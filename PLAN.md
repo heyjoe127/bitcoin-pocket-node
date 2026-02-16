@@ -82,7 +82,7 @@
 - **Dev machine:** 2014 MacBook Pro 15" (i7-4870HQ, 16GB, Big Sur)
 - **Test node:** Umbrel VM on Mac Mini (Bitcoin Knots 29.2.0, full unpruned, 820GB chain) at 10.0.1.127:9332
 - **Target hardware:** Google Pixel 7 Pro with GrapheneOS
-- **Repo:** github.com/heyjoe127/bitcoin-pocket-node
+- **Repo:** github.com/FreeOnlineUser/bitcoin-pocket-node
 
 ## bitcoind Configuration (Mobile)
 
