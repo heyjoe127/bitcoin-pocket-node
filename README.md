@@ -17,9 +17,9 @@ Turn any Android phone into a fully-validating Bitcoin full node. No server depe
 
 *Running on a Pixel 7 Pro with GrapheneOS*
 
-| Downloading chainstate | Pruning & starting | Electrum server | BlueWallet connected |
+| Syncing from node | Electrum server | BlueWallet connected | Wallet ready |
 |:---:|:---:|:---:|:---:|
-| ![Downloading chainstate from home node](docs/images/01-downloading-chainstate.jpg) | ![All steps complete, pruning blockstore](docs/images/02-pruning-blockstore.jpg) | ![Built-in Electrum server running](docs/images/03-electrum-server.jpg) | ![BlueWallet connected to local node](docs/images/04-bluewallet-connected.jpg) |
+| ![All steps complete, starting node](docs/images/02-pruning-blockstore.jpg) | ![Built-in Electrum server running](docs/images/03-electrum-server.jpg) | ![BlueWallet connected to local node](docs/images/04-bluewallet-connected.jpg) | ![BlueWallet wallet view](docs/images/04-bluewallet-wallet.jpg) |
 
 ## How It Works
 
