@@ -120,11 +120,9 @@ fun NodeStatusScreen(
         val preSyncRegex = Regex("""height:\s*(\d+)\s*\(~?([\d.]+)%\)""")
 
         while (isActive && isRunning) {
-            // Once RPC has real data, clear startup detail and stop
+            // Once RPC has real data, clear startup detail but keep mini log for sync info
             if (blockHeight > 0 || headerHeight > 0) {
                 if (startupDetail.isNotEmpty()) startupDetail = ""
-                if (miniLog.isNotEmpty()) miniLog = emptyList()
-                break
             }
             try {
                 if (logFile.exists() && logFile.length() > logStartOffset) {
@@ -178,8 +176,24 @@ fun NodeStatusScreen(
                         }
                     }
 
-                    // Mini log — last 4 meaningful lines (skip noise)
-                    val meaningful = text.lines().filter { line ->
+                    // Mini log — single most recent interesting line
+                    // During sync: show latest peer or mempool event
+                    // During startup: show latest init progress
+                    val lines = text.lines()
+
+                    // Check for interesting events (peer connect/disconnect, mempool, etc.)
+                    val interestingLine = lines.lastOrNull { line ->
+                        line.isNotBlank() &&
+                        (line.contains("peer connected") ||
+                         line.contains("Imported mempool") ||
+                         line.contains("Leaving InitialBlockDownload") ||
+                         line.contains("New outbound") ||
+                         line.contains("init message:") ||
+                         line.contains("Opened LevelDB") ||
+                         line.contains("Loaded best chain") ||
+                         line.contains("Verifying last"))
+                    } ?: lines.lastOrNull { line ->
+                        // Fallback: any non-noise line
                         line.isNotBlank() &&
                         !line.contains("UpdateTip:") &&
                         !line.contains("Saw new header") &&
@@ -189,14 +203,22 @@ fun NodeStatusScreen(
                         !line.contains("will be tried for connections") &&
                         !line.contains("block tree size") &&
                         !line.contains("obfuscation key") &&
+                        !line.contains("thread start") &&
+                        !line.contains("thread exit") &&
+                        !line.contains("Using 2.0 MiB") &&
+                        !line.contains("Checking all blk") &&
+                        !line.contains("LoadBlockIndexDB") &&
+                        !line.contains("Block files have previously") &&
                         line.length > 20
-                    }.takeLast(1).map { line ->
-                        // Strip timestamp prefix for cleaner display
-                        val stripped = line.removePrefix(line.take(20).takeWhile { it != 'Z' } + "Z ")
-                        // Truncate long lines
-                        if (stripped.length > 80) stripped.take(77) + "…" else stripped
                     }
-                    if (meaningful.isNotEmpty()) miniLog = meaningful
+
+                    if (interestingLine != null) {
+                        val stripped = interestingLine.removePrefix(
+                            interestingLine.take(20).takeWhile { it != 'Z' } + "Z "
+                        )
+                        val display = if (stripped.length > 80) stripped.take(77) + "…" else stripped
+                        miniLog = listOf(display)
+                    }
                 }
             } catch (_: Exception) {}
             delay(1000) // check every second for snappy feedback
