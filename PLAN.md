@@ -128,3 +128,6 @@ disablewallet=1
 ### Maintenance
 - [ ] Bitcoin Core version upgrades (v29+)
 - [ ] BWT fork maintenance and modernization
+
+### Visuals
+- [ ] Block visualization — animated graphic showing stub creation → pruning → backfill (explainer for chainstate copy technique)
