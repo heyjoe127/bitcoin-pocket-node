@@ -106,13 +106,17 @@ class NetworkMonitor(private val context: Context) {
         val caps = connectivityManager.getNetworkCapabilities(activeNetwork)
             ?: return NetworkState.OFFLINE
 
+        // Check metered status — metered connections are treated as cellular
+        // This correctly handles VPN-over-cellular (metered) vs VPN-over-WiFi (unmetered)
+        val isMetered = !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
+
         return when {
-            caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> NetworkState.WIFI
+            caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) && !isMetered -> NetworkState.WIFI
+            caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) && isMetered -> NetworkState.CELLULAR
             caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> NetworkState.CELLULAR
-            // VPN/Ethernet/other transports — treat as WiFi (metered check below)
-            caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN) -> NetworkState.WIFI
+            caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN) -> if (isMetered) NetworkState.CELLULAR else NetworkState.WIFI
             caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> NetworkState.WIFI
-            caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) -> NetworkState.WIFI
+            caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) -> if (isMetered) NetworkState.CELLULAR else NetworkState.WIFI
             else -> NetworkState.OFFLINE
         }
     }
