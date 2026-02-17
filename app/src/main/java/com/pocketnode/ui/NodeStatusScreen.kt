@@ -98,7 +98,7 @@ fun NodeStatusScreen(
 
     // Tail debug.log for startup progress (pre-sync headers phase where RPC returns 0)
     LaunchedEffect(isRunning) {
-        if (!isRunning) { startupPhase = 0; return@LaunchedEffect }
+        if (!isRunning) { startupPhase = 0; startupDetail = ""; return@LaunchedEffect }
         val logFile = java.io.File(context.filesDir, "bitcoin/debug.log")
         val preSyncRegex = Regex("""height:\s*(\d+)\s*\(~?([\d.]+)%\)""")
         while (isActive && isRunning) {
@@ -359,6 +359,9 @@ fun NodeStatusScreen(
                                 .edit().putBoolean("node_was_running", false).apply()
                             isRunning = false
                             nodeStatus = "Stopped"
+                            startupDetail = ""
+                            startupPhase = 0
+                            bwtAutoStarted = false
                             blockHeight = -1
                             headerHeight = -1
                             peerCount = 0
