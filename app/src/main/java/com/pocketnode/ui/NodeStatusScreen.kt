@@ -74,7 +74,8 @@ fun NodeStatusScreen(
         if (serviceRunning && !isRunning) {
             isRunning = true
             nodeStatus = "Running"
-        } else if (!serviceRunning && isRunning) {
+        } else if (!serviceRunning && isRunning && nodeStatus != "Starting") {
+            // Don't reset to Stopped if we just pressed Start — wait for service to catch up
             isRunning = false
             nodeStatus = "Stopped"
         }
@@ -94,73 +95,64 @@ fun NodeStatusScreen(
 
     // Startup detail from debug.log (shown when RPC has no data yet)
     var startupDetail by remember { mutableStateOf("") }
-    var startupPhase by remember { mutableStateOf(0) }
 
-    // Tail debug.log for startup progress (before RPC has data)
+    // Tail debug.log for startup progress (pre-sync headers phase where RPC returns 0)
     LaunchedEffect(isRunning) {
-        if (!isRunning) { startupPhase = 0; startupDetail = ""; return@LaunchedEffect }
+        if (!isRunning) return@LaunchedEffect
         val logFile = java.io.File(context.filesDir, "bitcoin/debug.log")
         val preSyncRegex = Regex("""height:\s*(\d+)\s*\(~?([\d.]+)%\)""")
-        // Record log size at launch — only parse lines after this point
-        val logStartSize = if (logFile.exists()) logFile.length() else 0L
         while (isActive && isRunning) {
+            // Only read log when RPC hasn't provided real data yet
             if (blockHeight <= 0 && headerHeight <= 0) {
                 try {
-                    if (logFile.exists() && logFile.length() > logStartSize) {
+                    if (logFile.exists() && logFile.length() > 0) {
                         val raf = java.io.RandomAccessFile(logFile, "r")
-                        val newBytes = raf.length() - logStartSize
-                        val readSize = minOf(16384L, newBytes)
+                        val readSize = minOf(4096L, raf.length())
                         raf.seek(raf.length() - readSize)
                         val tail = ByteArray(readSize.toInt())
                         raf.readFully(tail)
                         raf.close()
-                        val allLines = String(tail).lines()
+                        val lines = String(tail).lines().takeLast(15)
 
-                        // Find the latest init message in the full buffer
-                        val lastInitMsg = allLines.lastOrNull { it.contains("init message:") } ?: ""
-
-                        // Advance phase forward only
-                        val detected = when {
-                            lastInitMsg.contains("Done loading") -> 5
-                            lastInitMsg.contains("Starting network") -> 4
-                            lastInitMsg.contains("Pruning") -> 3
-                            lastInitMsg.contains("Verifying") -> 2
-                            lastInitMsg.contains("Loading block index") || lastInitMsg.contains("Loading wallet") -> 1
-                            else -> 0
-                        }
-                        startupPhase = maxOf(startupPhase, detected)
-
-                        // Build detail text from current phase
-                        val lastTip = allLines.lastOrNull { it.contains("UpdateTip:") && it.contains("height=") }
-                        val catchUpHeight = lastTip?.let { Regex("""height=(\d+)""").find(it)?.groupValues?.get(1)?.toLongOrNull() }
-
-                        startupDetail = when {
-                            catchUpHeight != null -> "Catching up... block ${"%,d".format(catchUpHeight)}"
-                            startupPhase >= 4 -> "Connecting to peers..."
-                            startupPhase == 3 -> "Pruning blockstore..."
-                            startupPhase == 2 -> "Verifying blocks..."
-                            allLines.isNotEmpty() -> "Loading block index..."
-                            else -> {
-                                val preSyncLine = allLines.lastOrNull { it.contains("Pre-synchronizing blockheaders") }
-                                if (preSyncLine != null) {
-                                    val match = preSyncRegex.find(preSyncLine)
-                                    if (match != null) {
-                                        nodeStatus = "Pre-syncing headers"
-                                        "Pre-syncing headers: ${match.groupValues[2]}% (${"%,d".format(match.groupValues[1].toLong())})"
-                                    } else "Starting..."
-                                } else "Starting..."
+                        // Match startup phases from debug.log init messages
+                        val detail = when {
+                            lines.any { it.contains("init message: Done loading") } -> "Connecting to peers..."
+                            lines.any { it.contains("init message: Loading mempool") || it.contains("Loading") && it.contains("mempool") } -> "Loading mempool..."
+                            lines.any { it.contains("init message: Pruning blockstore") } -> "Pruning blockstore..."
+                            lines.any { it.contains("init message: Verifying blocks") } -> {
+                                val pctLine = lines.lastOrNull { it.contains("Verification progress:") }
+                                val pct = pctLine?.substringAfter("progress:")?.trim()?.trimEnd('%')?.trim() ?: ""
+                                if (pct.isNotEmpty()) "Verifying blocks... $pct%" else "Verifying blocks..."
                             }
+                            lines.any { it.contains("init message: Loading block index") || it.contains("block index") } -> "Loading block index..."
+                            lines.any { it.contains("init message: Loading wallet") } -> "Loading wallet..."
+                            lines.any { it.contains("Pre-synchronizing blockheaders") } -> {
+                                val preSyncLine = lines.lastOrNull { it.contains("Pre-synchronizing blockheaders") }
+                                val match = preSyncLine?.let { preSyncRegex.find(it) }
+                                if (match != null) {
+                                    val h = match.groupValues[1]
+                                    val pct = match.groupValues[2]
+                                    nodeStatus = "Pre-syncing headers"
+                                    "Pre-syncing headers: $pct% (${"%,d".format(h.toLong())})"
+                                } else "Pre-syncing headers..."
+                            }
+                            lines.any { it.contains("init message: Starting network") } -> "Starting network..."
+                            lines.any { it.contains("init message:") } -> {
+                                val msg = lines.last { it.contains("init message:") }
+                                    .substringAfter("init message:").trim().trimEnd('…', '.')
+                                "$msg..."
+                            }
+                            else -> ""
                         }
+                        if (detail.isNotEmpty()) startupDetail = detail
                     }
                 } catch (_: Exception) {}
             } else {
-                // RPC has real data — clear detail once status is meaningful
-                if (nodeStatus != "Starting" && nodeStatus != "Running") {
-                    startupDetail = ""
-                    break
-                }
+                // RPC has real data now, clear startup detail and stop log tailing
+                if (startupDetail.isNotEmpty()) startupDetail = ""
+                break
             }
-            delay(500)
+            delay(2000)
         }
     }
 
@@ -351,8 +343,6 @@ fun NodeStatusScreen(
                                 .edit().putBoolean("node_was_running", false).apply()
                             isRunning = false
                             nodeStatus = "Stopped"
-                            startupDetail = ""
-                            startupPhase = 0
                             blockHeight = -1
                             headerHeight = -1
                             peerCount = 0
