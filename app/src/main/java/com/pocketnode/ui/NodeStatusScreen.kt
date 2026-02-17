@@ -94,10 +94,11 @@ fun NodeStatusScreen(
 
     // Startup detail from debug.log (shown when RPC has no data yet)
     var startupDetail by remember { mutableStateOf("") }
+    var startupPhase by remember { mutableStateOf(0) } // 0=init, 1=loading, 2=verifying, 3=pruning, 4=network, 5=catching up
 
     // Tail debug.log for startup progress (pre-sync headers phase where RPC returns 0)
     LaunchedEffect(isRunning) {
-        if (!isRunning) return@LaunchedEffect
+        if (!isRunning) { startupPhase = 0; return@LaunchedEffect }
         val logFile = java.io.File(context.filesDir, "bitcoin/debug.log")
         val preSyncRegex = Regex("""height:\s*(\d+)\s*\(~?([\d.]+)%\)""")
         while (isActive && isRunning) {
@@ -123,47 +124,38 @@ fun NodeStatusScreen(
                             Regex("""height=(\d+)""").find(it)?.groupValues?.get(1)?.toLongOrNull()
                         }
 
-                        // Use allLines for phase detection (last 15 lines get flooded by UpdateTip)
-                        // Find the latest init message to determine current phase
+                        // Determine phase from log — only advance forward, never back
                         val lastInitIdx = allLines.indexOfLast { it.contains("init message:") }
                         val lastInitMsg = if (lastInitIdx >= 0) allLines[lastInitIdx] else ""
 
-                        val detail = when {
-                            lastInitMsg.contains("Done loading") -> {
-                                when {
-                                    catchUpHeight != null && catchUpHeight > 0 -> "Catching up... block ${"%,d".format(catchUpHeight)} ($peerCount2 peers)"
-                                    peerCount2 > 0 -> "Finding peers... ($peerCount2 connected)"
-                                    else -> "Connecting to peers..."
-                                }
-                            }
-                            lastInitMsg.contains("Starting network") -> {
-                                if (peerCount2 > 0) "Finding peers... ($peerCount2 connected)"
-                                else "Starting network..."
-                            }
-                            lastInitMsg.contains("Loading mempool") || allLines.any { it.contains("Loading") && it.contains("mempool") } -> "Loading mempool..."
-                            lastInitMsg.contains("Pruning blockstore") -> "Pruning blockstore..."
-                            lastInitMsg.contains("Verifying blocks") -> {
+                        // Detect phase transitions (only forward)
+                        if (catchUpHeight != null && catchUpHeight > 0) startupPhase = maxOf(startupPhase, 5)
+                        else if (peerCount2 > 0 && lastInitMsg.contains("Done loading")) startupPhase = maxOf(startupPhase, 4)
+                        else if (lastInitMsg.contains("Done loading") || lastInitMsg.contains("Starting network")) startupPhase = maxOf(startupPhase, 4)
+                        else if (lastInitMsg.contains("Pruning blockstore")) startupPhase = maxOf(startupPhase, 3)
+                        else if (lastInitMsg.contains("Verifying blocks")) startupPhase = maxOf(startupPhase, 2)
+                        else if (lastInitMsg.contains("Loading block index") || lastInitMsg.contains("Loading wallet")) startupPhase = maxOf(startupPhase, 1)
+
+                        val detail = when (startupPhase) {
+                            5 -> "Catching up... block ${"%,d".format(catchUpHeight ?: 0L)}"
+                            4 -> if (peerCount2 > 0) "Finding peers... ($peerCount2 connected)" else "Starting network..."
+                            3 -> "Pruning blockstore..."
+                            2 -> {
                                 val pctLine = allLines.lastOrNull { it.contains("Verification progress:") }
                                 val pct = pctLine?.substringAfter("progress:")?.trim()?.trimEnd('%')?.trim() ?: ""
                                 if (pct.isNotEmpty()) "Verifying blocks... $pct%" else "Verifying blocks..."
                             }
-                            lastInitMsg.contains("Loading block index") -> "Loading block index..."
-                            lastInitMsg.contains("Loading wallet") -> "Loading wallet..."
-                            allLines.any { it.contains("Pre-synchronizing blockheaders") } -> {
-                                val preSyncLine = allLines.lastOrNull { it.contains("Pre-synchronizing blockheaders") }
-                                val match = preSyncLine?.let { preSyncRegex.find(it) }
-                                if (match != null) {
-                                    val h = match.groupValues[1]
-                                    val pct = match.groupValues[2]
-                                    nodeStatus = "Pre-syncing headers"
-                                    "Pre-syncing headers: $pct% (${"%,d".format(h.toLong())})"
-                                } else "Pre-syncing headers..."
+                            1 -> "Loading block index..."
+                            else -> {
+                                if (allLines.any { it.contains("Pre-synchronizing blockheaders") }) {
+                                    val preSyncLine = allLines.lastOrNull { it.contains("Pre-synchronizing blockheaders") }
+                                    val match = preSyncLine?.let { preSyncRegex.find(it) }
+                                    if (match != null) {
+                                        nodeStatus = "Pre-syncing headers"
+                                        "Pre-syncing headers: ${match.groupValues[2]}% (${"%,d".format(match.groupValues[1].toLong())})"
+                                    } else "Starting..."
+                                } else "Starting..."
                             }
-                            lastInitMsg.isNotEmpty() -> {
-                                val msg = lastInitMsg.substringAfter("init message:").trim().trimEnd('…', '.')
-                                "$msg..."
-                            }
-                            else -> ""
                         }
                         if (detail.isNotEmpty()) startupDetail = detail
                     }
