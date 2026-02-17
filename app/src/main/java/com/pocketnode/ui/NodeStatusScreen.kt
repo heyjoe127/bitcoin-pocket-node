@@ -81,11 +81,31 @@ fun NodeStatusScreen(
         }
     }
     // Delayed recheck — catches race where service starts before UI initializes
+    // Also tries RPC directly in case _isRunning was reset (e.g. after app install)
     LaunchedEffect(Unit) {
         delay(2000)
         if (BitcoindService.isRunningFlow.value && !isRunning) {
             isRunning = true
             nodeStatus = "Running"
+        }
+        // If still not running after 5s, try RPC as last resort
+        if (!isRunning) {
+            delay(3000)
+            try {
+                val creds = com.pocketnode.util.ConfigGenerator.readCredentials(context)
+                if (creds != null) {
+                    val rpc = com.pocketnode.rpc.BitcoinRpcClient(creds.first, creds.second)
+                    val info = rpc.getBlockchainInfo()
+                    if (info != null) {
+                        // bitcoind is running but service state was lost — recover
+                        isRunning = true
+                        nodeStatus = "Running"
+                        // Restart the service to re-attach
+                        val intent = android.content.Intent(context, BitcoindService::class.java)
+                        context.startForegroundService(intent)
+                    }
+                }
+            } catch (_: Exception) {}
         }
     }
     var ibd by remember { mutableStateOf(true) }
