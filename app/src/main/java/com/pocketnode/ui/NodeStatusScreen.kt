@@ -188,12 +188,9 @@ fun NodeStatusScreen(
                             if (phase < 5) nodeStatus = "Pre-syncing headers"
                         }
                     }
-                    // Peer connections
-                    if (phase >= 4) {
-                        val peerLines = text.lines().count { it.contains("peer connected") }
-                        if (peerLines > 0) {
-                            startupDetail = "$peerLines peer${if (peerLines > 1) "s" else ""} connected"
-                        }
+                    // Clear "Waiting for peers" once a peer connects
+                    if (phase >= 4 && text.contains("peer connected")) {
+                        startupDetail = ""
                     }
 
                     // Mini log — single most recent interesting line
@@ -201,13 +198,11 @@ fun NodeStatusScreen(
                     // During startup: show latest init progress
                     val lines = text.lines()
 
-                    // Check for interesting events (peer connect/disconnect, mempool, etc.)
+                    // Check for interesting events (skip peer counts — stats grid has live RPC data)
                     val interestingLine = lines.lastOrNull { line ->
                         line.isNotBlank() &&
-                        (line.contains("peer connected") ||
-                         line.contains("Imported mempool") ||
+                        (line.contains("Imported mempool") ||
                          line.contains("Leaving InitialBlockDownload") ||
-                         line.contains("New outbound") ||
                          line.contains("init message:") ||
                          line.contains("Opened LevelDB") ||
                          line.contains("Loaded best chain") ||
