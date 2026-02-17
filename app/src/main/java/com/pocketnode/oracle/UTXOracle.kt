@@ -59,20 +59,22 @@ class UTXOracle(private val rpc: BitcoinRpcClient) {
             ?: throw RuntimeException("RPC call '$method' returned null")
     }
 
-    /** Extract scalar string result from RPC response */
+    /** Extract scalar string result from RPC response.
+     *  The RPC client wraps non-JSONObject results as {"value": ...} */
     private fun extractResult(resp: JSONObject): String {
-        return if (resp.has("result") && !resp.isNull("result")) {
-            val r = resp.get("result")
-            if (r is String) r else r.toString()
-        } else resp.toString()
+        return when {
+            resp.has("value") -> resp.get("value").toString()
+            resp.has("result") && !resp.isNull("result") -> resp.get("result").toString()
+            else -> resp.toString()
+        }
     }
 
     private suspend fun getBlockHash(height: Int): String =
         extractResult(rpcCall("getblockhash", height)).trim().replace("\"", "")
 
     private suspend fun getBlockHeader(hash: String): JSONObject {
-        val resp = rpcCall("getblockheader", hash, true)
-        return if (resp.has("result") && !resp.isNull("result")) resp.getJSONObject("result") else resp
+        // RPC client returns the result JSONObject directly for object results
+        return rpcCall("getblockheader", hash, true)
     }
 
     private suspend fun getRawBlock(hash: String): String =

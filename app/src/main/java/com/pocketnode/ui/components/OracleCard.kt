@@ -60,6 +60,7 @@ fun OracleCard(
                 result = oracle.getPrice()
                 progressJob.cancel()
             } catch (e: Exception) {
+                android.util.Log.e("OracleCard", "UTXOracle failed", e)
                 error = e.message ?: "Unknown error"
             } finally {
                 isRunning = false
@@ -189,6 +190,7 @@ fun OracleCard(
                                         result = oracle.getPriceRecentBlocks()
                                         progressJob.cancel()
                                     } catch (e: Exception) {
+                                        android.util.Log.e("OracleCard", "UTXOracle refresh failed", e)
                                         error = e.message
                                     } finally {
                                         isRunning = false
