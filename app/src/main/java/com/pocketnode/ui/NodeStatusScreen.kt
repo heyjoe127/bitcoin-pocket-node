@@ -94,62 +94,56 @@ fun NodeStatusScreen(
 
     // Startup detail from debug.log (shown when RPC has no data yet)
     var startupDetail by remember { mutableStateOf("") }
-    var startupPhase by remember { mutableStateOf(0) } // 0=init, 1=loading, 2=verifying, 3=pruning, 4=network, 5=catching up
+    var startupPhase by remember { mutableStateOf(0) }
 
-    // Tail debug.log for startup progress (pre-sync headers phase where RPC returns 0)
+    // Tail debug.log for startup progress (before RPC has data)
     LaunchedEffect(isRunning) {
         if (!isRunning) { startupPhase = 0; startupDetail = ""; return@LaunchedEffect }
         val logFile = java.io.File(context.filesDir, "bitcoin/debug.log")
         val preSyncRegex = Regex("""height:\s*(\d+)\s*\(~?([\d.]+)%\)""")
+        // Record log size at launch — only parse lines after this point
+        val logStartSize = if (logFile.exists()) logFile.length() else 0L
         while (isActive && isRunning) {
-            // Only read log when RPC hasn't provided real data yet
             if (blockHeight <= 0 && headerHeight <= 0) {
                 try {
-                    if (logFile.exists() && logFile.length() > 0) {
+                    if (logFile.exists() && logFile.length() > logStartSize) {
                         val raf = java.io.RandomAccessFile(logFile, "r")
-                        val readSize = minOf(8192L, raf.length())
+                        val newBytes = raf.length() - logStartSize
+                        val readSize = minOf(16384L, newBytes)
                         raf.seek(raf.length() - readSize)
                         val tail = ByteArray(readSize.toInt())
                         raf.readFully(tail)
                         raf.close()
                         val allLines = String(tail).lines()
-                        val lines = allLines.takeLast(15)
 
-                        // Count unique peers from log
-                        val peerCount2 = allLines.count { it.contains("peer connected") }
+                        // Find the latest init message in the full buffer
+                        val lastInitMsg = allLines.lastOrNull { it.contains("init message:") } ?: ""
 
-                        // Check for UpdateTip after Done loading (catching up)
-                        val lastUpdateTip = allLines.lastOrNull { it.contains("UpdateTip:") && it.contains("height=") }
-                        val catchUpHeight = lastUpdateTip?.let {
-                            Regex("""height=(\d+)""").find(it)?.groupValues?.get(1)?.toLongOrNull()
+                        // Advance phase forward only
+                        val detected = when {
+                            lastInitMsg.contains("Done loading") -> 5
+                            lastInitMsg.contains("Starting network") -> 4
+                            lastInitMsg.contains("Pruning") -> 3
+                            lastInitMsg.contains("Verifying") -> 2
+                            lastInitMsg.contains("Loading block index") || lastInitMsg.contains("Loading wallet") -> 1
+                            else -> 0
                         }
+                        startupPhase = maxOf(startupPhase, detected)
 
-                        // Determine phase from log — only advance forward, never back
-                        val lastInitIdx = allLines.indexOfLast { it.contains("init message:") }
-                        val lastInitMsg = if (lastInitIdx >= 0) allLines[lastInitIdx] else ""
+                        // Build detail text from current phase
+                        val lastTip = allLines.lastOrNull { it.contains("UpdateTip:") && it.contains("height=") }
+                        val catchUpHeight = lastTip?.let { Regex("""height=(\d+)""").find(it)?.groupValues?.get(1)?.toLongOrNull() }
 
-                        // Detect phase transitions (only forward)
-                        if (catchUpHeight != null && catchUpHeight > 0) startupPhase = maxOf(startupPhase, 5)
-                        else if (peerCount2 > 0 && lastInitMsg.contains("Done loading")) startupPhase = maxOf(startupPhase, 4)
-                        else if (lastInitMsg.contains("Done loading") || lastInitMsg.contains("Starting network")) startupPhase = maxOf(startupPhase, 4)
-                        else if (lastInitMsg.contains("Pruning blockstore")) startupPhase = maxOf(startupPhase, 3)
-                        else if (lastInitMsg.contains("Verifying blocks")) startupPhase = maxOf(startupPhase, 2)
-                        else if (lastInitMsg.contains("Loading block index") || lastInitMsg.contains("Loading wallet")) startupPhase = maxOf(startupPhase, 1)
-
-                        val detail = when (startupPhase) {
-                            5 -> "Catching up... block ${"%,d".format(catchUpHeight ?: 0L)}"
-                            4 -> if (peerCount2 > 0) "Finding peers... ($peerCount2 connected)" else "Starting network..."
-                            3 -> "Pruning blockstore..."
-                            2 -> {
-                                val pctLine = allLines.lastOrNull { it.contains("Verification progress:") }
-                                val pct = pctLine?.substringAfter("progress:")?.trim()?.trimEnd('%')?.trim() ?: ""
-                                if (pct.isNotEmpty()) "Verifying blocks... $pct%" else "Verifying blocks..."
-                            }
-                            1 -> "Loading block index..."
+                        startupDetail = when {
+                            catchUpHeight != null -> "Catching up... block ${"%,d".format(catchUpHeight)}"
+                            startupPhase >= 4 -> "Connecting to peers..."
+                            startupPhase == 3 -> "Pruning blockstore..."
+                            startupPhase == 2 -> "Verifying blocks..."
+                            allLines.isNotEmpty() -> "Loading block index..."
                             else -> {
-                                if (allLines.any { it.contains("Pre-synchronizing blockheaders") }) {
-                                    val preSyncLine = allLines.lastOrNull { it.contains("Pre-synchronizing blockheaders") }
-                                    val match = preSyncLine?.let { preSyncRegex.find(it) }
+                                val preSyncLine = allLines.lastOrNull { it.contains("Pre-synchronizing blockheaders") }
+                                if (preSyncLine != null) {
+                                    val match = preSyncRegex.find(preSyncLine)
                                     if (match != null) {
                                         nodeStatus = "Pre-syncing headers"
                                         "Pre-syncing headers: ${match.groupValues[2]}% (${"%,d".format(match.groupValues[1].toLong())})"
@@ -157,18 +151,16 @@ fun NodeStatusScreen(
                                 } else "Starting..."
                             }
                         }
-                        if (detail.isNotEmpty()) startupDetail = detail
                     }
                 } catch (_: Exception) {}
             } else {
-                // RPC has real data now — clear detail once status moves past "Starting"
-                if (nodeStatus != "Starting" && startupDetail.isNotEmpty()) {
+                // RPC has real data — clear detail once status is meaningful
+                if (nodeStatus != "Starting" && nodeStatus != "Running") {
                     startupDetail = ""
+                    break
                 }
-                // Keep tailing until status is no longer "Starting"
-                if (nodeStatus != "Starting") break
             }
-            delay(2000)
+            delay(500)
         }
     }
 
@@ -361,7 +353,6 @@ fun NodeStatusScreen(
                             nodeStatus = "Stopped"
                             startupDetail = ""
                             startupPhase = 0
-                            bwtAutoStarted = false
                             blockHeight = -1
                             headerHeight = -1
                             peerCount = 0
