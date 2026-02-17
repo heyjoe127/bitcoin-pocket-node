@@ -114,11 +114,8 @@ fun NodeStatusScreen(
                         val allLines = String(tail).lines()
                         val lines = allLines.takeLast(15)
 
-                        // Count peers connected since last "Done loading"
-                        val doneIdx = allLines.indexOfLast { it.contains("init message: Done loading") }
-                        val peerCount2 = if (doneIdx >= 0) {
-                            allLines.drop(doneIdx).count { it.contains("peer connected") }
-                        } else 0
+                        // Count unique peers from log
+                        val peerCount2 = allLines.count { it.contains("peer connected") }
 
                         // Check for UpdateTip after Done loading (catching up)
                         val lastUpdateTip = allLines.lastOrNull { it.contains("UpdateTip:") && it.contains("height=") }
