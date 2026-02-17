@@ -500,8 +500,8 @@ private fun StatusHeader(nodeStatus: String, chain: String, detail: String = "",
                 }
             }
         }
-        // Mini log — recent meaningful lines during startup
-        if (miniLog.isNotEmpty()) {
+        // Mini log — only during startup/sync, hidden when synced
+        if (miniLog.isNotEmpty() && !nodeStatus.startsWith("Synced")) {
             HorizontalDivider(
                 modifier = Modifier.padding(horizontal = 16.dp),
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
