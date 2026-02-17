@@ -331,7 +331,7 @@ fun NodeStatusScreen(
                 } catch (_: Exception) {}
 
             } catch (_: Exception) {
-                if (nodeStatus != "Starting") nodeStatus = "Error"
+                if (nodeStatus != "Starting" && nodeStatus != "Stopped") nodeStatus = "Error"
             }
             delay(3_000) // poll every 3 seconds for snappy UI
         }
