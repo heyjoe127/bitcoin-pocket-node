@@ -178,13 +178,17 @@ fun NodeStatusScreen(
                         }
                     }
 
-                    // Mini log — last 4 meaningful lines (skip UpdateTip, Saw new header, empty)
+                    // Mini log — last 4 meaningful lines (skip noise)
                     val meaningful = text.lines().filter { line ->
                         line.isNotBlank() &&
                         !line.contains("UpdateTip:") &&
                         !line.contains("Saw new header") &&
                         !line.contains("PATTERN_PRIVACY") &&
                         !line.contains("dnsseed") &&
+                        !line.contains("Waiting 300 seconds") &&
+                        !line.contains("will be tried for connections") &&
+                        !line.contains("block tree size") &&
+                        !line.contains("obfuscation key") &&
                         line.length > 20
                     }.takeLast(4).map { line ->
                         // Strip timestamp prefix for cleaner display
