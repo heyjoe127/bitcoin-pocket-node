@@ -5,6 +5,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -101,12 +102,15 @@ fun NodeStatusScreen(
 
     // Startup detail from debug.log (shown when RPC has no data yet)
     var startupDetail by remember { mutableStateOf("") }
+    // Mini log — last few meaningful lines from debug.log during startup
+    var miniLog by remember { mutableStateOf(listOf<String>()) }
 
     // Tail debug.log for startup phases (before RPC has real data)
     // Phases only advance forward (0→5), never regress, to handle log buffer floods
     LaunchedEffect(isRunning) {
         if (!isRunning) {
             startupDetail = ""
+            miniLog = emptyList()
             return@LaunchedEffect
         }
         val logFile = java.io.File(context.filesDir, "bitcoin/debug.log")
@@ -119,6 +123,7 @@ fun NodeStatusScreen(
             // Once RPC has real data, clear startup detail and stop
             if (blockHeight > 0 || headerHeight > 0) {
                 if (startupDetail.isNotEmpty()) startupDetail = ""
+                if (miniLog.isNotEmpty()) miniLog = emptyList()
                 break
             }
             try {
@@ -172,6 +177,22 @@ fun NodeStatusScreen(
                             startupDetail = "$peerLines peer${if (peerLines > 1) "s" else ""} connected"
                         }
                     }
+
+                    // Mini log — last 4 meaningful lines (skip UpdateTip, Saw new header, empty)
+                    val meaningful = text.lines().filter { line ->
+                        line.isNotBlank() &&
+                        !line.contains("UpdateTip:") &&
+                        !line.contains("Saw new header") &&
+                        !line.contains("PATTERN_PRIVACY") &&
+                        !line.contains("dnsseed") &&
+                        line.length > 20
+                    }.takeLast(4).map { line ->
+                        // Strip timestamp prefix for cleaner display
+                        val stripped = line.removePrefix(line.take(20).takeWhile { it != 'Z' } + "Z ")
+                        // Truncate long lines
+                        if (stripped.length > 80) stripped.take(77) + "…" else stripped
+                    }
+                    if (meaningful.isNotEmpty()) miniLog = meaningful
                 }
             } catch (_: Exception) {}
             delay(1000) // check every second for snappy feedback
@@ -306,7 +327,7 @@ fun NodeStatusScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 // Status indicator
-                StatusHeader(nodeStatus = nodeStatus, chain = chain, detail = startupDetail)
+                StatusHeader(nodeStatus = nodeStatus, chain = chain, detail = startupDetail, miniLog = miniLog)
 
                 // Chainstate copy progress (visible from dashboard while copy runs)
                 ChainstateProgressCard(context)
@@ -379,7 +400,7 @@ fun NodeStatusScreen(
 }
 
 @Composable
-private fun StatusHeader(nodeStatus: String, chain: String, detail: String = "") {
+private fun StatusHeader(nodeStatus: String, chain: String, detail: String = "", miniLog: List<String> = emptyList()) {
     val statusColor by animateColorAsState(
         targetValue = when {
             nodeStatus == "Synced" -> Color(0xFF4CAF50)
@@ -434,6 +455,26 @@ private fun StatusHeader(nodeStatus: String, chain: String, detail: String = "")
                         "Bitcoin $chain",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                }
+            }
+        }
+        // Mini log — recent meaningful lines during startup
+        if (miniLog.isNotEmpty()) {
+            HorizontalDivider(
+                modifier = Modifier.padding(horizontal = 16.dp),
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
+            )
+            Column(
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp, top = 8.dp)
+            ) {
+                miniLog.forEach { line ->
+                    Text(
+                        line,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
+                        maxLines = 1
                     )
                 }
             }
