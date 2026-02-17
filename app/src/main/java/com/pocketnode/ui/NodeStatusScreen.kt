@@ -79,6 +79,14 @@ fun NodeStatusScreen(
             nodeStatus = "Stopped"
         }
     }
+    // Delayed recheck — catches race where service starts before UI initializes
+    LaunchedEffect(Unit) {
+        delay(2000)
+        if (BitcoindService.isRunningFlow.value && !isRunning) {
+            isRunning = true
+            nodeStatus = "Running"
+        }
+    }
     var ibd by remember { mutableStateOf(true) }
     var sizeOnDisk by remember { mutableStateOf(0L) }
     var mempoolSize by remember { mutableStateOf(0) }
