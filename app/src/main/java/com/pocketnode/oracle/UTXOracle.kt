@@ -415,13 +415,24 @@ class UTXOracle(private val rpc: BitcoinRpcClient) {
                     if (valueBtc > 1e-5 && valueBtc < 1e5) outputValues.add(valueBtc)
                 }
 
-                // Witness size filter via tx weight (proxy for Python's 500-byte witness check)
-                // witness_bytes ≈ (weight - vsize) / inputCount
-                val weight = tx.optInt("weight", 0)
-                val vsize = tx.optInt("vsize", 0)
-                val witnessExceeds = if (vsize > 0 && inputCount > 0) {
-                    ((weight - vsize).toLong() / inputCount) > 500
-                } else false
+                // Per-input witness check matching Python behavior
+                var witnessExceeds = false
+                for (i in 0 until inputCount) {
+                    val input = vin.getJSONObject(i)
+                    val witnessArray = input.optJSONArray("txinwitness")
+                    if (witnessArray != null) {
+                        var totalWitnessLen = 0
+                        for (w in 0 until witnessArray.length()) {
+                            val itemLen = witnessArray.getString(w).length / 2 // hex to bytes
+                            totalWitnessLen += itemLen
+                            if (itemLen > 500 || totalWitnessLen > 500) {
+                                witnessExceeds = true
+                                break
+                            }
+                        }
+                    }
+                    if (witnessExceeds) break
+                }
 
                 todaysTxids.add(txid)
                 val isSameDayTx = inputTxids.any { it in todaysTxids }
