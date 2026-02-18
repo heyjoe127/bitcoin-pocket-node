@@ -433,13 +433,9 @@ fun NodeStatusScreen(
                         onExpanded = { isExpanded -> scope.launch {
                             kotlinx.coroutines.delay(150)
                             val anim = androidx.compose.animation.core.tween<Int>(700)
-                            if (isExpanded) {
-                                val scrollBefore = dashboardScrollState.value
-                                dashboardScrollState.animateScrollTo(scrollBefore + 400, anim)
-                            } else {
-                                kotlinx.coroutines.delay(300)
-                                dashboardScrollState.animateScrollTo((dashboardScrollState.value - 400).coerceAtLeast(0), anim)
-                            }
+                            val amount = 300
+                            if (isExpanded) dashboardScrollState.animateScrollTo(dashboardScrollState.value + amount, anim)
+                            else { kotlinx.coroutines.delay(300); dashboardScrollState.animateScrollTo((dashboardScrollState.value - amount).coerceAtLeast(0), anim) }
                         } }
                     )
                 }
@@ -455,13 +451,9 @@ fun NodeStatusScreen(
                         onExpanded = { isExpanded -> scope.launch {
                             kotlinx.coroutines.delay(150)
                             val anim = androidx.compose.animation.core.tween<Int>(700)
-                            if (isExpanded) {
-                                val scrollBefore = dashboardScrollState.value
-                                dashboardScrollState.animateScrollTo(scrollBefore + 400, anim)
-                            } else {
-                                kotlinx.coroutines.delay(300)
-                                dashboardScrollState.animateScrollTo((dashboardScrollState.value - 400).coerceAtLeast(0), anim)
-                            }
+                            val amount = 250
+                            if (isExpanded) dashboardScrollState.animateScrollTo(dashboardScrollState.value + amount, anim)
+                            else { kotlinx.coroutines.delay(300); dashboardScrollState.animateScrollTo((dashboardScrollState.value - amount).coerceAtLeast(0), anim) }
                         } }
                     )
                 }
