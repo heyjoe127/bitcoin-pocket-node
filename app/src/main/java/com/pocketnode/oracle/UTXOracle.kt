@@ -38,6 +38,15 @@ data class OracleResult(
     val deviation: Double
 )
 
+/** Per-block filtered outputs, cached for incremental updates */
+data class BlockOutputs(
+    val height: Int,
+    val hash: String,
+    val time: Long,
+    val txids: Set<String>,
+    val outputs: List<Double>
+)
+
 class UTXOracle(private val rpc: BitcoinRpcClient) {
 
     private val _progress = MutableSharedFlow<String>(replay = 1, extraBufferCapacity = 64)
@@ -226,6 +235,135 @@ class UTXOracle(private val rpc: BitcoinRpcClient) {
         runAlgorithm(dateMode = false, requestedDate = null)
     }
 
+    /** Cached block data from last full run — used for incremental updates */
+    var cachedBlocks: MutableList<BlockOutputs> = mutableListOf()
+        private set
+
+    fun setCachedBlocks(blocks: List<BlockOutputs>) {
+        cachedBlocks = blocks.toMutableList()
+    }
+
+    /**
+     * Incremental update: process only new blocks since last run.
+     * Drops oldest blocks to maintain 144-block window.
+     * Returns updated result in ~4 seconds per new block.
+     */
+    suspend fun incrementalUpdate(currentTipHeight: Int): OracleResult? = withContext(Dispatchers.IO) {
+        if (cachedBlocks.isEmpty()) return@withContext null
+
+        val lastCachedHeight = cachedBlocks.last().height
+        if (currentTipHeight <= lastCachedHeight) return@withContext null // no new blocks
+
+        val newBlockCount = currentTipHeight - lastCachedHeight
+        emit("Updating: $newBlockCount new block${if (newBlockCount > 1) "s" else ""}...")
+
+        // Fetch and process new blocks
+        val allTxids = HashSet<String>()
+        cachedBlocks.forEach { allTxids.addAll(it.txids) }
+
+        for (h in (lastCachedHeight + 1)..currentTipHeight) {
+            emit("Block $h...")
+            kotlinx.coroutines.yield()
+            val hash = getBlockHash(h)
+            val header = getBlockHeader(hash)
+            val time = header.getLong("time")
+            val blockData = processBlock(hash, h, time, allTxids)
+            cachedBlocks.add(blockData)
+            allTxids.addAll(blockData.txids)
+        }
+
+        // Trim to 144 blocks (sliding window)
+        while (cachedBlocks.size > 144) {
+            val removed = cachedBlocks.removeAt(0)
+            // Remove old txids (approximate — some may still exist in other blocks)
+        }
+
+        // Recalculate price from cached block outputs
+        val allOutputs = mutableListOf<Double>()
+        val allBlockHeights = mutableListOf<Int>()
+        val allBlockTimes = mutableListOf<Long>()
+        for (block in cachedBlocks) {
+            for (amt in block.outputs) {
+                allOutputs.add(amt)
+                allBlockHeights.add(block.height)
+                allBlockTimes.add(block.time)
+            }
+        }
+
+        val result = calculatePrice(allOutputs, allBlockHeights, allBlockTimes,
+            cachedBlocks.first().height..cachedBlocks.last().height, "recent-blocks")
+        emit("Price: $${result.price}")
+        result
+    }
+
+    /** Process a single block and return its filtered outputs */
+    private suspend fun processBlock(
+        blockHash: String,
+        height: Int,
+        time: Long,
+        existingTxids: Set<String>
+    ): BlockOutputs {
+        val block = rpcCallLong("getblock", blockHash, 2)
+        val txArray = block.getJSONArray("tx")
+        val blockTxids = mutableSetOf<String>()
+        val filteredOutputs = mutableListOf<Double>()
+
+        for (txIdx in 0 until txArray.length()) {
+            val tx = txArray.getJSONObject(txIdx)
+            val txid = tx.getString("txid")
+            val vin = tx.getJSONArray("vin")
+            val vout = tx.getJSONArray("vout")
+            val inputCount = vin.length()
+            val outputCount = vout.length()
+
+            val isCoinbase = inputCount > 0 && vin.getJSONObject(0).has("coinbase")
+
+            val inputTxids = mutableListOf<String>()
+            for (i in 0 until inputCount) {
+                val input = vin.getJSONObject(i)
+                if (input.has("txid")) inputTxids.add(input.getString("txid"))
+            }
+
+            var hasOpReturn = false
+            val outputValues = mutableListOf<Double>()
+            for (i in 0 until outputCount) {
+                val output = vout.getJSONObject(i)
+                val valueBtc = output.getDouble("value")
+                val scriptPubKey = output.optJSONObject("scriptPubKey")
+                if (scriptPubKey?.optString("type", "") == "nulldata") hasOpReturn = true
+                if (valueBtc > 1e-5 && valueBtc < 1e5) outputValues.add(valueBtc)
+            }
+
+            var witnessExceeds = false
+            for (i in 0 until inputCount) {
+                val input = vin.getJSONObject(i)
+                val witnessArray = input.optJSONArray("txinwitness")
+                if (witnessArray != null) {
+                    var totalWitnessLen = 0
+                    for (w in 0 until witnessArray.length()) {
+                        val itemLen = witnessArray.getString(w).length / 2
+                        totalWitnessLen += itemLen
+                        if (itemLen > 500 || totalWitnessLen > 500) {
+                            witnessExceeds = true
+                            break
+                        }
+                    }
+                }
+                if (witnessExceeds) break
+            }
+
+            blockTxids.add(txid)
+            val isSameDayTx = inputTxids.any { it in existingTxids || it in blockTxids }
+
+            if (inputCount <= 5 && outputCount == 2 && !isCoinbase &&
+                !hasOpReturn && !witnessExceeds && !isSameDayTx) {
+                filteredOutputs.addAll(outputValues)
+            }
+        }
+
+        return BlockOutputs(height, blockHash, time, blockTxids, filteredOutputs)
+    }
+
     private suspend fun runAlgorithm(dateMode: Boolean, requestedDate: String?): OracleResult {
         emit("Connecting to node...")
 
@@ -353,6 +491,44 @@ class UTXOracle(private val rpc: BitcoinRpcClient) {
 
         if (blockNums.isEmpty()) throw RuntimeException("No blocks found")
 
+        // ── Step 6: Fetch decoded blocks, extract outputs ──
+        emit("Loading transactions from ${blockNums.size} blocks...")
+
+        val allTxids = HashSet<String>()
+        val rawOutputs = mutableListOf<Double>()
+        val blockHeightsDec = mutableListOf<Int>()
+        val blockTimesDec = mutableListOf<Long>()
+        cachedBlocks.clear()
+
+        for ((idx, bh) in blockHashes.withIndex()) {
+            emit("Block ${idx + 1}/${blockHashes.size}")
+            kotlinx.coroutines.yield()
+
+            val blockData = processBlock(bh, blockNums[idx], blockTimes[idx], allTxids)
+            cachedBlocks.add(blockData)
+            allTxids.addAll(blockData.txids)
+
+            for (amt in blockData.outputs) {
+                rawOutputs.add(amt)
+                blockHeightsDec.add(blockNums[idx])
+                blockTimesDec.add(blockTimes[idx])
+            }
+        }
+
+        return calculatePrice(rawOutputs, blockHeightsDec, blockTimesDec,
+            blockNums.first()..blockNums.last(), priceDateStr)
+    }
+
+    /** Steps 5, 7-11: Calculate price from filtered outputs */
+    private fun calculatePrice(
+        rawOutputs: List<Double>,
+        blockHeights: List<Int>,
+        blockTimesIn: List<Long>,
+        blockRange: IntRange,
+        dateStr: String
+    ): OracleResult {
+        emit("Processing histogram...")
+
         // ── Step 5: Initialize histogram ─────────────────────────────────
         val firstBinValue = -6
         val lastBinValue = 6
@@ -367,100 +543,14 @@ class UTXOracle(private val rpc: BitcoinRpcClient) {
         val numBins = bins.size
         val binCounts = DoubleArray(numBins)
 
-        // ── Step 6: Fetch decoded blocks (verbosity 1), extract outputs ──
-        // Uses JSON-decoded blocks instead of raw hex parsing.
-        // Eliminates SHA256 txid computation and binary parsing — much faster on mobile.
-        emit("Loading transactions from ${blockNums.size} blocks...")
-
-        val todaysTxids = HashSet<String>()
-        val rawOutputs = mutableListOf<Double>()
-        val blockHeightsDec = mutableListOf<Int>()
-        val blockTimesDec = mutableListOf<Long>()
-
-        for ((idx, bh) in blockHashes.withIndex()) {
-            emit("Block ${idx + 1}/${blockHashes.size}")
-            kotlinx.coroutines.yield()
-
-            // Verbosity 2: full transaction objects with vout values, vin refs
-            val block = rpcCallLong("getblock", bh, 2)
-            val txArray = block.getJSONArray("tx")
-            val txsToAdd = mutableListOf<Double>()
-
-            for (txIdx in 0 until txArray.length()) {
-                val tx = txArray.getJSONObject(txIdx)
-                val txid = tx.getString("txid")
-                val vin = tx.getJSONArray("vin")
-                val vout = tx.getJSONArray("vout")
-                val inputCount = vin.length()
-                val outputCount = vout.length()
-
-                // Coinbase check
-                val isCoinbase = inputCount > 0 && vin.getJSONObject(0).has("coinbase")
-
-                // Input txids for same-day filter
-                val inputTxids = mutableListOf<String>()
-                for (i in 0 until inputCount) {
-                    val input = vin.getJSONObject(i)
-                    if (input.has("txid")) inputTxids.add(input.getString("txid"))
-                }
-
-                // Output values + OP_RETURN check
-                var hasOpReturn = false
-                val outputValues = mutableListOf<Double>()
-                for (i in 0 until outputCount) {
-                    val output = vout.getJSONObject(i)
-                    val valueBtc = output.getDouble("value")
-                    val scriptPubKey = output.optJSONObject("scriptPubKey")
-                    if (scriptPubKey?.optString("type", "") == "nulldata") hasOpReturn = true
-                    if (valueBtc > 1e-5 && valueBtc < 1e5) outputValues.add(valueBtc)
-                }
-
-                // Per-input witness check matching Python behavior
-                var witnessExceeds = false
-                for (i in 0 until inputCount) {
-                    val input = vin.getJSONObject(i)
-                    val witnessArray = input.optJSONArray("txinwitness")
-                    if (witnessArray != null) {
-                        var totalWitnessLen = 0
-                        for (w in 0 until witnessArray.length()) {
-                            val itemLen = witnessArray.getString(w).length / 2 // hex to bytes
-                            totalWitnessLen += itemLen
-                            if (itemLen > 500 || totalWitnessLen > 500) {
-                                witnessExceeds = true
-                                break
-                            }
-                        }
-                    }
-                    if (witnessExceeds) break
-                }
-
-                todaysTxids.add(txid)
-                val isSameDayTx = inputTxids.any { it in todaysTxids }
-
-                // Apply filters (same as Python original)
-                if (inputCount <= 5 && outputCount == 2 && !isCoinbase &&
-                    !hasOpReturn && !witnessExceeds && !isSameDayTx) {
-                    for (amount in outputValues) {
-                        val amountLog = log10(amount)
-                        val pctInRange = (amountLog - firstBinValue) / rangeBinValues.toDouble()
-                        var binEst = (pctInRange * numBins).toInt()
-                        while (bins[binEst] <= amount) binEst++
-                        val binNumber = binEst - 1
-                        binCounts[binNumber] += 1.0
-                        txsToAdd.add(amount)
-                    }
-                }
-            }
-
-            // Store outputs
-            for (amt in txsToAdd) {
-                rawOutputs.add(amt)
-                blockHeightsDec.add(blockNums[idx])
-                blockTimesDec.add(blockTimes[idx])
-            }
+        for (amount in rawOutputs) {
+            val amountLog = log10(amount)
+            val pctInRange = (amountLog - firstBinValue) / rangeBinValues.toDouble()
+            var binEst = (pctInRange * numBins).toInt()
+            while (bins[binEst] <= amount) binEst++
+            val binNumber = binEst - 1
+            binCounts[binNumber] += 1.0
         }
-
-        emit("Processing histogram...")
 
         // ── Step 7: Remove round BTC amounts ─────────────────────────────
         for (n in 0..200) binCounts[n] = 0.0
@@ -613,8 +703,8 @@ class UTXOracle(private val rpc: BitcoinRpcClient) {
 
         for (i in rawOutputs.indices) {
             val n = rawOutputs[i]
-            val b = blockHeightsDec[i]
-            val t = blockTimesDec[i]
+            val b = blockHeights[i]
+            val t = blockTimesIn[i]
 
             for (usd in usds) {
                 val avbtc = usd.toDouble() / roughPriceEstimate
@@ -707,8 +797,8 @@ class UTXOracle(private val rpc: BitcoinRpcClient) {
 
         return OracleResult(
             price = finalPrice,
-            date = priceDateStr,
-            blockRange = blockNums.first()..blockNums.last(),
+            date = dateStr,
+            blockRange = blockRange,
             outputCount = outputPrices.size,
             deviation = devPct
         )

@@ -17,6 +17,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.pocketnode.oracle.BlockOutputs
 import com.pocketnode.oracle.OracleResult
 import com.pocketnode.oracle.UTXOracle
 import com.pocketnode.rpc.BitcoinRpcClient
@@ -30,7 +31,8 @@ import kotlinx.coroutines.launch
  */
 @Composable
 fun OracleCard(
-    isNodeSynced: Boolean
+    isNodeSynced: Boolean,
+    blockHeight: Long = -1
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -70,9 +72,57 @@ fun OracleCard(
 
     var result by remember { mutableStateOf(loadCachedResult()) }
     var showRefreshConfirm by remember { mutableStateOf(false) }
+    var lastUpdatedHeight by remember { mutableStateOf(prefs.getInt("blockEnd", 0).toLong()) }
 
-    // Auto-run once when node is synced and we haven't run yet
-    // Use scope that survives recomposition (won't cancel on scroll)
+    // Persistent oracle instance — survives recomposition, holds cached block data
+    val oracle = remember { mutableStateOf<UTXOracle?>(null) }
+
+    // Load cached block data from disk on first composition
+    fun saveCachedBlocks(blocks: List<BlockOutputs>) {
+        try {
+            val json = org.json.JSONArray()
+            for (b in blocks) {
+                val obj = org.json.JSONObject()
+                obj.put("h", b.height)
+                obj.put("hash", b.hash)
+                obj.put("t", b.time)
+                val outs = org.json.JSONArray()
+                for (o in b.outputs) outs.put(o)
+                obj.put("o", outs)
+                // Skip txids — too large to cache, rebuilt on next full run
+                json.put(obj)
+            }
+            prefs.edit().putString("blockData", json.toString()).apply()
+        } catch (e: Exception) {
+            android.util.Log.e("OracleCard", "Failed to save block data", e)
+        }
+    }
+
+    fun loadCachedBlocks(): List<BlockOutputs> {
+        try {
+            val str = prefs.getString("blockData", null) ?: return emptyList()
+            val json = org.json.JSONArray(str)
+            val blocks = mutableListOf<BlockOutputs>()
+            for (i in 0 until json.length()) {
+                val obj = json.getJSONObject(i)
+                val outs = obj.getJSONArray("o")
+                val outputList = mutableListOf<Double>()
+                for (j in 0 until outs.length()) outputList.add(outs.getDouble(j))
+                blocks.add(BlockOutputs(
+                    height = obj.getInt("h"),
+                    hash = obj.getString("hash"),
+                    time = obj.getLong("t"),
+                    txids = emptySet(), // not cached — rebuilt on full run
+                    outputs = outputList
+                ))
+            }
+            return blocks
+        } catch (e: Exception) {
+            return emptyList()
+        }
+    }
+
+    // Initial full run when node is synced and cache is stale
     LaunchedEffect(isNodeSynced) {
         val cacheAgeMs = System.currentTimeMillis() - prefs.getLong("cachedAt", 0)
         val isStale = result == null || cacheAgeMs > 12 * 60 * 60 * 1000 // 12 hours
@@ -82,22 +132,23 @@ fun OracleCard(
             error = null
             try {
                 val rpc = BitcoinRpcClient(creds.first, creds.second)
-                val oracle = UTXOracle(rpc)
+                val oracleInstance = UTXOracle(rpc)
+                oracle.value = oracleInstance
 
-                // Collect progress in background
                 val progressJob = launch {
-                    oracle.progress.collect { progressText = it }
+                    oracleInstance.progress.collect { progressText = it }
                 }
 
-                val r = oracle.getPrice()
+                val r = oracleInstance.getPriceRecentBlocks()
                 result = r
                 saveResult(r)
+                saveCachedBlocks(oracleInstance.cachedBlocks)
+                lastUpdatedHeight = r.blockRange.last.toLong()
                 progressJob.cancel()
             } catch (e: kotlinx.coroutines.CancellationException) {
-                // Composable left composition — don't treat as error, will retry
                 android.util.Log.d("OracleCard", "Oracle calculation cancelled (recomposition)")
                 isRunning = false
-                throw e // re-throw so coroutine machinery works correctly
+                throw e
             } catch (e: Exception) {
                 android.util.Log.e("OracleCard", "UTXOracle failed", e)
                 error = e.message ?: "Unknown error"
@@ -105,6 +156,51 @@ fun OracleCard(
                 isRunning = false
                 progressText = ""
             }
+        } else if (isNodeSynced && !isStale && oracle.value == null) {
+            // Restore oracle instance from cache for incremental updates
+            val creds = ConfigGenerator.readCredentials(context) ?: return@LaunchedEffect
+            val rpc = BitcoinRpcClient(creds.first, creds.second)
+            val oracleInstance = UTXOracle(rpc)
+            val cached = loadCachedBlocks()
+            if (cached.isNotEmpty()) {
+                oracleInstance.setCachedBlocks(cached)
+                oracle.value = oracleInstance
+            }
+        }
+    }
+
+    // Incremental update when block height changes
+    LaunchedEffect(blockHeight) {
+        if (blockHeight <= 0 || !isNodeSynced || isRunning) return@LaunchedEffect
+        if (blockHeight <= lastUpdatedHeight) return@LaunchedEffect
+
+        val oracleInstance = oracle.value ?: return@LaunchedEffect
+        if (oracleInstance.cachedBlocks.isEmpty()) return@LaunchedEffect
+
+        isRunning = true
+        error = null
+        try {
+            val progressJob = launch {
+                oracleInstance.progress.collect { progressText = it }
+            }
+
+            val r = oracleInstance.incrementalUpdate(blockHeight.toInt())
+            if (r != null) {
+                result = r
+                saveResult(r)
+                saveCachedBlocks(oracleInstance.cachedBlocks)
+                lastUpdatedHeight = blockHeight
+            }
+            progressJob.cancel()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            isRunning = false
+            throw e
+        } catch (e: Exception) {
+            android.util.Log.e("OracleCard", "Incremental update failed", e)
+            // Don't show error for incremental — cached result still valid
+        } finally {
+            isRunning = false
+            progressText = ""
         }
     }
 

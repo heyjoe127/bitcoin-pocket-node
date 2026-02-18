@@ -414,7 +414,8 @@ fun NodeStatusScreen(
 
                 // UTXOracle price card (shows when synced)
                 com.pocketnode.ui.components.OracleCard(
-                    isNodeSynced = nodeStatus.startsWith("Synced")
+                    isNodeSynced = nodeStatus.startsWith("Synced"),
+                    blockHeight = blockHeight
                 )
 
                 Spacer(Modifier.weight(1f))
