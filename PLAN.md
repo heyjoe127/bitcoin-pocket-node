@@ -131,3 +131,7 @@ disablewallet=1
 
 ### Visuals
 - [ ] Block visualization — animated graphic showing stub creation → pruning → backfill (explainer for chainstate copy technique)
+
+### Mempool Integration Notes
+- **Rust GBT lib skipped** — using Kotlin fallback for block projection. If performance is an issue on phone, cross-compile the Rust native lib (`app/src/main/rust/gbt/`) with `aarch64-linux-android` NDK target.
+- **Widget skipped** — mempool home screen widget from pocket-mempool repo can be added later.

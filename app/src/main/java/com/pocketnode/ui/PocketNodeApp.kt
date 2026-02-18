@@ -12,6 +12,8 @@ import com.pocketnode.network.NetworkState
 import com.pocketnode.service.BitcoindService
 import com.pocketnode.service.SyncController
 import com.pocketnode.snapshot.NodeSetupManager
+import com.pocketnode.ui.mempool.MempoolScreen
+import com.pocketnode.ui.mempool.TransactionSearchScreen
 
 /**
  * Root composable — dark Material 3 theme + navigation.
@@ -86,7 +88,13 @@ fun PocketNodeApp(
             }
             composable("data_usage") {
                 MempoolScreen(
+                    onNavigateToTransactionSearch = { navController.navigate("tx_search") },
                     onBack = { navController.popBackStack() }
+                )
+            }
+            composable("tx_search") {
+                TransactionSearchScreen(
+                    onNavigateBack = { navController.popBackStack() }
                 )
             }
             composable("network_settings") {

@@ -34,6 +34,10 @@
             android:exported="false"
             android:foregroundServiceType="specialUse" />
 
+        <service
+            android:name=".mempool.MempoolService"
+            android:exported="false" />
+
         <receiver
             android:name=".service.BootReceiver"
             android:exported="true"
