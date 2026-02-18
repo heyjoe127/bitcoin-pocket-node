@@ -43,6 +43,7 @@ fun OracleCard(
     var progressText by remember { mutableStateOf("") }
 
     // Auto-run once when node is synced and we haven't run yet
+    // Use scope that survives recomposition (won't cancel on scroll)
     LaunchedEffect(isNodeSynced) {
         if (isNodeSynced && result == null && !isRunning) {
             val creds = ConfigGenerator.readCredentials(context) ?: return@LaunchedEffect
@@ -59,6 +60,11 @@ fun OracleCard(
 
                 result = oracle.getPrice()
                 progressJob.cancel()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // Composable left composition — don't treat as error, will retry
+                android.util.Log.d("OracleCard", "Oracle calculation cancelled (recomposition)")
+                isRunning = false
+                throw e // re-throw so coroutine machinery works correctly
             } catch (e: Exception) {
                 android.util.Log.e("OracleCard", "UTXOracle failed", e)
                 error = e.message ?: "Unknown error"

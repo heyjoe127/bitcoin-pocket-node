@@ -376,7 +376,8 @@ class UTXOracle(private val rpc: BitcoinRpcClient) {
         val blockTimesDec = mutableListOf<Long>()
 
         for ((idx, bh) in blockHashes.withIndex()) {
-            if (idx % 10 == 0) emit("Block ${idx + 1}/${blockHashes.size}")
+            emit("Block ${idx + 1}/${blockHashes.size}")
+            kotlinx.coroutines.yield()
 
             val rawHex = getRawBlock(bh)
             val rawBytes = hexToBytes(rawHex)
