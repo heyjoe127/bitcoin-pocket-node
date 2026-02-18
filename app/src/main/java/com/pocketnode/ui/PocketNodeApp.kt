@@ -96,6 +96,7 @@ fun PocketNodeApp(
                     allowCellular = syncController?.allowCellularSync ?: false,
                     cellularBudgetMb = syncController?.cellularBudgetMb ?: 0,
                     wifiBudgetMb = syncController?.wifiBudgetMb ?: 0,
+                    networkMonitor = networkMonitor,
                     onAllowCellularChanged = { syncController?.allowCellularSync = it },
                     onCellularBudgetChanged = { syncController?.cellularBudgetMb = it },
                     onWifiBudgetChanged = { syncController?.wifiBudgetMb = it },

@@ -943,7 +943,7 @@ private fun ActionButtons(
                 onClick = onNavigateToDataUsage,
                 modifier = Modifier.weight(1f),
                 contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)
-            ) { Text("Data", maxLines = 1, style = MaterialTheme.typography.labelSmall) }
+            ) { Text("Mempool", maxLines = 1, style = MaterialTheme.typography.labelSmall) }
             OutlinedButton(
                 onClick = onNavigateToWallet,
                 modifier = Modifier.weight(1f),
