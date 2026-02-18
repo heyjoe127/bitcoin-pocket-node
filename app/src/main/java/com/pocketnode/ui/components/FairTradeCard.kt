@@ -13,6 +13,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -32,11 +33,13 @@ import com.pocketnode.oracle.OracleResult
 fun FairTradeCard(
     oraclePrice: Int? // USD price from UTXOracle, null if not available
 ) {
+    val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
     val focusManager = LocalFocusManager.current
 
+    val prefs = remember { context.getSharedPreferences("fair_trade", android.content.Context.MODE_PRIVATE) }
     var expanded by remember { mutableStateOf(false) }
-    var fiatInput by remember { mutableStateOf("") }
+    var fiatInput by remember { mutableStateOf(prefs.getString("fiat_input", "") ?: "") }
     var copiedField by remember { mutableStateOf<String?>(null) }
 
     // Reset copied indicator after delay
@@ -95,7 +98,10 @@ fun FairTradeCard(
                     // Fiat input
                     OutlinedTextField(
                         value = fiatInput,
-                        onValueChange = { fiatInput = it.filter { c -> c.isDigit() || c == '.' } },
+                        onValueChange = {
+                            fiatInput = it.filter { c -> c.isDigit() || c == '.' }
+                            prefs.edit().putString("fiat_input", fiatInput).apply()
+                        },
                         label = { Text("Amount (USD)") },
                         placeholder = { Text("e.g. 40") },
                         prefix = { Text("$ ", fontFamily = FontFamily.Monospace) },
