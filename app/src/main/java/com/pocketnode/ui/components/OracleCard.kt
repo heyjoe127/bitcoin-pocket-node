@@ -69,6 +69,7 @@ fun OracleCard(
     }
 
     var result by remember { mutableStateOf(loadCachedResult()) }
+    var showRefreshConfirm by remember { mutableStateOf(false) }
 
     // Auto-run once when node is synced and we haven't run yet
     // Use scope that survives recomposition (won't cancel on scroll)
@@ -212,32 +213,9 @@ fun OracleCard(
 
                         Spacer(Modifier.height(12.dp))
 
-                        // Refresh button
+                        // Refresh button — confirmation to prevent accidental ~10 min recalc
                         OutlinedButton(
-                            onClick = {
-                                scope.launch {
-                                    val creds = ConfigGenerator.readCredentials(context) ?: return@launch
-                                    isRunning = true
-                                    error = null
-                                    try {
-                                        val rpc = BitcoinRpcClient(creds.first, creds.second)
-                                        val oracle = UTXOracle(rpc)
-                                        val progressJob = launch {
-                                            oracle.progress.collect { progressText = it }
-                                        }
-                                        val r = oracle.getPriceRecentBlocks()
-                                        result = r
-                                        saveResult(r)
-                                        progressJob.cancel()
-                                    } catch (e: Exception) {
-                                        android.util.Log.e("OracleCard", "UTXOracle refresh failed", e)
-                                        error = e.message
-                                    } finally {
-                                        isRunning = false
-                                        progressText = ""
-                                    }
-                                }
-                            },
+                            onClick = { showRefreshConfirm = true },
                             modifier = Modifier.fillMaxWidth(),
                             enabled = !isRunning
                         ) {
@@ -287,6 +265,49 @@ fun OracleCard(
                 }
             }
         }
+    }
+
+    // Refresh confirmation dialog
+    if (showRefreshConfirm) {
+        AlertDialog(
+            onDismissRequest = { showRefreshConfirm = false },
+            title = { Text("Refresh Price?") },
+            text = { Text("This will re-scan 144 blocks and takes about 10 minutes. Continue?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showRefreshConfirm = false
+                    scope.launch {
+                        val creds = ConfigGenerator.readCredentials(context) ?: return@launch
+                        isRunning = true
+                        error = null
+                        try {
+                            val rpc = BitcoinRpcClient(creds.first, creds.second)
+                            val oracle = UTXOracle(rpc)
+                            val progressJob = launch {
+                                oracle.progress.collect { progressText = it }
+                            }
+                            val r = oracle.getPriceRecentBlocks()
+                            result = r
+                            saveResult(r)
+                            progressJob.cancel()
+                        } catch (e: Exception) {
+                            android.util.Log.e("OracleCard", "UTXOracle refresh failed", e)
+                            error = e.message
+                        } finally {
+                            isRunning = false
+                            progressText = ""
+                        }
+                    }
+                }) {
+                    Text("Refresh")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRefreshConfirm = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }
 
