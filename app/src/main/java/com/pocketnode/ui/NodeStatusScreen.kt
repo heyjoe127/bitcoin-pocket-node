@@ -70,6 +70,8 @@ fun NodeStatusScreen(
     var assumeUtxoActive by remember { mutableStateOf(false) }
     val appPrefs = remember { context.getSharedPreferences("pocketnode_prefs", android.content.Context.MODE_PRIVATE) }
     var showPrice by remember { mutableStateOf(appPrefs.getBoolean("show_price", false)) }
+    var showFairTrade by remember { mutableStateOf(appPrefs.getBoolean("show_fair_trade", false)) }
+    var oraclePrice by remember { mutableStateOf<Int?>(null) }
     var bgValidationHeight by remember { mutableStateOf(-1L) }
 
     // Sync local UI state with service state (handles start/stop while on other screens)
@@ -422,7 +424,19 @@ fun NodeStatusScreen(
                 ) {
                     com.pocketnode.ui.components.OracleCard(
                         isNodeSynced = nodeStatus.startsWith("Synced"),
-                        blockHeight = blockHeight
+                        blockHeight = blockHeight,
+                        onPriceUpdate = { oraclePrice = it }
+                    )
+                }
+
+                // Fair Trade converter card
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = showFairTrade && oraclePrice != null,
+                    enter = androidx.compose.animation.expandVertically(),
+                    exit = androidx.compose.animation.shrinkVertically()
+                ) {
+                    com.pocketnode.ui.components.FairTradeCard(
+                        oraclePrice = oraclePrice
                     )
                 }
 
@@ -433,6 +447,8 @@ fun NodeStatusScreen(
                     isRunning = isRunning,
                     showPrice = showPrice,
                     onShowPriceChange = { showPrice = it; appPrefs.edit().putBoolean("show_price", it).apply() },
+                    showFairTrade = showFairTrade,
+                    onShowFairTradeChange = { showFairTrade = it; appPrefs.edit().putBoolean("show_fair_trade", it).apply() },
                     onNavigateToDataUsage = onNavigateToDataUsage,
                     onNavigateToNetworkSettings = onNavigateToNetworkSettings,
                     onNavigateToSnapshot = onNavigateToSnapshot,
@@ -790,6 +806,8 @@ private fun ActionButtons(
     isRunning: Boolean,
     showPrice: Boolean,
     onShowPriceChange: (Boolean) -> Unit,
+    showFairTrade: Boolean,
+    onShowFairTradeChange: (Boolean) -> Unit,
     onNavigateToDataUsage: () -> Unit,
     onNavigateToNetworkSettings: () -> Unit,
     onNavigateToSnapshot: () -> Unit,
@@ -814,6 +832,25 @@ private fun ActionButtons(
             Switch(
                 checked = showPrice,
                 onCheckedChange = { onShowPriceChange(it) },
+                colors = SwitchDefaults.colors(
+                    checkedTrackColor = Color(0xFFFF9800)
+                )
+            )
+        }
+        // Fair Trade toggle
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                "Fair Trade",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Switch(
+                checked = showFairTrade,
+                onCheckedChange = { onShowFairTradeChange(it) },
                 colors = SwitchDefaults.colors(
                     checkedTrackColor = Color(0xFFFF9800)
                 )

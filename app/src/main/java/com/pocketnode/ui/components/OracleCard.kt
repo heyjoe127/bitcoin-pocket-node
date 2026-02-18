@@ -32,7 +32,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun OracleCard(
     isNodeSynced: Boolean,
-    blockHeight: Long = -1
+    blockHeight: Long = -1,
+    onPriceUpdate: ((Int) -> Unit)? = null
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -82,6 +83,11 @@ fun OracleCard(
     }
 
     var result by remember { mutableStateOf(loadCachedResult()) }
+
+    // Report initial cached price
+    LaunchedEffect(Unit) {
+        result?.let { onPriceUpdate?.invoke(it.price) }
+    }
     var showRefreshConfirm by remember { mutableStateOf(false) }
     var lastUpdatedHeight by remember { mutableStateOf(prefs.getInt("blockEnd", 0).toLong()) }
 
@@ -156,6 +162,7 @@ fun OracleCard(
 
                 val r = oracleInstance.getPriceRecentBlocks()
                 result = r
+                onPriceUpdate?.invoke(r.price)
                 saveResult(r)
                 saveCachedBlocks(oracleInstance.cachedBlocks)
                 lastUpdatedHeight = r.blockRange.last.toLong()
@@ -202,6 +209,7 @@ fun OracleCard(
             val r = oracleInstance.incrementalUpdate(blockHeight.toInt())
             if (r != null) {
                 result = r
+                onPriceUpdate?.invoke(r.price)
                 saveResult(r)
                 saveCachedBlocks(oracleInstance.cachedBlocks)
                 lastUpdatedHeight = blockHeight
@@ -401,6 +409,7 @@ fun OracleCard(
                             }
                             val r = oracle.getPriceRecentBlocks()
                             result = r
+                onPriceUpdate?.invoke(r.price)
                             saveResult(r)
                             progressJob.cancel()
                         } catch (e: Exception) {
