@@ -414,15 +414,15 @@ fun NodeStatusScreen(
                     )
                 }
 
-                // UTXOracle price card — always composed to retain state, visibility controlled by toggle
+                // UTXOracle price card — always processing, visibility controlled by toggle
                 androidx.compose.animation.AnimatedVisibility(
                     visible = showPrice,
                     enter = androidx.compose.animation.expandVertically(),
                     exit = androidx.compose.animation.shrinkVertically()
                 ) {
                     com.pocketnode.ui.components.OracleCard(
-                        isNodeSynced = nodeStatus.startsWith("Synced") && showPrice,
-                        blockHeight = if (showPrice) blockHeight else -1
+                        isNodeSynced = nodeStatus.startsWith("Synced"),
+                        blockHeight = blockHeight
                     )
                 }
 
