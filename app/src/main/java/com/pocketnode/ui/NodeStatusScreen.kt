@@ -909,26 +909,31 @@ private fun ActionButtons(
             )
         }
 
-        // Setup button — always accessible
-        OutlinedButton(
-            onClick = onNavigateToSetup,
+        // Setup row
+        Row(
             modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.outlinedButtonColors(
-                contentColor = MaterialTheme.colorScheme.primary
-            )
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text("Setup Checklist", fontWeight = FontWeight.Medium)
+            OutlinedButton(
+                onClick = onNavigateToSetup,
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.primary
+                )
+            ) { Text("Setup Checklist", fontWeight = FontWeight.Medium) }
+            OutlinedButton(
+                onClick = onNavigateToSnapshot,
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.primary
+                )
+            ) { Text("Setup", fontWeight = FontWeight.Medium) }
         }
 
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            OutlinedButton(
-                onClick = onNavigateToSnapshot,
-                modifier = Modifier.weight(1f),
-                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)
-            ) { Text("Snapshot", maxLines = 1, style = MaterialTheme.typography.labelSmall) }
             OutlinedButton(
                 onClick = onNavigateToNodeAccess,
                 modifier = Modifier.weight(1f),
