@@ -754,6 +754,7 @@ private fun StatsGrid(
         StatCard(
             label = "Peers",
             value = peerCount.toString(),
+            subtitle = "connected",
             modifier = Modifier.weight(1f).fillMaxHeight()
         )
         StatCard(
