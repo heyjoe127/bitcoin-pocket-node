@@ -552,7 +552,7 @@
           <div class="step-num">2</div>
           <div class="step-content">
             <div class="step-title">XOR Key (8 bytes)</div>
-            <div class="step-desc">Each node's chainstate DB is XOR-obfuscated with a unique key. The key must travel with the data.</div>
+            <div class="step-desc">Since Core 28, <span class="mono">xor.dat</span> is used for data obfuscation — each node generates a unique key. The key must travel with the chainstate.</div>
             <div class="trick">Without this file, the data can't be decoded correctly — the chainstate looks corrupt and bitcoind refuses to start!</div>
           </div>
         </div>
