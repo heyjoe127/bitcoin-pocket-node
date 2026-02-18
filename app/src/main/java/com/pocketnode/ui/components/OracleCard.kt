@@ -43,8 +43,15 @@ fun OracleCard(
     var isRunning by remember { mutableStateOf(false) }
     var progressText by remember { mutableStateOf("") }
 
-    // Cache oracle results in SharedPreferences
-    val prefs = remember { context.getSharedPreferences("oracle_cache", android.content.Context.MODE_PRIVATE) }
+    // Cache oracle results in SharedPreferences (small data only — result, not block data)
+    val prefs = remember {
+        val p = context.getSharedPreferences("oracle_cache", android.content.Context.MODE_PRIVATE)
+        // Migrate: remove blockData from SharedPreferences (moved to file)
+        if (p.contains("blockData")) {
+            p.edit().remove("blockData").apply()
+        }
+        p
+    }
 
     fun saveResult(r: OracleResult) {
         val now = System.currentTimeMillis()
@@ -81,30 +88,34 @@ fun OracleCard(
     // Persistent oracle instance — survives recomposition, holds cached block data
     val oracle = remember { mutableStateOf<UTXOracle?>(null) }
 
-    // Load cached block data from disk on first composition
+    // Block data cached to file (not SharedPreferences — too large, causes lag)
+    val blockDataFile = remember { java.io.File(context.filesDir, "oracle_blocks.json") }
+
     fun saveCachedBlocks(blocks: List<BlockOutputs>) {
-        try {
-            val json = org.json.JSONArray()
-            for (b in blocks) {
-                val obj = org.json.JSONObject()
-                obj.put("h", b.height)
-                obj.put("hash", b.hash)
-                obj.put("t", b.time)
-                val outs = org.json.JSONArray()
-                for (o in b.outputs) outs.put(o)
-                obj.put("o", outs)
-                // Skip txids — too large to cache, rebuilt on next full run
-                json.put(obj)
+        kotlinx.coroutines.MainScope().launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                val json = org.json.JSONArray()
+                for (b in blocks) {
+                    val obj = org.json.JSONObject()
+                    obj.put("h", b.height)
+                    obj.put("hash", b.hash)
+                    obj.put("t", b.time)
+                    val outs = org.json.JSONArray()
+                    for (o in b.outputs) outs.put(o)
+                    obj.put("o", outs)
+                    json.put(obj)
+                }
+                blockDataFile.writeText(json.toString())
+            } catch (e: Exception) {
+                android.util.Log.e("OracleCard", "Failed to save block data", e)
             }
-            prefs.edit().putString("blockData", json.toString()).apply()
-        } catch (e: Exception) {
-            android.util.Log.e("OracleCard", "Failed to save block data", e)
         }
     }
 
-    fun loadCachedBlocks(): List<BlockOutputs> {
+    suspend fun loadCachedBlocks(): List<BlockOutputs> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         try {
-            val str = prefs.getString("blockData", null) ?: return emptyList()
+            if (!blockDataFile.exists()) return@withContext emptyList()
+            val str = blockDataFile.readText()
             val json = org.json.JSONArray(str)
             val blocks = mutableListOf<BlockOutputs>()
             for (i in 0 until json.length()) {
@@ -116,13 +127,13 @@ fun OracleCard(
                     height = obj.getInt("h"),
                     hash = obj.getString("hash"),
                     time = obj.getLong("t"),
-                    txids = emptySet(), // not cached — rebuilt on full run
+                    txids = emptySet(),
                     outputs = outputList
                 ))
             }
-            return blocks
+            blocks
         } catch (e: Exception) {
-            return emptyList()
+            emptyList()
         }
     }
 
