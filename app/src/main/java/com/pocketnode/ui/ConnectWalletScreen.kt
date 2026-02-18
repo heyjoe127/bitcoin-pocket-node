@@ -5,7 +5,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.outlined.AccountBalanceWallet
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.ContentPaste
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Tag
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -15,6 +19,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.pocketnode.service.BwtService
@@ -127,16 +132,31 @@ fun ConnectWalletScreen(onBack: () -> Unit) {
                     }
 
                     if (bwtState.status == BwtService.BwtState.Status.RUNNING) {
+                        val statusClip = LocalClipboardManager.current
                         Spacer(Modifier.height(12.dp))
                         Text("Electrum Server", style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
-                        Text(
-                            bwtState.electrumAddress,
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFFF7931A)
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                bwtState.electrumAddress,
+                                style = MaterialTheme.typography.headlineSmall,
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFF7931A),
+                                modifier = Modifier.weight(1f)
+                            )
+                            IconButton(
+                                onClick = { statusClip.setText(AnnotatedString(bwtState.electrumAddress)) },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    Icons.Outlined.ContentCopy,
+                                    contentDescription = "Copy address",
+                                    modifier = Modifier.size(20.dp),
+                                    tint = Color(0xFFF7931A)
+                                )
+                            }
+                        }
                         Spacer(Modifier.height(4.dp))
                         Text(
                             "Protocol: TCP (no SSL)",
@@ -180,6 +200,7 @@ fun ConnectWalletScreen(onBack: () -> Unit) {
 
             // Connection instructions
             if (bwtRunning) {
+                val clipManager = LocalClipboardManager.current
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
@@ -191,15 +212,15 @@ fun ConnectWalletScreen(onBack: () -> Unit) {
                             color = Color(0xFFF7931A))
                         Text("Settings → Network → Electrum Server",
                             style = MaterialTheme.typography.bodySmall)
-                        Text("Enter: ${bwtState.electrumAddress}",
-                            style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
+                        CopyableValue("Host", bwtState.electrumAddress.substringBefore(":"), clipManager)
+                        CopyableValue("Port", bwtState.electrumAddress.substringAfter(":"), clipManager)
                         Spacer(Modifier.height(8.dp))
                         Text("Electrum (Android)", fontWeight = FontWeight.Medium,
                             color = Color(0xFFF7931A))
                         Text("Network → Server → Use custom server",
                             style = MaterialTheme.typography.bodySmall)
-                        Text("Enter: ${BwtService.ELECTRUM_HOST} port ${BwtService.ELECTRUM_PORT}",
-                            style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
+                        CopyableValue("Host", BwtService.ELECTRUM_HOST, clipManager)
+                        CopyableValue("Port", BwtService.ELECTRUM_PORT.toString(), clipManager)
                         Spacer(Modifier.height(8.dp))
                         Text("Other Wallets", fontWeight = FontWeight.Medium,
                             color = Color(0xFFF7931A))
@@ -310,6 +331,7 @@ fun ConnectWalletScreen(onBack: () -> Unit) {
 
             // Standard RPC connection
             val rpcCreds = remember { com.pocketnode.util.ConfigGenerator.readCredentials(context) }
+            val rpcClip = LocalClipboardManager.current
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
@@ -321,20 +343,10 @@ fun ConnectWalletScreen(onBack: () -> Unit) {
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
                     Spacer(Modifier.height(8.dp))
-                    Text("Host", style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
-                    Text("127.0.0.1:8332", fontFamily = FontFamily.Monospace,
-                        style = MaterialTheme.typography.bodyMedium)
-                    Spacer(Modifier.height(4.dp))
-                    Text("User", style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
-                    Text(rpcCreds?.first ?: "—", fontFamily = FontFamily.Monospace,
-                        style = MaterialTheme.typography.bodyMedium)
-                    Spacer(Modifier.height(4.dp))
-                    Text("Password", style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
-                    Text(rpcCreds?.second ?: "—", fontFamily = FontFamily.Monospace,
-                        style = MaterialTheme.typography.bodyMedium)
+                    CopyableValue("Host", "127.0.0.1", rpcClip)
+                    CopyableValue("Port", "8332", rpcClip)
+                    CopyableValue("User", rpcCreds?.first ?: "—", rpcClip)
+                    CopyableValue("Password", rpcCreds?.second ?: "—", rpcClip)
                     Spacer(Modifier.height(8.dp))
                     Text("For apps that support direct bitcoind RPC (e.g. Fully Noded, bitcoin-cli).",
                         style = MaterialTheme.typography.bodySmall,
@@ -418,7 +430,7 @@ fun ConnectWalletScreen(onBack: () -> Unit) {
         )
     }
 
-    // Add address dialog
+    // Add address dialog  
     if (showAddAddress) {
         val clipboardManager = LocalClipboardManager.current
         AlertDialog(
@@ -464,5 +476,41 @@ fun ConnectWalletScreen(onBack: () -> Unit) {
                 TextButton(onClick = { showAddAddress = false }) { Text("Cancel") }
             }
         )
+    }
+}
+
+@Composable
+private fun CopyableValue(
+    label: String,
+    value: String,
+    clipboardManager: androidx.compose.ui.platform.ClipboardManager
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+            )
+            Text(
+                value,
+                style = MaterialTheme.typography.bodyMedium,
+                fontFamily = FontFamily.Monospace
+            )
+        }
+        IconButton(
+            onClick = { clipboardManager.setText(AnnotatedString(value)) },
+            modifier = Modifier.size(32.dp)
+        ) {
+            Icon(
+                Icons.Outlined.ContentCopy,
+                contentDescription = "Copy $label",
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+            )
+        }
     }
 }
