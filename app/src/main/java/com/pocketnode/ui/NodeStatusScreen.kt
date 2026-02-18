@@ -430,12 +430,12 @@ fun NodeStatusScreen(
                         isNodeSynced = nodeStatus.startsWith("Synced"),
                         blockHeight = blockHeight,
                         onPriceUpdate = { oraclePrice = it },
-                        onExpanded = { isExpanded -> scope.launch {
-                            kotlinx.coroutines.delay(100) // let expand animation start
-                            val anim = androidx.compose.animation.core.tween<Int>(600)
-                            val target = if (isExpanded) (dashboardScrollState.value + 700).coerceAtMost(dashboardScrollState.maxValue)
-                                         else (dashboardScrollState.value - 700).coerceAtLeast(0)
-                            dashboardScrollState.animateScrollTo(target, anim)
+                        onExpanded = { isExpanded -> if (isExpanded) scope.launch {
+                            kotlinx.coroutines.delay(150)
+                            dashboardScrollState.animateScrollTo(
+                                dashboardScrollState.maxValue,
+                                androidx.compose.animation.core.tween(700)
+                            )
                         } }
                     )
                 }
@@ -448,12 +448,12 @@ fun NodeStatusScreen(
                 ) {
                     com.pocketnode.ui.components.FairTradeCard(
                         oraclePrice = oraclePrice,
-                        onExpanded = { isExpanded -> scope.launch {
-                            kotlinx.coroutines.delay(100)
-                            val anim = androidx.compose.animation.core.tween<Int>(600)
-                            val target = if (isExpanded) (dashboardScrollState.value + 700).coerceAtMost(dashboardScrollState.maxValue)
-                                         else (dashboardScrollState.value - 700).coerceAtLeast(0)
-                            dashboardScrollState.animateScrollTo(target, anim)
+                        onExpanded = { isExpanded -> if (isExpanded) scope.launch {
+                            kotlinx.coroutines.delay(150)
+                            dashboardScrollState.animateScrollTo(
+                                dashboardScrollState.maxValue,
+                                androidx.compose.animation.core.tween(700)
+                            )
                         } }
                     )
                 }
