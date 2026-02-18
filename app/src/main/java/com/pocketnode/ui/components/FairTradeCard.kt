@@ -144,13 +144,13 @@ fun FairTradeCard(
                     )
                     Spacer(Modifier.height(12.dp))
 
-                    // USD field
+                    // USD field (max 2 decimal places)
                     ConverterField(
                         label = "USD",
                         prefix = "$",
                         value = usdInput,
                         onValueChange = { value ->
-                            val filtered = value.filter { c -> c.isDigit() || c == '.' }
+                            val filtered = limitDecimals(value.filter { c -> c.isDigit() || c == '.' }, 2)
                             editingField = "usd"
                             updateFromUsd(filtered)
                         },
@@ -165,13 +165,13 @@ fun FairTradeCard(
 
                     Spacer(Modifier.height(8.dp))
 
-                    // BTC field
+                    // BTC field (max 8 decimal places)
                     ConverterField(
                         label = "BTC",
                         prefix = "₿",
                         value = btcInput,
                         onValueChange = { value ->
-                            val filtered = value.filter { c -> c.isDigit() || c == '.' }
+                            val filtered = limitDecimals(value.filter { c -> c.isDigit() || c == '.' }, 8)
                             editingField = "btc"
                             updateFromBtc(filtered)
                         },
@@ -222,6 +222,16 @@ fun FairTradeCard(
             }
         }
     }
+}
+
+/** Limit decimal places and prevent multiple dots */
+private fun limitDecimals(input: String, maxDecimals: Int): String {
+    val dotIndex = input.indexOf('.')
+    if (dotIndex < 0) return input
+    // Remove any extra dots
+    val clean = input.substring(0, dotIndex + 1) + input.substring(dotIndex + 1).replace(".", "")
+    val afterDot = clean.length - dotIndex - 1
+    return if (afterDot > maxDecimals) clean.substring(0, dotIndex + 1 + maxDecimals) else clean
 }
 
 /**
