@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Bitcoin Pocket Node — How It Works</title>
+<title>Bitcoin Pocket Node - How It Works</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&family=JetBrains+Mono:wght@400;600&display=swap');
 
@@ -518,7 +518,7 @@
       <div class="device-detail">ARM64 (Pixel, Samsung, etc.)<br>~15 GB free space<br><span class="mono highlight">same WiFi network</span></div>
     </div>
   </div>
-  <p class="subtitle" style="margin-top: 20px;">Both devices on the same local network. The phone copies directly from <em>your own</em> node — no external servers involved.</p>
+  <p class="subtitle" style="margin-top: 20px;">Both devices on the same local network. The phone copies directly from <em>your own</em> node - no external servers involved.</p>
 </div>
 
 <!-- Slide 4: The Architecture -->
@@ -545,15 +545,15 @@
           <div class="step-num">1</div>
           <div class="step-content">
             <div class="step-title">Chainstate (~11 GB)</div>
-            <div class="step-desc">The UTXO set — every unspent output on the network. This <em>is</em> Bitcoin's current state.</div>
+            <div class="step-desc">The UTXO set - every unspent output on the network. This <em>is</em> Bitcoin's current state.</div>
           </div>
         </div>
         <div class="step" style="animation-delay: 0.3s;">
           <div class="step-num">2</div>
           <div class="step-content">
             <div class="step-title">XOR Key (8 bytes)</div>
-            <div class="step-desc">Since Core 28, <span class="mono">xor.dat</span> is used for data obfuscation — each node generates a unique key. The key must travel with the chainstate.</div>
-            <div class="trick">Without this file, the data can't be decoded correctly — the chainstate looks corrupt and bitcoind refuses to start!</div>
+            <div class="step-desc">Since Core 28, <span class="mono">xor.dat</span> is used for data obfuscation - each node generates a unique key. The key must travel with the chainstate.</div>
+            <div class="trick">Without this file, the data can't be decoded correctly - the chainstate looks corrupt and bitcoind refuses to start!</div>
           </div>
         </div>
         <div class="step" style="animation-delay: 0.5s;">
@@ -568,7 +568,7 @@
   </div>
 </div>
 
-<!-- Slide 5: The Trick — Stub Files -->
+<!-- Slide 5: The Trick - Stub Files -->
 <div class="slide" id="slide-4">
   <h3>Step 2</h3>
   <h2>The <span class="highlight">stub file</span> trick</h2>
@@ -579,13 +579,13 @@
         If they're missing, bitcoind <span class="red">crashes</span>.
       </p>
       <p class="subtitle" style="text-align: left; margin-bottom: 24px;">
-        But we don't need the actual block data — just the files to <em>exist</em>.
+        But we don't need the actual block data - just the files to <em>exist</em>.
       </p>
       <p class="subtitle" style="text-align: left;">
         Solution: create <span class="highlight">empty stub files</span> for every block file the index expects.
       </p>
       <div class="trick" style="max-width: 500px; margin-top: 24px;">
-        Bitcoind reads the stub files, finds them empty, and begins backfilling them in pruned mode — only keeping the most recent blocks and discarding old ones as it goes.
+        Bitcoind reads the stub files, finds them empty, and begins backfilling them in pruned mode - only keeping the most recent blocks and discarding old ones as it goes.
       </div>
     </div>
     <div class="col">
@@ -627,7 +627,7 @@
           <div class="step-num">4</div>
           <div class="step-content">
             <div class="step-title">Copy last ~10 blocks</div>
-            <div class="step-desc">Only the blocks in the final <span class="mono">blk*.dat</span> file. Usually 10-50 MB — tiny compared to 600 GB.</div>
+            <div class="step-desc">Only the blocks in the final <span class="mono">blk*.dat</span> file. Usually 10-50 MB - tiny compared to 600 GB.</div>
           </div>
         </div>
         <div class="step" style="animation-delay: 0.5s;">
@@ -639,7 +639,7 @@
         </div>
       </div>
       <div class="trick" style="max-width: 500px; margin-top: 16px;">
-        The block index tells us which <span class="mono">blk*.dat</span> file has the chain tip. We only need that one file — everything else is stubs.
+        The block index tells us which <span class="mono">blk*.dat</span> file has the chain tip. We only need that one file - everything else is stubs.
       </div>
     </div>
     <div class="col" style="display: flex; flex-direction: column; align-items: center; justify-content: center;">
@@ -731,8 +731,8 @@
       <div class="step-num" style="background: var(--orange);">★</div>
       <div class="step-content">
         <div class="step-title highlight">Pruning takes over</div>
-        <div class="step-desc">This is normal pruned node behaviour — bitcoind finds empty block files, recognises them as pruned, and continues forward keeping only recent blocks. With <span class="mono">prune=2048</span> it maintains ~2 GB of recent data.</div>
-        <div class="trick">We're deliberately creating the conditions that trigger standard pruning. No hacks — just giving bitcoind a valid chainstate and letting its built-in pruning logic do the rest.</div>
+        <div class="step-desc">This is normal pruned node behaviour - bitcoind finds empty block files, recognises them as pruned, and continues forward keeping only recent blocks. With <span class="mono">prune=2048</span> it maintains ~2 GB of recent data.</div>
+        <div class="trick">We're deliberately creating the conditions that trigger standard pruning. No hacks - just giving bitcoind a valid chainstate and letting its built-in pruning logic do the rest.</div>
       </div>
     </div>
     <div class="step" style="animation-delay: 0.7s; border-left-color: var(--green);">
@@ -777,7 +777,7 @@
           <div class="step-num" style="background: var(--purple);">📱</div>
           <div class="step-content">
             <div class="step-title">Auto-start on boot</div>
-            <div class="step-desc">Phones restart nightly (GrapheneOS). A boot receiver re-launches the node automatically — zero downtime without user intervention.</div>
+            <div class="step-desc">Phones restart nightly (GrapheneOS). A boot receiver re-launches the node automatically - zero downtime without user intervention.</div>
           </div>
         </div>
       </div>
@@ -788,7 +788,7 @@
           <div class="step-num" style="background: var(--purple);">📶</div>
           <div class="step-content">
             <div class="step-title">Metered network detection</div>
-            <div class="step-desc">VPN over cellular looks like WiFi to Android. We detect <span class="highlight">metered connections</span> and warn before syncing over mobile data — blocks are ~2 MB each.</div>
+            <div class="step-desc">VPN over cellular looks like WiFi to Android. We detect <span class="highlight">metered connections</span> and warn before syncing over mobile data - blocks are ~2 MB each.</div>
           </div>
         </div>
         <div class="step" style="animation-delay: 0.9s; border-left-color: var(--purple);">
@@ -802,7 +802,7 @@
           <div class="step-num" style="background: var(--purple);">⚡</div>
           <div class="step-content">
             <div class="step-title">Built-in Electrum server</div>
-            <div class="step-desc">BWT runs alongside bitcoind, serving your wallet over localhost. BlueWallet connects directly — your keys, your node, your rules.</div>
+            <div class="step-desc">BWT runs alongside bitcoind, serving your wallet over localhost. BlueWallet connects directly - your keys, your node, your rules.</div>
           </div>
         </div>
       </div>
