@@ -434,10 +434,11 @@ fun NodeStatusScreen(
                             kotlinx.coroutines.delay(150)
                             val anim = androidx.compose.animation.core.tween<Int>(700)
                             if (isExpanded) {
-                                dashboardScrollState.animateScrollTo(dashboardScrollState.value + 700, anim)
+                                val scrollBefore = dashboardScrollState.value
+                                dashboardScrollState.animateScrollTo(scrollBefore + 400, anim)
                             } else {
-                                kotlinx.coroutines.delay(300) // wait for collapse to shrink content
-                                dashboardScrollState.animateScrollTo((dashboardScrollState.value - 700).coerceAtLeast(0), anim)
+                                kotlinx.coroutines.delay(300)
+                                dashboardScrollState.animateScrollTo((dashboardScrollState.value - 400).coerceAtLeast(0), anim)
                             }
                         } }
                     )
@@ -455,10 +456,11 @@ fun NodeStatusScreen(
                             kotlinx.coroutines.delay(150)
                             val anim = androidx.compose.animation.core.tween<Int>(700)
                             if (isExpanded) {
-                                dashboardScrollState.animateScrollTo(dashboardScrollState.value + 700, anim)
+                                val scrollBefore = dashboardScrollState.value
+                                dashboardScrollState.animateScrollTo(scrollBefore + 400, anim)
                             } else {
                                 kotlinx.coroutines.delay(300)
-                                dashboardScrollState.animateScrollTo((dashboardScrollState.value - 700).coerceAtLeast(0), anim)
+                                dashboardScrollState.animateScrollTo((dashboardScrollState.value - 400).coerceAtLeast(0), anim)
                             }
                         } }
                     )
