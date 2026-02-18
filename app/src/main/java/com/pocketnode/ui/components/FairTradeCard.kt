@@ -71,29 +71,13 @@ fun FairTradeCard(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("⚖️", fontSize = 18.sp)
                     Spacer(Modifier.width(8.dp))
-                    Column {
-                        Text(
-                            "Fair Trade",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                        )
-                        Text(
-                            if (oraclePrice != null) "Sovereign converter" else "Waiting for price…",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                        )
-                    }
-                }
-
-                if (satsAmount != null && !expanded) {
                     Text(
-                        "%,d sats".format(satsAmount),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace,
-                        color = Color(0xFFFF9800)
+                        if (oraclePrice != null) "Sovereign Converter" else "Sovereign Converter — waiting for price…",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
                 }
+
             }
 
             // ── Expanded view ──
@@ -157,32 +141,6 @@ fun FairTradeCard(
                             }
                         )
 
-                        Spacer(Modifier.height(12.dp))
-
-                        // Quick amount buttons
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            listOf("10", "20", "50", "100", "500").forEach { amount ->
-                                FilterChip(
-                                    selected = fiatInput == amount,
-                                    onClick = { fiatInput = amount },
-                                    label = {
-                                        Text(
-                                            "$$amount",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            fontFamily = FontFamily.Monospace
-                                        )
-                                    },
-                                    modifier = Modifier.weight(1f),
-                                    colors = FilterChipDefaults.filterChipColors(
-                                        selectedContainerColor = Color(0xFFFF9800).copy(alpha = 0.2f),
-                                        selectedLabelColor = Color(0xFFFF9800)
-                                    )
-                                )
-                            }
-                        }
                     }
 
                     Spacer(Modifier.height(12.dp))

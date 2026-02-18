@@ -844,7 +844,7 @@ private fun ActionButtons(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                "Fair Trade",
+                "Sovereign Converter",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface
             )
