@@ -433,7 +433,7 @@ fun NodeStatusScreen(
                         onExpanded = { isExpanded -> if (isExpanded) scope.launch {
                             kotlinx.coroutines.delay(250)
                             dashboardScrollState.animateScrollTo(
-                                dashboardScrollState.maxValue,
+                                dashboardScrollState.value + 5,
                                 androidx.compose.animation.core.tween(500, easing = androidx.compose.animation.core.LinearEasing)
                             )
                         } }
@@ -451,7 +451,7 @@ fun NodeStatusScreen(
                         onExpanded = { isExpanded -> if (isExpanded) scope.launch {
                             kotlinx.coroutines.delay(250)
                             dashboardScrollState.animateScrollTo(
-                                dashboardScrollState.maxValue,
+                                dashboardScrollState.value + 5,
                                 androidx.compose.animation.core.tween(500, easing = androidx.compose.animation.core.LinearEasing)
                             )
                         } }
