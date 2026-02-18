@@ -21,6 +21,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -218,6 +224,64 @@ fun FairTradeCard(
     }
 }
 
+/**
+ * Groups digits in threes with alternating colors for readability.
+ * Integer part: groups from right (like commas): 1,234,567
+ * Decimal part: groups from left after dot: .000 580 00
+ */
+private fun digitGroupingTransformation(
+    brightColor: Color,
+    dimColor: Color
+): VisualTransformation = VisualTransformation { text ->
+    val raw = text.text
+    val dotIndex = raw.indexOf('.')
+
+    val intPart = if (dotIndex >= 0) raw.substring(0, dotIndex) else raw
+    val decPart = if (dotIndex >= 0) raw.substring(dotIndex) else "" // includes the dot
+
+    val annotated = buildAnnotatedString {
+        // Integer part: group from right
+        if (intPart.isNotEmpty()) {
+            val reversed = intPart.reversed()
+            for ((i, c) in reversed.withIndex()) {
+                val groupIndex = i / 3
+                val color = if (groupIndex % 2 == 0) brightColor else dimColor
+                withStyle(SpanStyle(color = color)) { append(c) }
+            }
+            // Reverse back - we need to rebuild properly
+        }
+
+        // Actually, buildAnnotatedString appends in order, so let's do it properly
+    }
+
+    // Rebuild properly
+    val result = buildAnnotatedString {
+        // Integer part: assign group colors from right
+        if (intPart.isNotEmpty()) {
+            for (i in intPart.indices) {
+                val posFromRight = intPart.length - 1 - i
+                val groupIndex = posFromRight / 3
+                val color = if (groupIndex % 2 == 0) brightColor else dimColor
+                withStyle(SpanStyle(color = color)) { append(intPart[i]) }
+            }
+        }
+
+        // Decimal part: dot + group from left
+        if (decPart.isNotEmpty()) {
+            // The dot itself
+            withStyle(SpanStyle(color = dimColor)) { append('.') }
+            val afterDot = decPart.substring(1)
+            for (i in afterDot.indices) {
+                val groupIndex = i / 3
+                val color = if (groupIndex % 2 == 0) brightColor else dimColor
+                withStyle(SpanStyle(color = color)) { append(afterDot[i]) }
+            }
+        }
+    }
+
+    TransformedText(result, OffsetMapping.Identity)
+}
+
 @Composable
 private fun ConverterField(
     label: String,
@@ -229,6 +293,9 @@ private fun ConverterField(
     keyboardType: KeyboardType,
     focusManager: androidx.compose.ui.focus.FocusManager
 ) {
+    val brightColor = MaterialTheme.colorScheme.onSurface
+    val dimColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
@@ -250,6 +317,7 @@ private fun ConverterField(
                 )
             }
         },
+        visualTransformation = digitGroupingTransformation(brightColor, dimColor),
         modifier = Modifier.fillMaxWidth(),
         singleLine = true,
         textStyle = LocalTextStyle.current.copy(
