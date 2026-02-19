@@ -118,7 +118,7 @@ disablewallet=1
 - [ ] Remove `deprecatedrpc=create_bdb` dependency
 
 ### Chainstate Copy
-- [ ] XOR re-encoding — decode block index with source node's xor.dat key, re-encode with local node's key. Eliminates need to copy xor.dat, preserves unique per-node obfuscation (security model: every node looks different on disk)
+- [ ] XOR re-encoding — after chainstate copy, decode both block index (xor.dat key) and chainstate (embedded LevelDB obfuscation key) from source node, re-encode with locally generated keys. Eliminates need to copy xor.dat, every node is unique on disk from first boot
 - [ ] Phone-to-phone chainstate copy (WiFi Direct / hotspot)
 
 ### Networking
