@@ -73,9 +73,8 @@ fun ConnectWalletScreen(onBack: () -> Unit) {
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Connection Details
+            // Electrum Server card
             val connClip = LocalClipboardManager.current
-            val rpcCreds = remember { com.pocketnode.util.ConfigGenerator.readCredentials(context) }
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
@@ -87,16 +86,14 @@ fun ConnectWalletScreen(onBack: () -> Unit) {
                 )
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Connection Details", fontWeight = FontWeight.Bold)
-
-                    // Electrum server status
-                    Spacer(Modifier.height(12.dp))
+                    Text("Electrum Server", fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(8.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         val (statusText, statusColor) = when (bwtState.status) {
-                            BwtService.BwtState.Status.RUNNING -> "Electrum Server Running" to Color(0xFF4CAF50)
-                            BwtService.BwtState.Status.STARTING -> "Electrum Starting..." to Color(0xFFFF9800)
-                            BwtService.BwtState.Status.ERROR -> "Electrum Error" to MaterialTheme.colorScheme.error
-                            BwtService.BwtState.Status.STOPPED -> "Electrum Stopped" to MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                            BwtService.BwtState.Status.RUNNING -> "Running" to Color(0xFF4CAF50)
+                            BwtService.BwtState.Status.STARTING -> "Starting..." to Color(0xFFFF9800)
+                            BwtService.BwtState.Status.ERROR -> "Error" to MaterialTheme.colorScheme.error
+                            BwtService.BwtState.Status.STOPPED -> "Stopped" to MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                         }
                         Text("●", color = statusColor)
                         Spacer(Modifier.width(8.dp))
@@ -105,40 +102,41 @@ fun ConnectWalletScreen(onBack: () -> Unit) {
 
                     if (bwtState.status == BwtService.BwtState.Status.RUNNING) {
                         Spacer(Modifier.height(8.dp))
-                        Text("ELECTRUM SERVER", style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
                         CopyableValue("Host", BwtService.ELECTRUM_HOST, connClip)
                         CopyableValue("Port", BwtService.ELECTRUM_PORT.toString(), connClip)
                         Text("TCP (no SSL)", style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "Connect BlueWallet, Electrum, or Sparrow to this server.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        )
                     }
 
                     if (bwtState.error != null) {
                         Text(bwtState.error!!, color = MaterialTheme.colorScheme.error,
                             style = MaterialTheme.typography.bodySmall)
                     }
+                }
+            }
 
-                    // Divider between sections
-                    Spacer(Modifier.height(12.dp))
-                    HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
-                    Spacer(Modifier.height(12.dp))
-
-                    // RPC details
-                    Text("BITCOIN RPC", style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+            // Bitcoin RPC card
+            val rpcCreds = remember { com.pocketnode.util.ConfigGenerator.readCredentials(context) }
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("Bitcoin RPC", fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(8.dp))
                     CopyableValue("Host", "127.0.0.1", connClip)
                     CopyableValue("Port", "8332", connClip)
                     CopyableValue("User", rpcCreds?.first ?: "—", connClip)
                     CopyableValue("Password", rpcCreds?.second ?: "—", connClip)
-
-                    // Brief explainer
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(8.dp))
                     Text(
-                        "Point your wallet app at the Electrum server (BlueWallet, Electrum, Sparrow). " +
-                        "For apps that support direct RPC, use the RPC credentials (Fully Noded, bitcoin-cli). " +
-                        "All connections stay on your device.",
+                        "For Fully Noded, bitcoin-cli, or any app with direct RPC support.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                     )
