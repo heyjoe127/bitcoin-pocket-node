@@ -1,3 +1,10 @@
+/*
+ * UTXOracle — Licensed under the UTXOracle License v1.0 (May 2025)
+ * See LICENSES/UTXORACLE-LICENSE.md for full terms.
+ * Original author: @SteveSimple (utxo.live)
+ * Price logic is unmodified from the original Python implementation.
+ */
+
 /**
  * UTXOracle v9.1 — Kotlin Port for Bitcoin Pocket Node
  *

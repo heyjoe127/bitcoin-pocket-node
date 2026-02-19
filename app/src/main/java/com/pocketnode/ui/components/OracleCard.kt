@@ -262,7 +262,7 @@ fun OracleCard(
                     Spacer(Modifier.width(8.dp))
                     Column {
                         Text(
-                            "UTXOracle",
+                            "UTXOracle Block Window Price",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                         )
@@ -391,7 +391,17 @@ fun OracleCard(
                         color = MaterialTheme.colorScheme.primary,
                         textDecoration = TextDecoration.Underline,
                         modifier = Modifier.clickable {
-                            uriHandler.openUri("https://utxo.live")
+                            uriHandler.openUri("https://utxo.live/oracle/")
+                        }
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "▶ UTXOracle Live Stream",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        textDecoration = TextDecoration.Underline,
+                        modifier = Modifier.clickable {
+                            uriHandler.openUri("https://www.youtube.com/@UTXOracle/live")
                         }
                     )
                 }

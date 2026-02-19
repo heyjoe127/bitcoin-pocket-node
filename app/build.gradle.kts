@@ -80,6 +80,9 @@ dependencies {
     // Foldable support
     implementation("androidx.window:window:1.2.0")
 
+    // Image loading (GitHub avatar etc.)
+    implementation("io.coil-kt:coil-compose:2.5.0")
+
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 }
