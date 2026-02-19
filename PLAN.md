@@ -149,7 +149,7 @@ disablewallet=1
 - [ ] Warning screen: additional ~5 GB data, explain what it enables
 - [ ] SSH to donor node, enable `blockfilterindex=1` if not already set, wait for index build
 - [ ] Copy block filter index during chainstate copy (or as separate download)
-- [ ] Revert donor node config if user disables Lightning
+- [ ] Revert donor node config immediately after copy (don't leave changes on donor)
 - [ ] Zeus connects to local bitcoind via Neutrino (BIP 157/158) on localhost
 - [ ] Stack: Pocket Node (chain validation) + BlueWallet (on-chain via Electrum) + Zeus (Lightning via Neutrino)
 - [ ] Future: VLS (Validating Lightning Signer) for sovereign signing with remote Lightning node
