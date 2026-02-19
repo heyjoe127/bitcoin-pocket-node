@@ -156,16 +156,19 @@ disablewallet=1
 - [ ] **Downgrade warning** — "This will restore v28.1 chainstate and catch up to chain tip. Continue?"
 - [ ] Populate matrix from Bitcoin Core release notes (chainstate format changes are documented)
 
-### Lightning (Zeus Integration via Neutrino)
+### Lightning — Sovereign Mobile Lightning Node
 
-**Concept:** Enable Zeus wallet to connect to Pocket Node's bitcoind for sovereign Lightning chain validation. No new Lightning code in our app — Zeus handles Lightning, we provide the trusted chain backend via BIP 157/158 compact block filters.
+**Concept:** Make a phone a genuinely sovereign Lightning node using existing standards. No new protocol primitives required. Every component exists today — the innovation is composing them into an architecture that works on mobile.
 
 **The Sovereign Phone Stack:**
 - **Pocket Node** — full validating Bitcoin node (trust anchor)
 - **BlueWallet** — on-chain wallet via our Electrum server (BWT, port 50001)
 - **Zeus** — Lightning wallet via our bitcoind Neutrino (BIP 157/158, port 8333)
 
-**Setup Flow:**
+#### Phase 1: Sovereign Foundation
+Pruned Bitcoin Core on the phone with BIP 157/158 block filters. Zeus with embedded LND handles Lightning. Olympus LSP provides inbound liquidity via LSPS2 just-in-time channels. Users get a working sovereign Lightning experience without managing liquidity. Olympus can never steal funds — user holds keys and can exit to chain anytime. No watchtower needed — Olympus is a known, accountable entity.
+
+**Block Filter Setup Flow:**
 - [ ] "Enable Lightning" toggle in settings with warning: "Requires ~5 GB additional data from your source node"
 - [ ] Reuse existing SSH credentials from chainstate copy (no new login needed)
 - [ ] SSH to donor node, add `blockfilterindex=1` to `bitcoin.conf`
@@ -174,8 +177,10 @@ disablewallet=1
 - [ ] Check for XOR key in filter index directory — copy alongside if present (same pattern as chainstate xor.dat)
 - [ ] Revert donor's `bitcoin.conf` immediately after copy (remove `blockfilterindex=1`)
 - [ ] Restart donor's bitcoind — donor back to original state, completely out of the picture
+- [ ] If donor already has `blockfilterindex=1` enabled, skip enable/build/revert — just copy
 - [ ] Configure local bitcoind: `blockfilterindex=1` + `peerblockfilters=1`
 - [ ] Restart local bitcoind — now serves compact block filters
+- [ ] Poll donor via SSH/RPC for build progress, notification when ready
 
 **Standalone Operation:**
 - Historical filters copied from donor, new block filters built locally as blocks arrive
@@ -187,14 +192,14 @@ disablewallet=1
 - [ ] Filter index lives in `indexes/blockfilter/basic/` (separate LevelDB from chainstate)
 - [ ] Verify XOR obfuscation: own key vs shared with blocks index
 - [ ] Can be done during initial chainstate copy or as separate "Lightning upgrade" download later
-- [ ] If donor already has `blockfilterindex=1` enabled, skip the enable/build/revert — just copy
 - [ ] Progress UI: index build can take hours on donor, need monitoring and status display
 - [ ] Test with Umbrel and Start9 (different file paths, permissions)
 
-**Future Enhancements:**
-- [ ] VLS (Validating Lightning Signer) — phone holds signing keys, remote server runs always-online Lightning node. Even server operator can't steal funds.
-- [ ] Partnership with sovereign data center for LSP/VLS infrastructure
+#### Phase 2: Peer Channels
+As network matures, users open channels to arbitrary peers beyond Olympus — better routing, true decentralization, reduced LSP dependence. No new code from us — natural user behavior as confidence grows. Switching LSPs always possible because user owns the node.
+
 - [ ] LAN exposure toggle for Zeus on separate device (same network)
+- [ ] Documentation for opening peer channels
 
 ### Maintenance
 - [ ] BWT fork maintenance and modernization
@@ -205,3 +210,22 @@ disablewallet=1
 ### Mempool Integration Notes
 - **Rust GBT lib skipped** — using Kotlin fallback for block projection. If performance is an issue on phone, cross-compile the Rust native lib (`app/src/main/rust/gbt/`) with `aarch64-linux-android` NDK target.
 - **Widget skipped** — mempool home screen widget from pocket-mempool repo can be added later.
+
+### Lightning Phase 3: Peer Watchtower Mesh + LDK (Future)
+Replace Zeus embedded LND with LDK (Lightning Dev Kit by Block/Square) — modular Lightning library with native Android bindings. Designed specifically for mobile: constrained storage, intermittent connectivity.
+
+**Peer Watchtower Mesh:**
+- Watchtower duty distributed across the user base cryptographically
+- Phones watch each other — no trusted service, no always-on server, no single point of failure
+- Counterparties learn nothing about channel details from watchtower data they hold
+- Someone in the network is statistically always online
+- Nodes earn fees for successfully broadcasting justice transactions
+- Network effect: more users = stronger coverage = safer peer channels = less LSP dependence = more sovereignty
+
+**Development path:**
+- [ ] LDK integration with native Android bindings (replaces Zeus embedded LND)
+- [ ] LDK uses our local bitcoind RPC as chain source (already available)
+- [ ] Peer watchtower protocol — encrypted channel state backup distribution
+- [ ] Justice transaction fee incentives
+- [ ] VLS (Validating Lightning Signer) — phone holds signing keys, remote server runs always-online node
+- [ ] Partnership with sovereign data center for LSP/VLS infrastructure
