@@ -48,10 +48,15 @@ class BwtService(private val context: Context) {
      * Ensures the bwt wallet exists in bitcoind first.
      */
     fun start(saveState: Boolean = true) {
-        if (_isRunning.value) {
-            // Force cleanup if stuck
-            stop(saveState = false)
+        // Force cleanup any leftover process
+        bwtProcess?.let { process ->
+            if (process.isAlive) {
+                process.destroyForcibly()
+                Log.i(TAG, "Killed leftover BWT process before start")
+            }
         }
+        bwtProcess = null
+        _isRunning.value = false
         if (saveState) {
             context.getSharedPreferences("pocketnode_prefs", Context.MODE_PRIVATE)
                 .edit().putBoolean("bwt_was_running", true).apply()
@@ -117,7 +122,7 @@ class BwtService(private val context: Context) {
                 Log.i(TAG, "Starting BWT with ${xpubs.size} xpubs, ${addresses.size} addresses")
 
                 // Wait for port to be released from previous instance
-                delay(2000)
+                delay(3000)
 
                 val pb = ProcessBuilder(args)
                 pb.environment()["LD_LIBRARY_PATH"] = context.applicationInfo.nativeLibraryDir
