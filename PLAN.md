@@ -117,9 +117,12 @@ disablewallet=1
 - [ ] Multisig support (comes with descriptor wallets)
 - [ ] Remove `deprecatedrpc=create_bdb` dependency
 
+### Chainstate Copy
+- [ ] XOR re-encoding — decode block index with source node's xor.dat key, re-encode with local node's key. Eliminates need to copy xor.dat, preserves unique per-node obfuscation (security model: every node looks different on disk)
+- [ ] Phone-to-phone chainstate copy (WiFi Direct / hotspot)
+
 ### Networking
 - [ ] Tor integration for private peer connections
-- [ ] Phone-to-phone chainstate copy (WiFi Direct / hotspot)
 
 ### UX
 - [ ] Non-technical setup documentation for everyday users
