@@ -55,7 +55,8 @@ fun NodeStatusScreen(
     onNavigateToDataUsage: () -> Unit = {},
     onNavigateToNetworkSettings: () -> Unit = {},
     onNavigateToNodeAccess: () -> Unit = {},
-    onNavigateToWallet: () -> Unit = {}
+    onNavigateToWallet: () -> Unit = {},
+    mempoolPaneVisible: Boolean = false
 ) {
     val context = LocalContext.current
 
@@ -461,6 +462,7 @@ fun NodeStatusScreen(
                     onNavigateToNodeAccess = onNavigateToNodeAccess,
                     onNavigateToSetup = onNavigateToSetup,
                     onNavigateToWallet = onNavigateToWallet,
+                    mempoolPaneVisible = mempoolPaneVisible,
                     onToggleNode = {
                         if (isRunning) {
                             context.stopService(Intent(context, BitcoindService::class.java))
@@ -820,6 +822,7 @@ private fun ActionButtons(
     onNavigateToNodeAccess: () -> Unit = {},
     onNavigateToSetup: () -> Unit = {},
     onNavigateToWallet: () -> Unit = {},
+    mempoolPaneVisible: Boolean = false,
     onToggleNode: () -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -947,6 +950,7 @@ private fun ActionButtons(
             OutlinedButton(
                 onClick = onNavigateToDataUsage,
                 modifier = Modifier.weight(1f),
+                enabled = !mempoolPaneVisible,
                 contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)
             ) { Text("Mempool", maxLines = 1, style = MaterialTheme.typography.labelSmall) }
             OutlinedButton(

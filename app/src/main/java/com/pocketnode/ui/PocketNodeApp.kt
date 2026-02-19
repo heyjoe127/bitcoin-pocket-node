@@ -1,9 +1,15 @@
 package com.pocketnode.ui
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -54,8 +60,46 @@ fun PocketNodeApp(
             .collectAsState()
         val todayUsage = remember(networkState, activeMonitor) { activeMonitor?.getTodayUsage() }
 
+        // Detect wide screen (foldable unfolded) — 550dp+ triggers dual-pane
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            val isWideScreen = maxWidth >= 550.dp
+
         NavHost(navController = navController, startDestination = "status") {
             composable("status") {
+                if (isWideScreen) {
+                    // Dual-pane: dashboard left, mempool right
+                    Row(modifier = Modifier.fillMaxSize()) {
+                        androidx.compose.foundation.layout.Box(
+                            modifier = Modifier.weight(1f).fillMaxHeight()
+                        ) {
+                            NodeStatusScreen(
+                                onNavigateToSnapshot = { navController.navigate("snapshot") },
+                                onNavigateToSetup = { navController.navigate("setup") },
+                                networkState = networkState,
+                                syncPaused = syncPaused,
+                                todayUsage = todayUsage,
+                                onAllowCellular = { syncController?.confirmCellularSync() },
+                                onNavigateToDataUsage = {}, // Greyed out in wide mode
+                                onNavigateToNetworkSettings = { navController.navigate("network_settings") },
+                                onNavigateToNodeAccess = { navController.navigate("node_access") },
+                                onNavigateToWallet = { navController.navigate("connect_wallet") },
+                                mempoolPaneVisible = true
+                            )
+                        }
+                        VerticalDivider(
+                            modifier = Modifier.fillMaxHeight(),
+                            color = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                        androidx.compose.foundation.layout.Box(
+                            modifier = Modifier.weight(1f).fillMaxHeight()
+                        ) {
+                            MempoolScreen(
+                                onNavigateToTransactionSearch = { navController.navigate("tx_search") },
+                                onBack = {} // No back in dual-pane
+                            )
+                        }
+                    }
+                } else {
                 NodeStatusScreen(
                     onNavigateToSnapshot = { navController.navigate("snapshot") },
                     onNavigateToSetup = { navController.navigate("setup") },
@@ -68,6 +112,7 @@ fun PocketNodeApp(
                     onNavigateToNodeAccess = { navController.navigate("node_access") },
                     onNavigateToWallet = { navController.navigate("connect_wallet") }
                 )
+                }
             }
             composable("setup") {
                 SetupChecklistScreen(
@@ -98,14 +143,29 @@ fun PocketNodeApp(
                 )
             }
             composable("network_settings") {
+                val ctx = LocalContext.current
+                val syncPrefs = remember { ctx.getSharedPreferences("sync_settings", android.content.Context.MODE_PRIVATE) }
+                var allowCellular by remember { mutableStateOf(syncPrefs.getBoolean("allow_cellular_sync", false)) }
+                var cellBudget by remember { mutableStateOf(syncPrefs.getLong("cellular_budget_mb", 0)) }
+                var wifiBudget by remember { mutableStateOf(syncPrefs.getLong("wifi_budget_mb", 0)) }
                 NetworkSettingsScreen(
-                    allowCellular = syncController?.allowCellularSync ?: false,
-                    cellularBudgetMb = syncController?.cellularBudgetMb ?: 0,
-                    wifiBudgetMb = syncController?.wifiBudgetMb ?: 0,
+                    allowCellular = allowCellular,
+                    cellularBudgetMb = cellBudget,
+                    wifiBudgetMb = wifiBudget,
                     networkMonitor = networkMonitor,
-                    onAllowCellularChanged = { syncController?.allowCellularSync = it },
-                    onCellularBudgetChanged = { syncController?.cellularBudgetMb = it },
-                    onWifiBudgetChanged = { syncController?.wifiBudgetMb = it },
+                    onAllowCellularChanged = {
+                        allowCellular = it
+                        syncPrefs.edit().putBoolean("allow_cellular_sync", it).apply()
+                        syncController?.allowCellularSync = it
+                    },
+                    onCellularBudgetChanged = {
+                        cellBudget = it
+                        syncController?.cellularBudgetMb = it
+                    },
+                    onWifiBudgetChanged = {
+                        wifiBudget = it
+                        syncController?.wifiBudgetMb = it
+                    },
                     onBack = { navController.popBackStack() }
                 )
             }
@@ -190,5 +250,6 @@ fun PocketNodeApp(
                 )
             }
         }
+        } // BoxWithConstraints
     }
 }

@@ -77,6 +77,9 @@ dependencies {
     // Archive extraction (tar.gz) — Android doesn't have tar
     implementation("org.apache.commons:commons-compress:1.26.1")
 
+    // Foldable support
+    implementation("androidx.window:window:1.2.0")
+
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 }
