@@ -89,7 +89,7 @@ fun ConnectWalletScreen(onBack: () -> Unit) {
                     CopyableValue("Password", rpcCreds?.second ?: "—", connClip)
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "For Fully Noded, bitcoin-cli, or any app with direct RPC support.",
+                        "For any app with direct RPC support.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                     )
@@ -130,7 +130,7 @@ fun ConnectWalletScreen(onBack: () -> Unit) {
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            "Connect BlueWallet, Electrum, or Sparrow to this server.",
+                            "Connect a wallet app like BlueWallet to this address.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                         )
