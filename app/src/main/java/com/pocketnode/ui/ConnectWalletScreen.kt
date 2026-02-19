@@ -105,7 +105,7 @@ fun ConnectWalletScreen(onBack: () -> Unit) {
 
                     if (bwtState.status == BwtService.BwtState.Status.RUNNING) {
                         Spacer(Modifier.height(8.dp))
-                        Text("ELECTRUM", style = MaterialTheme.typography.labelSmall,
+                        Text("ELECTRUM SERVER", style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
                         CopyableValue("Host", BwtService.ELECTRUM_HOST, connClip)
@@ -119,9 +119,13 @@ fun ConnectWalletScreen(onBack: () -> Unit) {
                             style = MaterialTheme.typography.bodySmall)
                     }
 
-                    // RPC details
+                    // Divider between sections
                     Spacer(Modifier.height(12.dp))
-                    Text("RPC", style = MaterialTheme.typography.labelSmall,
+                    HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+                    Spacer(Modifier.height(12.dp))
+
+                    // RPC details
+                    Text("BITCOIN RPC", style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
                     CopyableValue("Host", "127.0.0.1", connClip)
