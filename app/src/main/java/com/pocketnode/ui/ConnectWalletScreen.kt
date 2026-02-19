@@ -73,8 +73,30 @@ fun ConnectWalletScreen(onBack: () -> Unit) {
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Electrum Server card
+            // Bitcoin RPC card
             val connClip = LocalClipboardManager.current
+            val rpcCreds = remember { com.pocketnode.util.ConfigGenerator.readCredentials(context) }
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("Bitcoin RPC", fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(8.dp))
+                    CopyableValue("Host", "127.0.0.1", connClip)
+                    CopyableValue("Port", "8332", connClip)
+                    CopyableValue("User", rpcCreds?.first ?: "—", connClip)
+                    CopyableValue("Password", rpcCreds?.second ?: "—", connClip)
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "For Fully Noded, bitcoin-cli, or any app with direct RPC support.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                    )
+                }
+            }
+
+            // Electrum Server card
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
@@ -118,28 +140,6 @@ fun ConnectWalletScreen(onBack: () -> Unit) {
                         Text(bwtState.error!!, color = MaterialTheme.colorScheme.error,
                             style = MaterialTheme.typography.bodySmall)
                     }
-                }
-            }
-
-            // Bitcoin RPC card
-            val rpcCreds = remember { com.pocketnode.util.ConfigGenerator.readCredentials(context) }
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Bitcoin RPC", fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(8.dp))
-                    CopyableValue("Host", "127.0.0.1", connClip)
-                    CopyableValue("Port", "8332", connClip)
-                    CopyableValue("User", rpcCreds?.first ?: "—", connClip)
-                    CopyableValue("Password", rpcCreds?.second ?: "—", connClip)
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        "For Fully Noded, bitcoin-cli, or any app with direct RPC support.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                    )
                 }
             }
 
