@@ -159,6 +159,9 @@ class BwtService(private val context: Context) {
                 } else {
                     _state.value = BwtState(status = BwtState.Status.STOPPED)
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // Normal cancellation from stop() — not an error
+                Log.d(TAG, "BWT coroutine cancelled (stop)")
             } catch (e: Exception) {
                 _isRunning.value = false
                 Log.e(TAG, "BWT start failed", e)
