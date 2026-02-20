@@ -80,10 +80,13 @@ Remove both lines when user removes block filters.
 5. Revert: Remove `blockfilterindex=1` from donor's `bitcoin.conf`, restart bitcoind
 6. All done via existing SSH connection, same credentials as chainstate copy
 
-### Size Estimate
-- Need to verify on real node (Brad's Umbrel may have it enabled)
-- Estimates range 1-5 GB depending on chain height
-- Much smaller than chainstate (~11 GB)
+### Size (Verified on Umbrel, Bitcoin Knots 29.2.0, Feb 2026)
+- **Total: ~13 GB** (781 files)
+- 780 `fltr*.dat` files (~16 MB each) = ~12.9 GB flat filter data
+- `db/` LevelDB index = ~110 MB (contains obfuscation key internally)
+- No separate `xor.dat` — obfuscation key is inside the LevelDB
+- Total phone storage with filters: ~26 GB (13 GB chainstate + 13 GB filters)
+- Path on Umbrel (Knots): `~/umbrel/app-data/bitcoin-knots/data/bitcoin/indexes/blockfilter/basic/`
 
 ### Archive Modification
 Current tar command builds: `chainstate/ blocks/index/ blocks/blkNNNNN.dat blocks/revNNNNN.dat blocks/xor.dat`
