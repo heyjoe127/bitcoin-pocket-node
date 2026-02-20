@@ -250,8 +250,7 @@ class BlockFilterManager(private val context: Context) {
      * Same pattern as ChainstateManager.copyChainstate().
      */
     suspend fun copyFromDonor(
-        sshHost: String, sshPort: Int, sshUser: String, sshPassword: String,
-        sftpUser: String, sftpPassword: String
+        sshHost: String, sshPort: Int, sshUser: String, sshPassword: String
     ): Boolean = withContext(Dispatchers.IO) {
         try {
             // --- Step 1: Connect and find data dir ---
@@ -319,11 +318,12 @@ class BlockFilterManager(private val context: Context) {
                 totalBytes = archiveSize)
 
             val localArchive = dataDir.resolve(FILTER_ARCHIVE)
-            val sftpSession = SshUtils.connectSsh(sshHost, sshPort, sftpUser, sftpPassword)
+            // Use admin creds for SFTP (pocketnode user may not be set up)
+            val sftpSession = SshUtils.connectSsh(sshHost, sshPort, sshUser, sshPassword)
             val sftp = sftpSession.openChannel("sftp") as ChannelSftp
             sftp.connect()
 
-            val inputStream = sftp.get("/snapshots/$FILTER_ARCHIVE")
+            val inputStream = sftp.get("/home/pocketnode/snapshots/$FILTER_ARCHIVE")
             val outputStream = FileOutputStream(localArchive)
             val buffer = ByteArray(1024 * 1024) // 1MB buffer
             var totalRead = 0L
