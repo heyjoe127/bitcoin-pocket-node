@@ -487,7 +487,7 @@ class BlockFilterManager(private val context: Context) {
                 if (!com.pocketnode.service.BitcoindService.isRunningFlow.value) break
                 kotlinx.coroutines.delay(1000)
             }
-            kotlinx.coroutines.delay(2000)
+            kotlinx.coroutines.delay(500)
         }
 
         // Step 3: Delete entire indexes directory (clean slate)

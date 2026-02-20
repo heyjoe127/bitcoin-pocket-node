@@ -244,7 +244,7 @@ fun PocketNodeApp(
                             } else {
                                 ctx.startService(intent)
                             }
-                        }, 3000)
+                        }, 1500)
                         navController.popBackStack("status", inclusive = false)
                     }
                 )
