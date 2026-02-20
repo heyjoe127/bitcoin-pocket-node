@@ -6,11 +6,10 @@ Turn any Android phone into a fully-validating Bitcoin full node. No server depe
 
 ## ✅ Proven
 
-- **Direct chainstate copy** — full node at chain tip in ~20 minutes (height 936,822, 4 peers, instant)
-- **167 million UTXOs** loaded via AssumeUTXO on a Pixel 7 Pro
-- Syncing from block 910,000 to chain tip
+- **Direct chainstate copy** — full node at chain tip in ~20 minutes, 167 million UTXOs (height 936,822, 4 peers, instant)
+- **AssumeUTXO alternative** — full node in ~3 hours via cryptographically verified UTXO snapshot
 - Phone stays cool, runs overnight without issues
-- ~13 GB total disk usage (11 GB chainstate + 2 GB pruned blocks)
+- ~26 GB total disk with Lightning (11 GB chainstate + 2 GB pruned blocks + 13 GB block filters), ~13 GB without
 - **BWT Electrum server** — BlueWallet connects to local node for private transaction queries
 
 ## Screenshots
@@ -63,12 +62,12 @@ See [Direct Chainstate Copy](docs/direct-chainstate-copy.md) for a detailed comp
 
 #### Direct Chainstate Copy (fastest)
 The app connects to your home node via SSH, briefly stops bitcoind, and copies:
-- `chainstate/` — the UTXO set (~12 GB)
+- `chainstate/` — the UTXO set (~11 GB)
 - `blocks/index/` — block metadata (~2 GB)
 - `blocks/xor.dat` — block file obfuscation key
 - Tip block/rev files — latest block data
 
-Total transfer ~15 GB over LAN (~5 min). Node operational in ~20 minutes including setup.
+Total transfer ~13 GB over LAN (~5 min). Node operational in ~20 minutes including setup.
 
 #### AssumeUTXO Snapshot
 1. Generates a UTXO snapshot using `dumptxoutset rollback`
