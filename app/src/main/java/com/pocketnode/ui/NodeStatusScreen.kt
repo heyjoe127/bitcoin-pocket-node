@@ -921,6 +921,116 @@ private fun ActionButtons(
             )
         }
 
+        // Bitcoin version selector
+        val versionContext = LocalContext.current
+        var selectedVersion by remember { mutableStateOf(com.pocketnode.util.BinaryExtractor.getSelectedVersion(versionContext)) }
+        var showVersionPicker by remember { mutableStateOf(false) }
+        val availableVersions = remember { com.pocketnode.util.BinaryExtractor.availableVersions(versionContext) }
+        val allVersions = com.pocketnode.util.BinaryExtractor.BitcoinVersion.entries
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .let { mod ->
+                    @Suppress("DEPRECATION")
+                    mod.then(Modifier.padding(vertical = 4.dp))
+                },
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text(
+                    "Bitcoin Implementation",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    "${selectedVersion.displayName} ${selectedVersion.versionString}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFFFF9800)
+                )
+            }
+            OutlinedButton(
+                onClick = { showVersionPicker = true },
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+            ) {
+                Text("Change", style = MaterialTheme.typography.labelSmall)
+            }
+        }
+
+        if (showVersionPicker) {
+            AlertDialog(
+                onDismissRequest = { showVersionPicker = false },
+                title = { Text("Choose Implementation") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            "Your node, your rules. Choose which Bitcoin implementation to run.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        allVersions.forEach { version ->
+                            val isAvailable = version in availableVersions
+                            val isSelected = version == selectedVersion
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (isSelected)
+                                        Color(0xFFFF9800).copy(alpha = 0.15f)
+                                    else MaterialTheme.colorScheme.surfaceVariant
+                                ),
+                                onClick = {
+                                    if (isAvailable && !isSelected) {
+                                        com.pocketnode.util.BinaryExtractor.setSelectedVersion(versionContext, version)
+                                        selectedVersion = version
+                                        showVersionPicker = false
+                                        // Node restart needed — user can tap Stop/Start
+                                    }
+                                },
+                                enabled = isAvailable
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Row(
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(
+                                            "${version.displayName} ${version.versionString}",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (isAvailable)
+                                                MaterialTheme.colorScheme.onSurface
+                                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                                        )
+                                        if (isSelected) {
+                                            Text("✓", color = Color(0xFFFF9800), fontWeight = FontWeight.Bold)
+                                        }
+                                        if (!isAvailable) {
+                                            Text("Coming soon", style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
+                                        }
+                                    }
+                                    Text(
+                                        version.policyStance,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = if (isAvailable)
+                                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showVersionPicker = false }) {
+                        Text("Close")
+                    }
+                }
+            )
+        }
+
         // Setup row
         Row(
             modifier = Modifier.fillMaxWidth(),
