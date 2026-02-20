@@ -152,22 +152,24 @@ class ChainstateManager private constructor(private val context: Context) {
                 }
             }
 
-            // --- Check if archive already exists (skip archiving) ---
-            val archiveExists = if (!sshUser.isNullOrEmpty()) {
-                // We have admin creds — check SFTP first
-                checkArchiveExists(sshHost, sshPort, sftpUser, sftpPassword)
-            } else {
-                checkArchiveExists(sshHost, sshPort, sftpUser, sftpPassword)
-            }
-
+            // Always rebuild fresh — never trust a stale archive
             val localArchiveValid = archiveFile.exists() && archiveFile.length() > 1_000_000_000
 
-            if (!archiveExists && !localArchiveValid) {
+            if (!localArchiveValid) {
                 if (sshUser.isNullOrEmpty()) {
                     _state.value = _state.value.copy(step = Step.ERROR,
                         error = "No archive found on node. Admin credentials required to create one.")
                     return@withContext false
                 }
+
+                // Delete any old remote archive first
+                try {
+                    val cleanSession = SshUtils.connectSsh(sshHost, sshPort, sshUser, sshPassword)
+                    SshUtils.execSudo(cleanSession, sshPassword,
+                        "rm -f /home/$SFTP_USERNAME/snapshots/$ARCHIVE_NAME 2>/dev/null")
+                    cleanSession.disconnect()
+                    Log.i(TAG, "Cleaned old remote archive")
+                } catch (_: Exception) {}
 
                 // --- Step 1: Find bitcoin data dir ---
                 _state.value = ChainstateState(step = Step.STOPPING_REMOTE,
@@ -303,14 +305,6 @@ class ChainstateManager private constructor(private val context: Context) {
                         error = "Archive creation failed — file not found on remote node")
                     return@withContext false
                 }
-            } else if (archiveExists && !localArchiveValid) {
-                // Archive on remote but not local — skip straight to download
-                _state.value = ChainstateState(step = Step.STOPPING_REMOTE,
-                    progress = "Archive found on node ✓")
-                delay(500)
-                _state.value = _state.value.copy(step = Step.ARCHIVING,
-                    progress = "Archive ready ✓")
-                delay(500)
             } else if (localArchiveValid) {
                 // Already downloaded — skip to deploy
                 _state.value = ChainstateState(step = Step.STOPPING_REMOTE,

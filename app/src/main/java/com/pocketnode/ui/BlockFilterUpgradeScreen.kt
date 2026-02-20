@@ -77,6 +77,14 @@ fun BlockFilterUpgradeScreen(
         view.keepScreenOn = isWorking
     }
 
+    // Auto-hide password after 10 seconds of visibility
+    LaunchedEffect(passwordVisible) {
+        if (passwordVisible) {
+            delay(10_000)
+            passwordVisible = false
+        }
+    }
+
     LaunchedEffect(Unit) {
         manager.reset()
     }
