@@ -28,12 +28,21 @@ import kotlinx.coroutines.launch
 @Composable
 fun ChainstateCopyScreen(onBack: () -> Unit, onComplete: () -> Unit = {}) {
     val context = LocalContext.current
+    val view = androidx.compose.ui.platform.LocalView.current
     val scope = rememberCoroutineScope()
     // Use a scope that survives recomposition for long-running work
     val workScope = remember { kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.SupervisorJob()) }
     val setupManager = remember { NodeSetupManager(context) }
     val chainstateManager = remember { ChainstateManager.getInstance(context) }
     val state by chainstateManager.state.collectAsState()
+
+    // Keep screen on during active transfer
+    val transferActive = state.step != ChainstateManager.Step.NOT_STARTED &&
+            state.step != ChainstateManager.Step.ERROR &&
+            state.step != ChainstateManager.Step.COMPLETE
+    LaunchedEffect(transferActive) {
+        view.keepScreenOn = transferActive
+    }
 
     var started by remember { mutableStateOf(false) }
     var showConfirm by remember { mutableStateOf(true) }
