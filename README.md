@@ -148,12 +148,13 @@ The app can copy BIP 157/158 block filter indexes (~13 GB) from your home node, 
 ### Zeus Setup
 1. Install **Zeus v0.12.2** from [GitHub releases](https://github.com/ZeusLN/zeus/releases/tag/v0.12.2) (v0.12.3+ has a [SQLite bug](https://github.com/ZeusLN/zeus/issues/3672) that stalls sync at block 123,000)
 2. Open Zeus, select **Create embedded LND**
-3. Wait ~10 minutes on the boot animation while initial header sync completes (don't change settings yet)
-4. Wait for the warning icon to appear at the top of the screen
-5. Tap the warning icon to open node settings
-6. Delete all default Neutrino peers
-7. Add `127.0.0.1:8333` as the only Neutrino peer
-8. Restart Zeus -- it connects to your local bitcoind and the wallet appears
+3. Wait ~15 minutes on the boot animation while initial header sync completes (don't change settings yet)
+4. Restart the app
+5. Wait for the warning icon to appear at the top of the screen
+6. Tap the warning icon to open node settings
+7. Delete all default Neutrino peers
+8. Add `127.0.0.1:8333` as the only Neutrino peer
+9. Restart Zeus -- it connects to your local bitcoind and the wallet appears
 
 ### Full Sovereign Stack
 ```
