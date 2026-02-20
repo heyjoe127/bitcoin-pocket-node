@@ -18,9 +18,9 @@ Turn any Android phone into a fully-validating Bitcoin full node. No server depe
 
 **Node + On-chain wallet**
 
-| Syncing from node | Electrum server | BlueWallet connected | Wallet ready |
+| Setup checklist | Electrum server | BlueWallet connected | BlueWallet wallet |
 |:---:|:---:|:---:|:---:|
-| ![All steps complete, starting node](docs/images/02-pruning-blockstore.jpg) | ![Built-in Electrum server running](docs/images/03-electrum-server.jpg) | ![BlueWallet connected to local node](docs/images/04-bluewallet-connected.jpg) | ![BlueWallet wallet view](docs/images/04-bluewallet-wallet.jpg) |
+| ![Setup checklist all green](docs/images/01-checklist.jpg) | ![Electrum server running with tracked wallets](docs/images/03-electrum-server.jpg) | ![BlueWallet connected to localhost](docs/images/04-bluewallet-connected.jpg) | ![BlueWallet wallet view](docs/images/04-bluewallet-wallet.jpg) |
 
 **Lightning**
 
