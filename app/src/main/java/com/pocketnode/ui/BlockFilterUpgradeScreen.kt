@@ -333,7 +333,7 @@ fun BlockFilterUpgradeScreen(
                         onClick = {
                             scope.launch {
                                 val success = manager.copyFromDonor(
-                                    sshHost, sshPort, sshUser, sshPassword)
+                                    sshHost, sshPort, sshUser, sshPassword, sftpUser, sftpPassword)
                                 if (success) onRestartNode()
                             }
                         },

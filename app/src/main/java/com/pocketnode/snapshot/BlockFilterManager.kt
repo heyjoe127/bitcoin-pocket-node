@@ -2,11 +2,11 @@ package com.pocketnode.snapshot
 
 import android.content.Context
 import android.util.Log
-import com.jcraft.jsch.ChannelSftp
 import com.pocketnode.ssh.SshUtils
 import com.pocketnode.util.ConfigGenerator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -250,7 +250,8 @@ class BlockFilterManager(private val context: Context) {
      * Same pattern as ChainstateManager.copyChainstate().
      */
     suspend fun copyFromDonor(
-        sshHost: String, sshPort: Int, sshUser: String, sshPassword: String
+        sshHost: String, sshPort: Int, sshUser: String, sshPassword: String,
+        sftpUser: String = "pocketnode", sftpPassword: String = ""
     ): Boolean = withContext(Dispatchers.IO) {
         try {
             // --- Step 1: Connect and find data dir ---
@@ -312,43 +313,48 @@ class BlockFilterManager(private val context: Context) {
 
             session.disconnect()
 
-            // Download via SFTP
+            // Download via SFTP using same system as chainstate copy
             _state.value = _state.value.copy(step = Step.DOWNLOADING,
-                progress = "Downloading block filters...",
-                totalBytes = archiveSize)
+                progress = "Connecting to SFTP...")
 
             val localArchive = dataDir.resolve(FILTER_ARCHIVE)
-            // Use admin creds for SFTP (pocketnode user may not be set up)
-            val sftpSession = SshUtils.connectSsh(sshHost, sshPort, sshUser, sshPassword)
-            val sftp = sftpSession.openChannel("sftp") as ChannelSftp
-            sftp.connect()
-
-            val inputStream = sftp.get("/home/pocketnode/snapshots/$FILTER_ARCHIVE")
-            val outputStream = FileOutputStream(localArchive)
-            val buffer = ByteArray(1024 * 1024) // 1MB buffer
-            var totalRead = 0L
-            var read: Int
-
-            while (inputStream.read(buffer).also { read = it } != -1) {
-                outputStream.write(buffer, 0, read)
-                totalRead += read
-                _state.value = _state.value.copy(
-                    downloadedBytes = totalRead,
-                    downloadProgress = (totalRead.toFloat() / archiveSize).coerceAtMost(1f),
-                    progress = "Downloading: ${"%.1f".format(totalRead / (1024.0 * 1024 * 1024))} / ${"%.1f".format(archiveSize / (1024.0 * 1024 * 1024))} GB"
-                )
+            val downloader = SnapshotDownloader(context)
+            val progressJob = kotlinx.coroutines.CoroutineScope(Dispatchers.Default).launch {
+                downloader.progress.collect { dp ->
+                    if (dp.totalBytes > 0) {
+                        _state.value = _state.value.copy(
+                            step = Step.DOWNLOADING,
+                            downloadedBytes = dp.bytesDownloaded,
+                            totalBytes = dp.totalBytes,
+                            downloadProgress = dp.progressFraction,
+                            progress = "Downloading: ${"%.1f".format(dp.bytesDownloaded / (1024.0 * 1024 * 1024))} / ${"%.1f".format(dp.totalBytes / (1024.0 * 1024 * 1024))} GB"
+                        )
+                    }
+                }
             }
 
-            inputStream.close()
-            outputStream.close()
-            sftp.disconnect()
+            val file = downloader.downloadSftp(
+                host = sshHost,
+                port = sshPort,
+                username = sftpUser,
+                password = sftpPassword,
+                remotePath = "/snapshots/$FILTER_ARCHIVE",
+                destinationFile = localArchive
+            )
+            progressJob.cancel()
+
+            if (file == null) {
+                _state.value = _state.value.copy(step = Step.ERROR,
+                    error = "Failed to download block filters from node")
+                return@withContext false
+            }
 
             // Clean up remote archive
-            val cleanSession = SshUtils.connectSsh(sshHost, sshPort, sshUser, sshPassword)
-            SshUtils.execSudo(cleanSession, sshPassword, "rm -f '$archivePath'")
-            cleanSession.disconnect()
-
-            sftpSession.disconnect()
+            try {
+                val cleanSession = SshUtils.connectSsh(sshHost, sshPort, sshUser, sshPassword)
+                SshUtils.execSudo(cleanSession, sshPassword, "rm -f '$archivePath'")
+                cleanSession.disconnect()
+            } catch (_: Exception) {}
 
             // Extract locally using Apache Commons Compress (no system tar on Android)
             _state.value = _state.value.copy(step = Step.EXTRACTING,
