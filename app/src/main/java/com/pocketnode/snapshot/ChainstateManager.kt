@@ -205,9 +205,22 @@ class ChainstateManager private constructor(private val context: Context) {
                     delay(5000) // Give it time to shut down
                 }
 
+                // Check if donor has block filters (for Lightning support)
+                val filterPath = "$bitcoinDataDir/indexes/blockfilter/basic"
+                val hasFilters = SshUtils.execSudo(archiveSession, sshPassword,
+                    "test -d '$filterPath/db' && ls '$filterPath'/fltr*.dat 2>/dev/null | head -1 | grep -q fltr && echo 'YES' || echo 'NO'")
+                    .trim().lines().lastOrNull()?.trim() == "YES"
+                if (hasFilters) {
+                    Log.i(TAG, "Donor has block filters — including in archive for Lightning support")
+                }
+                // Save filter state so deploy step knows whether to configure filters
+                context.getSharedPreferences("pocketnode_prefs", Context.MODE_PRIVATE)
+                    .edit().putBoolean("archive_has_filters", hasFilters).apply()
+
                 // Archive everything needed
                 _state.value = _state.value.copy(step = Step.ARCHIVING,
-                    progress = "Archiving chainstate + block index...")
+                    progress = if (hasFilters) "Archiving chainstate + block index + block filters..."
+                              else "Archiving chainstate + block index...")
 
                 val destDir = "/home/$SFTP_USERNAME/snapshots"
                 val archivePath = "$destDir/$ARCHIVE_NAME"
@@ -227,6 +240,10 @@ class ChainstateManager private constructor(private val context: Context) {
                     tarComponents.add(blkFile)
                     tarComponents.add(revFile)
                 }
+                // Include block filters if available (atomic copy with chainstate)
+                if (hasFilters) {
+                    tarComponents.add("indexes/blockfilter/basic/")
+                }
                 // xor.dat may or may not exist (Core 28+ / Knots)
                 val tarCmd = buildString {
                     append("mkdir -p $destDir && cd $bitcoinDataDir && ")
@@ -241,7 +258,8 @@ class ChainstateManager private constructor(private val context: Context) {
                 // Monitor archive creation in parallel
                 val monitorSession = SshUtils.connectSsh(sshHost, sshPort, sshUser, sshPassword)
                 val monitorJob = CoroutineScope(Dispatchers.IO).launch {
-                    val expectedSize = 12_000_000_000L // ~12 GB expected
+                    // ~12 GB without filters, ~25 GB with filters
+                    val expectedSize = if (hasFilters) 25_000_000_000L else 12_000_000_000L
                     while (true) {
                         delay(3_000)
                         try {
@@ -356,8 +374,8 @@ class ChainstateManager private constructor(private val context: Context) {
                 delay(2000)
             }
 
-            // Clean existing data
-            _state.value = _state.value.copy(progress = "Preparing data directory...")
+            // Clean ALL existing node data — fresh start from archive only
+            _state.value = _state.value.copy(progress = "Clearing old node data...")
             if (chainstateDir.exists()) {
                 Log.i(TAG, "Deleting existing chainstate")
                 chainstateDir.deleteRecursively()
@@ -375,6 +393,16 @@ class ChainstateManager private constructor(private val context: Context) {
             blocksDir.listFiles()?.filter {
                 it.name.startsWith("blk") || it.name.startsWith("rev")
             }?.forEach { it.delete() }
+            // Delete old block filter index (will be replaced by archive if available)
+            val oldFilterDir = dataDir.resolve("indexes")
+            if (oldFilterDir.exists()) {
+                Log.i(TAG, "Deleting old indexes (block filters)")
+                oldFilterDir.deleteRecursively()
+            }
+            // Delete old peers/banlist (fresh connections)
+            dataDir.resolve("peers.dat").delete()
+            dataDir.resolve("banlist.json").delete()
+            dataDir.resolve("fee_estimates.dat").delete()
 
             // Extract archive
             _state.value = _state.value.copy(progress = "Extracting archive...")
@@ -454,9 +482,18 @@ class ChainstateManager private constructor(private val context: Context) {
                 var confText = confFile.readText()
                 if (!confText.contains("checklevel=")) {
                     confText += "\nchecklevel=0\n"
-                    confFile.writeText(confText)
-                    Log.i(TAG, "Added checklevel=0 to bitcoin.conf")
                 }
+                // Add block filter config if filters were included in archive
+                val archiveHadFilters = context.getSharedPreferences("pocketnode_prefs", Context.MODE_PRIVATE)
+                    .getBoolean("archive_has_filters", false)
+                val filtersExtracted = dataDir.resolve("indexes/blockfilter/basic/db").exists()
+                if (archiveHadFilters && filtersExtracted) {
+                    if (!confText.contains("blockfilterindex=")) {
+                        confText += "\n# Lightning support (BIP 157/158 block filters)\nblockfilterindex=1\npeerblockfilters=1\n"
+                        Log.i(TAG, "Added blockfilterindex=1 to bitcoin.conf (filters included in archive)")
+                    }
+                }
+                confFile.writeText(confText)
             }
 
             // --- Step 5: Start node ---
@@ -509,8 +546,13 @@ class ChainstateManager private constructor(private val context: Context) {
             context.getSharedPreferences("pocketnode_prefs", Context.MODE_PRIVATE)
                 .edit().putBoolean("node_was_running", true).apply()
 
+            val filtersDeployed = dataDir.resolve("indexes/blockfilter/basic/db").exists()
+            val finalMessage = if (filtersDeployed)
+                "Node running at chain tip — Lightning ready! ⚡"
+            else
+                "Node running at chain tip — no background validation needed!"
             _state.value = _state.value.copy(step = Step.COMPLETE,
-                progress = "Node running at chain tip — no background validation needed!")
+                progress = finalMessage)
             true
 
         } catch (e: Exception) {
