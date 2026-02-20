@@ -970,8 +970,9 @@ private fun ActionButtons(
         }
 
         // Lightning support button
+        // Check filter status — no caching, always reads filesystem
         val filterDir = LocalContext.current.filesDir.resolve("bitcoin/indexes/blockfilter/basic")
-        val hasFilters = filterDir.exists() && (filterDir.listFiles()?.any { it.name.startsWith("fltr") } == true)
+        val hasFilters = filterDir.exists() && (filterDir.listFiles()?.size ?: 0) > 1
         OutlinedButton(
             onClick = onNavigateToBlockFilter,
             modifier = Modifier.fillMaxWidth(),
