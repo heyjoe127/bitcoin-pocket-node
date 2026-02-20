@@ -261,9 +261,10 @@ class BlockFilterManager(private val context: Context) {
                 return@withContext false
             }
 
-            // Create tar archive of filter index
-            val archivePath = "/tmp/$FILTER_ARCHIVE"
-            val tarCmd = "cd '$bitcoinDir' && tar cf '$archivePath' '$FILTER_DIR/' 2>&1 && ls -l '$archivePath'"
+            // Create tar archive of filter index in pocketnode's home (SFTP-accessible)
+            val destDir = "/home/pocketnode/snapshots"
+            val archivePath = "$destDir/$FILTER_ARCHIVE"
+            val tarCmd = "mkdir -p '$destDir' && cd '$bitcoinDir' && tar cf '$archivePath' '$FILTER_DIR/' 2>&1 && chown pocketnode:pocketnode '$archivePath' 2>/dev/null; chmod 644 '$archivePath' 2>/dev/null; ls -l '$archivePath'"
             SshUtils.execSudo(session, sshPassword, tarCmd, timeoutMs = 600_000)
 
             // Get archive size
@@ -291,7 +292,7 @@ class BlockFilterManager(private val context: Context) {
             val sftp = sftpSession.openChannel("sftp") as ChannelSftp
             sftp.connect()
 
-            val inputStream = sftp.get(archivePath)
+            val inputStream = sftp.get("/snapshots/$FILTER_ARCHIVE")
             val outputStream = FileOutputStream(localArchive)
             val buffer = ByteArray(1024 * 1024) // 1MB buffer
             var totalRead = 0L
