@@ -454,7 +454,17 @@ class BlockFilterManager(private val context: Context) {
         val confFile = dataDir.resolve("bitcoin.conf")
         if (!confFile.exists()) return
 
-        val content = confFile.readText()
+        var content = confFile.readText()
+
+        // Enable listening on localhost so Zeus/Neutrino can connect via P2P
+        if (content.contains("listen=0")) {
+            content = content.replace("listen=0", "listen=1")
+            if (!content.contains("bind=")) {
+                content = content.replace("listen=1", "listen=1\nbind=127.0.0.1")
+            }
+            confFile.writeText(content)
+        }
+
         val lines = mutableListOf<String>()
 
         if (!content.contains("$CONFIG_KEY_INDEX=1")) {

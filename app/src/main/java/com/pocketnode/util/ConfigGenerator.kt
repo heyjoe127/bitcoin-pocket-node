@@ -42,7 +42,8 @@ object ConfigGenerator {
             
             # Network
             server=1
-            listen=0
+            listen=1
+            bind=127.0.0.1
             maxconnections=4
             
             # Storage — pruned to ~2GB
