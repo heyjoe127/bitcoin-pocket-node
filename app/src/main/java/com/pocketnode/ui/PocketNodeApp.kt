@@ -234,6 +234,17 @@ fun PocketNodeApp(
                 BlockFilterUpgradeScreen(
                     onBack = { navController.popBackStack() },
                     onRestartNode = {
+                        // Restart bitcoind so block filter config takes effect
+                        val ctx = navController.context
+                        val intent = android.content.Intent(ctx, com.pocketnode.service.BitcoindService::class.java)
+                        ctx.stopService(intent)
+                        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                                ctx.startForegroundService(intent)
+                            } else {
+                                ctx.startService(intent)
+                            }
+                        }, 3000)
                         navController.popBackStack("status", inclusive = false)
                     }
                 )

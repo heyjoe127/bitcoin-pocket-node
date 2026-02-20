@@ -970,12 +970,17 @@ private fun ActionButtons(
         }
 
         // Lightning support button
+        val filterDir = LocalContext.current.filesDir.resolve("bitcoin/indexes/blockfilter/basic")
+        val hasFilters = filterDir.exists() && (filterDir.listFiles()?.any { it.name.startsWith("fltr") } == true)
         OutlinedButton(
             onClick = onNavigateToBlockFilter,
             modifier = Modifier.fillMaxWidth(),
             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)
         ) {
-            Text("⚡ Lightning Support", style = MaterialTheme.typography.labelSmall)
+            Text(
+                if (hasFilters) "⚡ Lightning Settings" else "⚡ Add Lightning Support",
+                style = MaterialTheme.typography.labelSmall
+            )
         }
 
         Button(
