@@ -64,6 +64,27 @@ fun BlockFilterUpgradeScreen(
 
     var passwordVisible by remember { mutableStateOf(false) }
     var showRemoveConfirm by remember { mutableStateOf(false) }
+    var localNodeSynced by remember { mutableStateOf(false) }
+    var localNodeHeight by remember { mutableStateOf(0L) }
+
+    // Check local node sync status
+    LaunchedEffect(Unit) {
+        val creds = com.pocketnode.util.ConfigGenerator.readCredentials(context)
+        if (creds != null) {
+            val rpc = com.pocketnode.rpc.BitcoinRpcClient(creds.first, creds.second)
+            while (true) {
+                try {
+                    val info = rpc.getBlockchainInfo()
+                    if (info != null) {
+                        val progress = info.optDouble("verificationprogress", 0.0)
+                        localNodeHeight = info.optLong("blocks", 0)
+                        localNodeSynced = progress > 0.9999
+                    }
+                } catch (_: Exception) {}
+                kotlinx.coroutines.delay(5000)
+            }
+        }
+    }
     var showBuildConfirm by remember { mutableStateOf(false) }
 
     val scrollState = rememberScrollState()
@@ -288,7 +309,26 @@ fun BlockFilterUpgradeScreen(
                         Text("Check Source Node")
                     }
                 } else if (state.donorHasFilters == true && !isWorking) {
-                    // Step 2a: Filters exist — copy directly
+                    // Step 2a: Filters exist — copy directly (requires synced local node)
+                    if (!localNodeSynced) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = Color(0xFFFFB300).copy(alpha = 0.15f)
+                            )
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text("Node must be fully synced",
+                                    fontWeight = FontWeight.Medium)
+                                Spacer(Modifier.height(4.dp))
+                                Text("Your local node needs to be fully synced before downloading block filters. " +
+                                     "The filter index references block hashes that must exist in your node's block index." +
+                                     if (localNodeHeight > 0) "\n\nCurrent height: ${"%,d".format(localNodeHeight)}" else "",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                            }
+                        }
+                    }
                     Button(
                         onClick = {
                             scope.launch {
@@ -297,7 +337,8 @@ fun BlockFilterUpgradeScreen(
                                 if (success) onRestartNode()
                             }
                         },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = localNodeSynced
                     ) {
                         Text("Download Block Filters")
                     }
