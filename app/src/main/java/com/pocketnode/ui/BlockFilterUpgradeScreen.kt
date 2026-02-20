@@ -61,6 +61,7 @@ fun BlockFilterUpgradeScreen(
     var inputUser by remember { mutableStateOf(savedAdminUser) }
     var inputPassword by remember { mutableStateOf("") }
 
+    var passwordVisible by remember { mutableStateOf(false) }
     var showRemoveConfirm by remember { mutableStateOf(false) }
     var showBuildConfirm by remember { mutableStateOf(false) }
 
@@ -203,16 +204,7 @@ fun BlockFilterUpgradeScreen(
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold)
 
-                if (hasSavedHost) {
-                    // Pre-filled from setup — just show info and ask for password
-                    Text("Host: $inputHost",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
-                    Text("User: $inputUser",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
-                } else {
-                    // No saved creds — full input
+                if (!hasSavedHost) {
                     OutlinedTextField(
                         value = inputHost,
                         onValueChange = { inputHost = it },
@@ -220,21 +212,37 @@ fun BlockFilterUpgradeScreen(
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true
                     )
-                    OutlinedTextField(
-                        value = inputUser,
-                        onValueChange = { inputUser = it },
-                        label = { Text("SSH Username") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
+                } else {
+                    Text("Host: $inputHost",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
                 }
+                OutlinedTextField(
+                    value = inputUser,
+                    onValueChange = { inputUser = it },
+                    label = { Text("SSH Username") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
                 OutlinedTextField(
                     value = inputPassword,
                     onValueChange = { inputPassword = it },
                     label = { Text("Admin Password") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
+                    visualTransformation = if (passwordVisible)
+                        androidx.compose.ui.text.input.VisualTransformation.None
+                    else
+                        androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                            Icon(
+                                if (passwordVisible) Icons.Outlined.VisibilityOff
+                                else Icons.Outlined.Visibility,
+                                contentDescription = if (passwordVisible) "Hide password" else "Show password"
+                            )
+                        }
+                    }
                 )
 
                 // Progress display
