@@ -16,9 +16,17 @@ Turn any Android phone into a fully-validating Bitcoin full node. No server depe
 
 *Running on a Pixel 7 Pro with GrapheneOS*
 
+**Node + On-chain wallet**
+
 | Syncing from node | Electrum server | BlueWallet connected | Wallet ready |
 |:---:|:---:|:---:|:---:|
 | ![All steps complete, starting node](docs/images/02-pruning-blockstore.jpg) | ![Built-in Electrum server running](docs/images/03-electrum-server.jpg) | ![BlueWallet connected to local node](docs/images/04-bluewallet-connected.jpg) | ![BlueWallet wallet view](docs/images/04-bluewallet-wallet.jpg) |
+
+**Lightning**
+
+| Lightning enabled | Connect Wallet | Zeus synced | Zeus Neutrino peer |
+|:---:|:---:|:---:|:---:|
+| ![Dashboard with Lightning Ready](docs/images/05-lightning-dashboard.jpg) | ![All three wallet services](docs/images/06-connect-wallet.jpg) | ![Zeus Node Info synced](docs/images/07-zeus-node-info.jpg) | ![Zeus connected to localhost](docs/images/08-zeus-neutrino-peers.jpg) |
 
 ## How It Works
 
