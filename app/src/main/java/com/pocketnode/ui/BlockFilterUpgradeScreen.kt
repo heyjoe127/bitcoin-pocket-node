@@ -13,6 +13,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.pocketnode.snapshot.BlockFilterManager
@@ -66,6 +67,15 @@ fun BlockFilterUpgradeScreen(
     var showBuildConfirm by remember { mutableStateOf(false) }
 
     val scrollState = rememberScrollState()
+    val view = LocalView.current
+
+    // Keep screen on during active transfer
+    val isWorking = state.step != BlockFilterManager.Step.IDLE &&
+            state.step != BlockFilterManager.Step.ERROR &&
+            state.step != BlockFilterManager.Step.COMPLETE
+    LaunchedEffect(isWorking) {
+        view.keepScreenOn = isWorking
+    }
 
     LaunchedEffect(Unit) {
         manager.reset()
@@ -253,10 +263,6 @@ fun BlockFilterUpgradeScreen(
                 )
 
                 // Action buttons (right after password, before status)
-                val isWorking = state.step != BlockFilterManager.Step.IDLE &&
-                        state.step != BlockFilterManager.Step.ERROR &&
-                        state.step != BlockFilterManager.Step.COMPLETE
-
                 if (state.donorHasFilters == null && !isWorking) {
                     // Step 1: Check donor
                     Button(
