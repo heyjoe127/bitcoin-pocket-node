@@ -183,7 +183,11 @@ fun BlockFilterUpgradeScreen(
                                 modifier = Modifier.size(20.dp),
                                 tint = MaterialTheme.colorScheme.primary)
                             Spacer(Modifier.width(8.dp))
-                            Text("Requires ~13 GB additional storage",
+                            Text(
+                                if (state.donorHasFilters == true && state.donorFilterSizeBytes > 0)
+                                    "Requires ${"%.1f".format(state.donorFilterSizeBytes / (1024.0 * 1024 * 1024))} GB additional storage"
+                                else
+                                    "Requires ~13 GB additional storage",
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Medium)
                         }
