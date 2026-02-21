@@ -179,7 +179,13 @@ fun main() = application {
 }
 ```
 
-Window defaults to phone-like proportions. Resizable. The existing foldable/landscape dual-pane layout (550dp threshold) kicks in automatically when the window is widened.
+Window defaults to phone-like proportions. Freely resizable and draggable to simulate different device sizes:
+
+- **Narrow (< 550dp):** Single-pane phone layout
+- **Wide (≥ 550dp):** Dual-pane foldable/tablet layout (existing BoxWithConstraints breakpoint)
+- **Full desktop width:** Same dual-pane, more breathing room
+
+This doubles as a live device preview. Drag the window narrow to see exactly what a phone user sees. Drag it wide to see the foldable experience. The responsive layout is already built from the phone app's foldable support. No new code needed.
 
 System tray icon for background operation (minimize to tray, show status).
 
