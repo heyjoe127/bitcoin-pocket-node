@@ -36,7 +36,7 @@
 - [x] Auto-start on app launch (SharedPreferences flag)
 - [ ] Charging-aware sync (configurable)
 - [ ] Doze mode handling
-- [ ] Detect when behind prune window → offer re-bootstrap
+- [ ] *(nice-to-have)* Detect corrupted block index after long offline period, offer re-bootstrap. Normal catch-up from full nodes works fine.
 
 ## Phase 4: Node Setup & Security ✅
 
