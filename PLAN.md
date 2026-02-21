@@ -35,7 +35,6 @@
 - [x] Auto-start on app launch (SharedPreferences flag)
 - [ ] Charging-aware sync (configurable)
 - [ ] Doze mode handling
-- [ ] *(nice-to-have)* Detect corrupted block index after long offline period, offer re-bootstrap. Normal catch-up from full nodes works fine.
 
 ## Phase 4: Node Setup & Security ✅
 
@@ -105,6 +104,7 @@ disablewallet=1
 **Why v28.1 instead of Core 30.x?** Core 30 changed OP_RETURN policy. v28.1 with patched AssumeUTXO heights gives us snapshot flexibility while preserving standard transaction relay behavior.
 
 ## Nice to Haves / Backlog
+- [ ] Detect corrupted block index after long offline period, offer re-bootstrap
 
 ### Performance
 - [ ] Optimize stub file creation: only create stubs for files actually in index range (reduce 15 min pruning)
