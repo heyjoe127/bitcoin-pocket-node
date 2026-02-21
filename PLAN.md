@@ -155,38 +155,34 @@ disablewallet=1
 - **BlueWallet**: on-chain wallet via our Electrum server (BWT, port 50001)
 - **Zeus**: Lightning wallet via our bitcoind Neutrino (BIP 157/158, port 8333)
 
-#### Phase 1: Sovereign Foundation
-Pruned Bitcoin Core on the phone with BIP 157/158 block filters. Zeus with embedded LND handles Lightning. Olympus LSP provides inbound liquidity via LSPS2 just-in-time channels. Users get a working sovereign Lightning experience without managing liquidity. Olympus can never steal funds: user holds keys and can exit to chain anytime. No watchtower needed: Olympus is a known, accountable entity.
+#### Phase 1: Sovereign Foundation ✅
+Pruned Bitcoin Core on the phone with BIP 157/158 block filters. Zeus with embedded LND handles Lightning. Full sovereign stack proven and operational.
 
-**Block Filter Setup Flow:**
-- [ ] "Enable Lightning" toggle in settings with warning: "Requires ~5 GB additional data from your source node"
-- [ ] Reuse existing SSH credentials from chainstate copy (no new login needed)
-- [ ] SSH to donor node, add `blockfilterindex=1` to `bitcoin.conf`
-- [ ] Restart donor's bitcoind, monitor index build via RPC (`getindexinfo`)
-- [ ] Once index built, copy `indexes/blockfilter/basic/` directory to phone
-- [ ] Check for XOR key in filter index directory: copy alongside if present (same pattern as chainstate xor.dat)
-- [ ] Revert donor's `bitcoin.conf` immediately after copy (remove `blockfilterindex=1`)
-- [ ] Restart donor's bitcoind: donor back to original state, completely out of the picture
-- [ ] If donor already has `blockfilterindex=1` enabled, skip enable/build/revert: just copy
-- [ ] Configure local bitcoind: `blockfilterindex=1` + `peerblockfilters=1`
-- [ ] Restart local bitcoind: now serves compact block filters
-- [ ] Poll donor via SSH/RPC for build progress, notification when ready
+**Block Filter Setup Flow:** ✅
+- [x] "Add Lightning Support" button on dashboard
+- [x] Reuse existing SSH credentials from chainstate copy
+- [x] Detect if donor already has block filters, skip build if so
+- [x] If donor lacks filters: enable on donor, poll build progress via RPC, copy when ready, revert donor config
+- [x] Copy `indexes/blockfilter/basic/` (781 files + LevelDB) to phone
+- [x] Filter index LevelDB has no obfuscation (`f_obfuscate` defaults false)
+- [x] Configure local bitcoind: `blockfilterindex=1` + `peerblockfilters=1` + `listen=1` + `bind=127.0.0.1`
+- [x] Auto-restart node after filter install/remove
+- [x] Unified atomic snapshot: stop donor, archive chainstate + filters together, restart
+- [x] Revert listen/bind config when Lightning removed
 
-**Standalone Operation:**
+**Standalone Operation:** ✅
 - Historical filters copied from donor, new block filters built locally as blocks arrive
 - Filter index doesn't need block data to serve: only to build. Pre-built = works on pruned node
-- Phone never needs donor again after copy (same as chainstate copy)
-- Zeus connects to localhost, gets filters, fully sovereign Lightning
+- Phone never needs donor again after copy
+- Zeus connects to `127.0.0.1` via Neutrino, fully sovereign Lightning
 
-**Implementation Notes:**
-- [ ] Filter index lives in `indexes/blockfilter/basic/` (separate LevelDB from chainstate)
-- [ ] Verify XOR obfuscation: own key vs shared with blocks index
-- [ ] Can be done during initial chainstate copy or as separate "Lightning upgrade" download later
-- [ ] Progress UI: index build can take hours on donor, need monitoring and status display
-- [ ] Test with Umbrel and Start9 (different file paths, permissions)
+**Proven on device:**
+- Zeus v0.12.2 synced to chain, block height 937,527
+- `127.0.0.1` as only Neutrino peer (bypasses GrapheneOS DNS blocks)
+- Full stack: bitcoind → block filters → Zeus Neutrino → Lightning wallet, all localhost
 
 #### Phase 2: Peer Channels
-As network matures, users open channels to arbitrary peers beyond Olympus: better routing, true decentralization, reduced LSP dependence. No new code from us: natural user behavior as confidence grows. Switching LSPs always possible because user owns the node.
+As network matures, users open channels to arbitrary peers beyond Olympus. No new code from us: natural user behavior as confidence grows.
 
 - [ ] LAN exposure toggle for Zeus on separate device (same network)
 - [ ] Documentation for opening peer channels
