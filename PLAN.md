@@ -211,6 +211,36 @@ As network matures, users open channels to arbitrary peers beyond Olympus — be
 - **Rust GBT lib skipped** — using Kotlin fallback for block projection. If performance is an issue on phone, cross-compile the Rust native lib (`app/src/main/rust/gbt/`) with `aarch64-linux-android` NDK target.
 - **Widget skipped** — mempool home screen widget from pocket-mempool repo can be added later.
 
+### Desktop Port (Future)
+
+The fast-standup approach (chainstate copy + version selection) works on any platform, not just phones. A desktop companion tool would bring the same zero-to-full-node experience to Linux, macOS, and Windows.
+
+**What carries over directly:**
+- Chainstate + block index copy via SSH/SFTP (same SnapshotDownloader logic)
+- Version selection (Core 28.1, Core 30, Knots, Knots BIP 110)
+- UTXOracle sovereign price discovery
+- BWT Electrum server for wallet connectivity
+- Block filter index for Lightning/Neutrino support
+
+**What changes:**
+- x86_64 binaries instead of ARM64 (same NDK/CMake cross-compile, different target)
+- No Android service layer -- simple process management (systemd, launchd, or background process)
+- Could be CLI-first: `pocket-node setup --donor umbrel.local --version knots-bip110`
+- Optional lightweight GUI (Electron, Tauri, or native)
+- No battery/cellular constraints -- can run full mempool, more peers, no pruning
+
+**Why it matters:**
+- Lowers the barrier to running a node on ANY hardware, not just phones
+- Same trust model: copy from your own node, verify locally
+- "Mobile-first, desktop-portable" is a stronger grant story
+- Desktop nodes can serve as donors for phone nodes (circular ecosystem)
+- Fast disaster recovery: new machine to full node in minutes
+
+**Approach:**
+- Phase 1: CLI tool (Kotlin or Rust) with SFTP copy + bitcoind management
+- Phase 2: Version selection + UTXOracle + BWT bundled
+- Phase 3: Lightweight GUI wrapper
+
 ### Lightning Phase 3: Peer Watchtower Mesh + LDK (Future)
 Replace Zeus embedded LND with LDK (Lightning Dev Kit by Block/Square) — modular Lightning library with native Android bindings. Designed specifically for mobile: constrained storage, intermittent connectivity.
 
