@@ -24,7 +24,7 @@
 - [x] Non-blocking loadtxoutset with progress polling (tails debug.log)
 - [x] Early completion detection (skip re-download if already loaded)
 - [x] "Try pocketnode first": check for existing snapshot with saved SFTP creds
-- [ ] Download from HTTPS URL (utxo.download)
+- [x] Download from HTTPS URL (utxo.download)
 - [ ] Load from local file (USB/SD/Downloads)
 
 ## Phase 3: Smart Syncing ✅
