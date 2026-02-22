@@ -31,6 +31,8 @@ object ConfigGenerator {
             Log.d(TAG, "bitcoin.conf already exists at ${confFile.absolutePath}")
             // Sync stored creds from existing conf if needed
             syncCredsFromConf(context, confFile)
+            // Migrate: add persistmempool if missing (added in v0.6)
+            migrateConfig(confFile)
             return dataDir
         }
 
@@ -52,6 +54,7 @@ object ConfigGenerator {
             # Mempool — partial mempool for fee estimation + privacy cover traffic
             # Small enough to be bandwidth-friendly, large enough for cover
             maxmempool=50
+            persistmempool=1
             blockreconstructionextratxn=10
             
             # Performance
@@ -107,6 +110,29 @@ object ConfigGenerator {
             }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to sync creds from conf", e)
+        }
+    }
+
+    /**
+     * One-time config migrations for existing installs.
+     * Appends missing settings that were added after initial release.
+     */
+    private fun migrateConfig(confFile: File) {
+        try {
+            val content = confFile.readText()
+            val additions = mutableListOf<String>()
+
+            if (!content.contains("persistmempool")) {
+                additions.add("persistmempool=1")
+            }
+
+            if (additions.isNotEmpty()) {
+                confFile.appendText("\n# Added by config migration\n" +
+                    additions.joinToString("\n") + "\n")
+                Log.i(TAG, "Migrated bitcoin.conf: added ${additions.joinToString(", ")}")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Config migration failed", e)
         }
     }
 

@@ -89,7 +89,7 @@ See [Version Selection Design](docs/VERSION-SELECTION.md) and [BIP 110 Research]
 - **Secure node pairing** with restricted SFTP account (no access to your bitcoin data)
 - **Setup checklist** with auto-detection of completed steps
 - **Live dashboard** showing block height, sync progress, peers, mempool, disk usage
-- **Partial mempool** (50 MB) for fee estimation and cover traffic
+- **Partial mempool** (50 MB) with persistence across restarts (survives nightly reboot)
 
 ## Snapshot Sources
 

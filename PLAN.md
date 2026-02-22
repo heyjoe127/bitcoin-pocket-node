@@ -82,6 +82,8 @@ Pruned Bitcoin Core on the phone with BIP 157/158 block filters. Zeus with embed
 - [x] Battery saver (pauses sync when unplugged below 50%)
 - [x] Auto-start on boot (BootReceiver)
 - [x] Live foreground notification (block height, peers, sync %, oracle price)
+- [x] Persistent mempool across restarts (survives nightly reboot)
+- [x] Config migration for existing installs (auto-adds new settings)
 
 ### Technical Risks (Resolved)
 - [x] **bitcoind ARM64 compilation**: Works with NDK r27 clang wrappers
@@ -213,17 +215,20 @@ See [Desktop Port Design](docs/DESKTOP-PORT.md) for the full design document.
 ```ini
 server=1
 prune=2048
-listen=0
+listen=1
+bind=127.0.0.1
 maxconnections=4
 maxmempool=50
+persistmempool=1
 blockreconstructionextratxn=10
 dbcache=256
 rpcbind=127.0.0.1
 rpcallowip=127.0.0.1
 rpcuser=pocketnode
 rpcpassword=<generated>
-disablewallet=1
 ```
+
+**Why `persistmempool=1`?** Phones restart nightly (GrapheneOS auto-reboot). Without persistence, the node wakes up with an empty mempool and needs 30+ minutes to rebuild from peer relay. With it, mempool.dat is written on shutdown and reloaded on startup.
 
 **Why no `blocksonly=1`?** Partial mempool (50MB cap) for fee estimation, payment detection, privacy cover traffic, and compact block reconstruction.
 
