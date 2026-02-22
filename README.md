@@ -8,7 +8,7 @@ Turn any Android phone into a fully-validating Bitcoin full node. No server depe
 
 - **Direct chainstate copy:** full node at chain tip in ~20 minutes (167M UTXOs, 4 peers, instant)
 - **AssumeUTXO alternative:** full node in ~3 hours via cryptographically verified UTXO snapshot
-- **4 Bitcoin implementations:** Core 28.1, Core 30, Knots 29.3, Knots BIP 110. Switch with one tap, same chainstate
+- **3 Bitcoin implementations:** Core 28.1, Core 30, Knots 29.3 (with BIP 110 toggle). Switch with one tap, same chainstate
 - Phone stays cool, runs overnight without issues
 - ~26 GB total disk with Lightning (11 GB chainstate + 2 GB pruned blocks + 13 GB block filters), ~13 GB without
 - **BWT Electrum server** for BlueWallet connectivity to your own node
@@ -61,18 +61,17 @@ Your node, your rules. Choose which Bitcoin implementation runs on your phone:
 |---|---|---|
 | **Bitcoin Core 28.1** | 13 MB | Neutral: standard relay rules |
 | **Bitcoin Core 30** | 8.6 MB | Permissive: larger OP_RETURN data allowed |
-| **Bitcoin Knots 29.3** | 9 MB | Restrictive: filters non-standard transactions |
-| **Bitcoin Knots (BIP 110)** | 9 MB | Enforcement: consensus-level data restrictions, bit 4 signaling |
+| **Bitcoin Knots 29.3** | 9 MB | Restrictive: filters non-standard transactions. Optional BIP 110 toggle |
 
-All four share the same chainstate format. Switch without re-syncing. Tap "Change" on the dashboard, confirm, and the node restarts with the new binary.
+All three share the same chainstate format. Switch without re-syncing. Tap "Change" on the dashboard, confirm, and the node restarts with the new binary.
 
-**BIP 110** ([bip110.dev](https://bip110.dev/)) temporarily limits arbitrary data embedding at the consensus level. Built from Dathon Ohm's [reference implementation](https://github.com/bitcoinknots/bitcoin/compare/29.x-knots...dathonohm:bitcoin:uasf-modified-bip9), signaling version bit 4 with a 55% activation threshold.
+**BIP 110** ([bip110.dev](https://bip110.dev/)) temporarily limits arbitrary data embedding at the consensus level. When running Knots, a toggle enables version bit 4 signaling and peer preference for reduced data carriers. Built from Dathon Ohm's [reference implementation](https://github.com/bitcoinknots/bitcoin/compare/29.x-knots...dathonohm:bitcoin:uasf-modified-bip9) with a 55% activation threshold.
 
 See [Version Selection Design](docs/VERSION-SELECTION.md) and [BIP 110 Research](docs/BIP110-RESEARCH.md) for details.
 
 ## Features
 
-- **4 Bitcoin implementations** with one-tap switching: Core 28.1, Core 30, Knots 29.3, Knots BIP 110
+- **3 Bitcoin implementations** with one-tap switching: Core 28.1, Core 30, Knots 29.3 (BIP 110 toggle)
 - **Two bootstrap paths:** direct chainstate copy (~20 min) or AssumeUTXO (~3 hours)
 - **BWT Electrum server** so BlueWallet can query your own node
 - **Lightning support** via block filter copy from your home node, enabling Zeus Neutrino on localhost
@@ -129,7 +128,7 @@ Download from `https://utxo.download/utxo-910000.dat` (9 GB). Same `loadtxoutset
 │       │             │             │         │
 │  ┌────┴─────────────┴─────────────┴──────┐  │
 │  │  bitcoind (ARM64), user selects:      │  │
-│  │  Core 28.1 | Core 30 | Knots | BIP110│  │
+│  │  Core 28.1 | Core 30 | Knots (+BIP110)│  │
 │  │  Foreground service, local RPC        │  │
 │  └──────────────┬────────────────────────┘  │
 │                 │                           │
@@ -206,7 +205,7 @@ bitcoind (phone) --> block filters --> Zeus Neutrino --> Lightning wallet
 - **OS:** GrapheneOS (or any Android 10+)
 - **Hardware:** Google Pixel devices (ARM64)
 - **Default:** Bitcoin Core v28.1 (non-controversial baseline)
-- **Also bundled:** Core 30, Knots 29.3, Knots BIP 110 (user selects from dashboard)
+- **Also bundled:** Core 30, Knots 29.3 with BIP 110 toggle (user selects from dashboard)
 - **AssumeUTXO heights:** 840k (upstream) + 880k, 910k (backported from Core 30)
 
 ## Building
