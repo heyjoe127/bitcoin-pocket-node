@@ -1,241 +1,129 @@
-# Watchtower Mesh: Peer Channel Protection
+# Watchtower Mesh Design
 
-## Summary
+## Concept
 
-Every Pocket Node phone automatically watches other Pocket Node phones' Lightning channels. Zero configuration. If your phone goes offline and a counterparty broadcasts an old channel state, another Pocket Node user's phone broadcasts the justice transaction on your behalf.
+A backend watchtower service that works transparently behind Zeus or any Lightning wallet. Not a wallet replacement. The goal is to make existing technology accessible without requiring users to understand it or other developers to change their code.
 
-## Why This Matters
+Watchtowers are infrastructure, not UX. They run silently and protect channels regardless of what wallet the user prefers.
 
-Lightning channels are vulnerable when nodes go offline. If your counterparty publishes a revoked commitment transaction while your phone is off (charging overnight, rebooting, out of service), you lose funds. The standard solution is a watchtower: an always-on server that monitors the chain and broadcasts justice transactions for you.
+## The Gap Being Filled
 
-The problem: most Lightning mobile users have no watchtower at all. They trust that counterparties won't cheat while they sleep. Running your own watchtower defeats the purpose of a phone node (you'd need a server anyway).
+Reliable, decentralized watchtower discovery and peering. Right now watchtower setup is manual and requires technical knowledge. No good solution exists for automatic discovery of trustworthy towers without a central registry.
 
-The Pocket Node answer: phones watch each other. Collectively, the network of Pocket Node users is always online even though individual phones come and go.
+## What Exists Today (No Code Changes Required)
 
-## What Already Exists
+LND already has a fully functional wtserver and wtclient built in. The wtclient connects to towers via URI: `pubkey@host:port`. No wallet or node software changes needed. The technology exists, it just needs a discovery and automation layer.
 
-LND ships with a complete watchtower implementation. Both server and client are built in:
+LND RPC calls available today:
 
-**Watchtower server** (watch someone else's channels):
-```
-# lnd.conf
-watchtower.active=1
-```
-Exposes: `lncli tower info` returns pubkey + listener URI.
+- `WatchtowerClient.AddTower`
+- `WatchtowerClient.GetTowerInfo`
+- `WatchtowerClient.ListTowers`
+- `WatchtowerClient.DeactivateTower`
 
-**Watchtower client** (send your channel state to watchtowers):
-```
-# lnd.conf
-wtclient.active=1
-```
-Commands: `lncli wtclient add <pubkey@host>`, `lncli wtclient towers`, `lncli wtclient stats`.
+## Why Not a Central Registry
 
-The watchtower protocol is encrypted. The watchtower server learns nothing about channel details (amounts, counterparties) until a breach actually occurs. It only stores encrypted blob data that becomes useful when it sees a matching revoked commitment on-chain.
+Central registries create single points of failure and control. The mesh should grow organically with no entity able to censor or control tower discovery.
 
-## Architecture
+## Discovery Layer: Nostr
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                    Discovery Service                     │
-│        (Nostr relay, simple API, or DNS records)         │
-│                                                         │
-│   Stores: watchtower pubkey + onion address per node    │
-│   Simple read/write. No logic. Replaceable.             │
-└───────────┬─────────────────────────┬───────────────────┘
-            │ register                │ fetch peers
-            │                        │
-     ┌──────┴──────┐          ┌──────┴──────┐
-     │  Phone A    │          │  Phone B    │
-     │  (server +  │◄────────►│  (server +  │
-     │   client)   │  watch   │   client)   │
-     └─────────────┘          └─────────────┘
-```
+Nostr provides decentralized publish/subscribe with no infrastructure to run. Relays are free and abundant. Every event is signed by the publisher, giving basic authenticity for free.
 
-Every phone runs both roles:
-1. **Server**: watches other phones' channels (costs nothing, minimal storage)
-2. **Client**: sends encrypted channel state updates to peer watchtowers
-
-## Implementation Plan
-
-### Phase 1: Enable Watchtower in LND Config
-
-**Status: needs Zeus support or direct config injection**
-
-Zeus's embedded LND generates its own `lnd.conf` via `writeLndConfig()` in `LndMobileUtils.ts`. As of now, it does not include watchtower settings. Two paths forward:
-
-**Option A: Zeus feature request (clean)**
-Ask Zeus to add `watchtower.active` and `wtclient.active` as user-toggleable settings. This is a small PR. Zeus already exposes Neutrino peer config, fee estimator, and protocol options.
-
-**Option B: Direct config append (works today)**
-After Zeus writes its `lnd.conf`, Pocket Node appends watchtower lines before LND starts. The app already knows Zeus's LND directory location. Risk: Zeus could overwrite on restart. Mitigation: re-append on every Zeus start detected.
-
-**Option C: LND REST/gRPC API (runtime)**
-LND's `wtclient` and `watchtower` sub-servers may be controllable via API calls after LND starts, bypassing config entirely. Needs investigation of which RPC calls Zeus's LND build includes.
-
-**Recommendation:** Start with Option A (Zeus PR). Fall back to Option B for a working prototype while waiting for upstream merge.
-
-### Phase 2: Discovery Service
-
-The simplest possible service for phones to find each other's watchtowers.
-
-#### Option 1: Nostr Relay (preferred)
-
-Watchtower registration as Nostr events on a public relay. No server to run.
+Tower announcement event structure:
 
 ```json
 {
   "kind": 38333,
+  "content": "",
   "tags": [
-    ["d", "<watchtower-pubkey>"],
-    ["uri", "<pubkey>@<onion-address>:9911"],
-    ["app", "pocket-node"],
-    ["v", "1"]
-  ],
-  "content": ""
+    ["d", "<tower-pubkey>"],
+    ["uri", "pubkey@host:9911"],
+    ["network", "mainnet"],
+    ["app", "bitcoin-pocket-node"],
+    ["role", "server"]
+  ]
 }
 ```
 
-- Phones publish their watchtower info as replaceable Nostr events (kind 38333, arbitrary choice in parameterized replaceable range)
-- Other phones query the relay for events with tag `["app", "pocket-node"]`
-- Nostr relays are free, public, redundant, and censorship-resistant
-- Events are signed by a per-device Nostr keypair (generated on first run)
-- Stale entries naturally expire (relays prune old events, or set expiration tag)
-- Multiple relays for redundancy (query 3, publish to 3)
+Phones query for `role=server` events and add those towers via `wtclient add`. Desktop/home nodes publish `role=server` and optionally also act as clients.
 
-**Why Nostr fits:**
-- No server to build, host, or maintain
-- Decentralized by default (relay goes down, use another)
-- Spam-resistant (valid Nostr events only, can add PoW requirement)
-- Already part of the Bitcoin ecosystem
+Stale events (no refresh in 24h) are treated as dead. NIP-40 expiration tags handle this cleanly.
 
-#### Option 2: Simple REST API (fallback)
+## The Ephemeral Address Problem
 
-A single endpoint if Nostr adds too much complexity for v1:
+Phone IPs change on every reconnect. Even Tor .onion addresses are ephemeral unless the private key is persisted. This is why phones should not be watchtower servers.
 
-```
-POST /api/v1/watchtower
-  { "pubkey": "02f1...", "uri": "02f1...@abc123.onion:9911" }
+## Role Separation (Honest MVP)
 
-GET /api/v1/watchtowers
-  Returns: [{ "pubkey": "...", "uri": "...", "last_seen": "..." }, ...]
-```
-
-Hosted on a simple VPS. No auth needed (watchtower pubkeys are meant to be public). Rate limit by IP. Prune entries not refreshed in 7 days.
-
-This is a centralization point but a temporary one. Migrate to Nostr once proven.
-
-#### Option 3: DNS TXT Records
-
-Encode watchtower URIs as DNS TXT records under a dedicated subdomain:
-
-```
-_watchtower.pocketnode.org TXT "02f1...@abc123.onion:9911"
-```
-
-Simple, cacheable, works everywhere. But requires manual updates or a dynamic DNS API, and doesn't scale well past a few hundred entries.
-
-**Recommendation:** Nostr for v1. It's the right fit for a Bitcoin-native, server-less discovery mechanism. REST API as a parallel fallback for reliability.
-
-### Phase 3: App Integration (Pocket Node Side)
-
-New Kotlin code in the Pocket Node app:
-
-#### WatchtowerManager.kt
-
-```kotlin
-class WatchtowerManager(private val context: Context) {
-
-    // On Lightning setup completion:
-    fun enableWatchtower() {
-        // 1. Ensure watchtower lines in LND config
-        // 2. Restart LND if needed
-        // 3. Get local tower info (pubkey + URI)
-        // 4. Publish to discovery service
-        // 5. Fetch peer watchtowers
-        // 6. Add peers via wtclient
-    }
-
-    // Periodic (on app start, daily):
-    fun refreshPeers() {
-        // 1. Re-publish own tower info (keep-alive)
-        // 2. Fetch current peer list
-        // 3. Add new peers, remove stale ones
-        // 4. Log stats (towers watching us, towers we watch)
-    }
-}
-```
-
-#### UI: Watchtower Status Card
-
-On the dashboard (or Lightning section):
-
-```
-⚡ Watchtower Mesh
-Watching: 12 peers
-Watched by: 8 peers
-Last refresh: 2 hours ago
-```
-
-Tap for details: list of connected watchtowers, stats, manual refresh.
-
-#### Tor Requirement
-
-Watchtower URIs use `.onion` addresses for privacy. LND generates these automatically when Tor is enabled. This means:
-
-- Tor must be running on the phone for watchtower server to be reachable
-- Zeus already supports Tor (toggle in settings)
-- Pocket Node would need to ensure Tor is enabled when watchtower mesh is active
-- Without Tor: client-only mode (use others' watchtowers, but don't serve)
-
-**For v1:** Support client-only mode without Tor. Full mesh (server + client) requires Tor enabled in Zeus. This avoids making Tor a hard dependency.
-
-### Phase 4: Hardening (Post-MVP)
-
-- **Reputation scoring:** Track which watchtowers are consistently online. Prefer reliable peers.
-- **Redundancy target:** Ensure each phone has at least N watchtowers (e.g., 5). Alert if below threshold.
-- **Fee incentives:** LND supports watchtower reward addresses. Could add optional sat bounties for successful justice transactions. (Current LND watchtowers are altruistic.)
-- **Gossip-based discovery:** Instead of a central service, watchtower URIs could propagate through LN gossip messages (custom TLV). True peer-to-peer, no relay needed.
-- **Rate limiting:** Limit how many watchtower peers each phone serves to prevent resource exhaustion on low-end devices.
-- **Encrypted backup:** Use the watchtower mesh as an encrypted channel state backup network (SCB distribution).
-
-## Privacy Properties
-
-| What watchtower server learns | What it doesn't learn |
-|---|---|
-| That a peer exists and has channels | Channel balances or capacity |
-| Encrypted justice transaction blobs | Counterparty identity |
-| When a breach occurs (if it does) | Normal channel activity |
-| Nothing if no breach ever happens | Wallet contents, transaction history |
-
-The watchtower protocol is designed so servers store opaque data. They can only act on it when they observe a matching revoked commitment transaction on-chain.
-
-## Storage and Resource Cost
-
-Per watched peer:
-- ~256 bytes per channel state update (encrypted blob)
-- Typical: a few KB per peer total
-- 100 peers = ~1 MB of watchtower data
-
-Negligible on a phone with 128+ GB storage. CPU cost is near zero (just blob storage and chain monitoring that LND already does).
-
-## Scope and Dependencies
-
-| Component | Status | Effort |
+| Device | Role | Rationale |
 |---|---|---|
-| LND watchtower server | Ships with LND | Configuration only |
-| LND watchtower client | Ships with LND | Configuration only |
-| Zeus config support | Not yet exposed | Feature request / small PR |
-| Nostr discovery | Protocol exists | ~1 week Kotlin code |
-| WatchtowerManager.kt | New | ~1 week |
-| Dashboard UI | New | ~2 days |
-| Tor integration | Zeus supports it | Configuration guidance |
+| Phone | wtclient only | I need watching |
+| Home node | wtserver | I will watch you |
+| Desktop | wtserver | I will watch you (future) |
 
-**Total estimated effort:** 2-3 weeks for a working MVP (client-only without Tor, Nostr discovery, dashboard card).
+This matches the actual reliability profile. A phone that is asleep or offline cannot respond to a breach. Always-on nodes can.
 
-Full mesh with Tor server mode: additional 1-2 weeks depending on Zeus cooperation.
+The mesh becomes phones protected by desktops and home nodes, which is exactly the right reliability model.
 
-## The Grant Pitch
+Persistent .onion addresses (`--tor.privatekeypath` in LND) are appropriate for always-on nodes that publish tower URIs. Phones do not need persistent addresses because they are clients only.
 
-> Every Bitcoin Pocket Node phone automatically watches other Pocket Node phones' Lightning channels. When your phone is offline and a counterparty tries to cheat, another Pocket Node user's phone catches it and broadcasts the justice transaction. Zero configuration. No servers. No trusted third parties. Phones protect each other.
+## Peer Selection Criteria
 
-This turns a network of mobile nodes from isolated individuals into a resilient collective. The more people run Pocket Node, the safer everyone's channels become. That's a network effect worth funding.
+Borrow directly from Bitcoin Core's peer selection logic:
+
+- Diverse IP ranges (avoid multiple towers on same /16 subnet)
+- Geographic distribution inferred from IP
+- Uptime scoring (analogous to Core's peer eviction logic)
+- Ban scoring for repeatedly failing towers
+- Rotate stale/dead towers out periodically
+
+Apply this scoring at the discovery layer. Clients receive a diverse set of tower URIs, not just the first ones found.
+
+Health check is simple: attempt a session handshake on port 9911. If it responds correctly the tower is alive. No custom protocol needed.
+
+## MVP Flow
+
+1. Phone pairs with home node (SSH, already exists in app)
+2. During pairing, wtserver enabled on home node (one config line via ConfigGenerator)
+3. Home node publishes its tower URI to Nostr
+4. WatchtowerManager.kt adds home node as primary tower automatically
+5. Phone also queries Nostr for other `role=server` nodes as backup towers
+6. Desktop port later becomes first-class tower server publishing to same mesh
+
+Real watchtower protection on day one using infrastructure the user already owns. Mesh provides organic redundancy on top.
+
+## Android Architecture
+
+`WatchtowerManager.kt` sits alongside `BlockFilterManager.kt` in the `snapshot/` package.
+
+Responsibilities:
+- Query Nostr relays for `role=server` tower announcements
+- Apply diversity/health scoring to candidate towers
+- Call LND wtclient gRPC to add/remove towers
+- Periodic background health checks via WorkManager
+- Rotate dead towers out automatically
+
+`ConfigGenerator.kt` already handles bitcoin.conf generation. Same pattern adds wtserver config lines to lnd.conf on the home node during pairing.
+
+`BitcoinRpcClient.kt` pattern is reused for LND gRPC calls to wtclient endpoints.
+
+## Future: Desktop Port
+
+Desktop/home nodes running Pocket Node become first-class watchtower servers. They publish to the same Nostr mesh. The phone app discovers them the same way it discovers any other tower. No protocol changes needed.
+
+The desktop port is the natural next milestone after MVP. It densifies the mesh and gives always-on reliability to users who run home nodes.
+
+## What Is NOT Being Built
+
+- Wallet UI
+- Payment flows
+- Channel management
+- Central registry or server
+- Custom P2P protocol
+- Any changes to Zeus, LND, or Bitcoin Core
+
+This is glue, not a new protocol. The technology exists. The missing piece is making it work without user intervention.
+
+## Peer Selection Analogy
+
+This is to watchtowers what DNS is to IP addresses. The underlying technology existed. Someone made it not require a computer science degree to use.
