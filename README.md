@@ -19,15 +19,15 @@ Turn any Android phone into a fully-validating Bitcoin full node. No server depe
 
 **Node + On-chain wallet**
 
-| Setup checklist | Electrum server | BlueWallet connected | BlueWallet wallet |
+| First run | Electrum server | BlueWallet connected | BlueWallet wallet |
 |:---:|:---:|:---:|:---:|
-| ![Setup checklist all green](docs/images/01-checklist.jpg) | ![Electrum server running with tracked wallets](docs/images/03-electrum-server.jpg) | ![BlueWallet connected to localhost](docs/images/04-bluewallet-connected.jpg) | ![BlueWallet wallet view](docs/images/04-bluewallet-wallet.jpg) |
+| ![Choose snapshot source](docs/images/00-setup-screen.jpg) | ![Electrum server running with tracked wallets](docs/images/03-electrum-server.jpg) | ![BlueWallet connected to localhost](docs/images/04-bluewallet-connected.jpg) | ![BlueWallet wallet view](docs/images/04-bluewallet-wallet.jpg) |
 
 **Lightning + Version Selection**
 
-| Lightning enabled | Connect Wallet | Version picker |
-|:---:|:---:|:---:|
-| ![Dashboard with Lightning Ready](docs/images/05-lightning-dashboard.jpg) | ![All three wallet services](docs/images/06-connect-wallet.jpg) | ![Choose Bitcoin implementation](docs/images/11-version-picker.png) |
+| Lightning enabled | Connect Wallet | Version picker | Setup checklist |
+|:---:|:---:|:---:|:---:|
+| ![Dashboard with Lightning Ready](docs/images/05-lightning-dashboard.jpg) | ![All three wallet services](docs/images/06-connect-wallet.jpg) | ![Choose Bitcoin implementation](docs/images/11-version-picker.png) | ![Setup checklist all green](docs/images/01-checklist.jpg) |
 
 ## How It Works
 
