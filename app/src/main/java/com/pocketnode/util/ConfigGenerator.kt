@@ -46,6 +46,7 @@ object ConfigGenerator {
             server=1
             listen=1
             bind=127.0.0.1
+            listenonion=0
             maxconnections=4
             whitelist=download@127.0.0.1
             
@@ -139,6 +140,11 @@ object ConfigGenerator {
             // BWT v0.2.4 compat: warnings as string not array (Core 28+)
             if (!content.contains("deprecatedrpc=warnings")) {
                 additions.add("deprecatedrpc=warnings")
+            }
+
+            // Disable Tor listener so 8333 stays a normal port (Zeus whitelist works)
+            if (!content.contains("listenonion=0")) {
+                additions.add("listenonion=0")
             }
 
             if (additions.isNotEmpty()) {

@@ -11,7 +11,7 @@ Turn any Android phone into a fully-validating Bitcoin full node. No server depe
 - **3 Bitcoin implementations:** Core 28.1, Core 30, Knots 29.3 (with BIP 110 toggle). Switch with one tap, same chainstate
 - Phone stays cool, runs overnight without issues
 - ~26 GB total disk with Lightning (11 GB chainstate + 2 GB pruned blocks + 13 GB block filters), ~13 GB without
-- **BWT Electrum server** for BlueWallet connectivity to your own node
+- **Pure Kotlin Electrum server** for BlueWallet connectivity to your own node
 
 ## Screenshots
 
@@ -23,17 +23,11 @@ Turn any Android phone into a fully-validating Bitcoin full node. No server depe
 |:---:|:---:|:---:|:---:|
 | ![Setup checklist all green](docs/images/01-checklist.jpg) | ![Electrum server running with tracked wallets](docs/images/03-electrum-server.jpg) | ![BlueWallet connected to localhost](docs/images/04-bluewallet-connected.jpg) | ![BlueWallet wallet view](docs/images/04-bluewallet-wallet.jpg) |
 
-**Lightning**
+**Lightning + Version Selection**
 
-| Lightning enabled | Connect Wallet | Zeus synced | Zeus Neutrino peer |
-|:---:|:---:|:---:|:---:|
-| ![Dashboard with Lightning Ready](docs/images/05-lightning-dashboard.jpg) | ![All three wallet services](docs/images/06-connect-wallet.jpg) | ![Zeus Node Info synced](docs/images/07-zeus-node-info.jpg) | ![Zeus connected to localhost](docs/images/08-zeus-neutrino-peers.jpg) |
-
-**Choose your implementation**
-
-| Version picker | Zeus setup guide |
-|:---:|:---:|
-| ![Choose Bitcoin implementation](docs/images/11-version-picker.png) | ![Zeus setup guide with version warning](docs/images/10-zeus-setup-guide.jpg) |
+| Lightning enabled | Connect Wallet | Version picker |
+|:---:|:---:|:---:|
+| ![Dashboard with Lightning Ready](docs/images/05-lightning-dashboard.jpg) | ![All three wallet services](docs/images/06-connect-wallet.jpg) | ![Choose Bitcoin implementation](docs/images/11-version-picker.png) |
 
 ## How It Works
 
@@ -73,11 +67,11 @@ See [Version Selection Design](docs/VERSION-SELECTION.md) and [BIP 110 Research]
 
 - **3 Bitcoin implementations** with one-tap switching: Core 28.1, Core 30, Knots 29.3 (BIP 110 toggle)
 - **Two bootstrap paths:** direct chainstate copy (~20 min) or AssumeUTXO (~3 hours)
-- **BWT Electrum server** so BlueWallet can query your own node
-- **Lightning support** via block filter copy from your home node, enabling Zeus Neutrino on localhost
+- **Pure Kotlin Electrum server** so BlueWallet can query your own node (no native dependencies)
+- **Lightning support** via block filter copy from your home node (Zeus with embedded LND)
 - **Sovereign price discovery** using UTXOracle (BTC/USD from on-chain data, no exchange APIs)
 - **Mempool viewer** with fee estimates, projected blocks, and transaction search
-- **Wallet setup guide** for BlueWallet and Zeus connection
+- **Wallet setup guide** for BlueWallet connection
 - **Snapshot validation** checks block hash before loading, auto-redownloads if wrong
 - **Non-blocking snapshot load** with progress tracking
 - **Network-aware sync** that auto-pauses on cellular and resumes on WiFi
@@ -170,35 +164,24 @@ You can view the pocketnode credentials and **fully remove access** from the app
 - bitcoind runs as `libbitcoind.so` in `jniLibs/` for GrapheneOS W^X compliance
 - No internet-facing ports. RPC and BWT Electrum are both localhost only
 
-## Lightning Support (Zeus)
+## Lightning Support
 
-The app can copy BIP 157/158 block filter indexes (~13 GB) from your home node, enabling Zeus to run as a fully sovereign Lightning wallet. Everything stays on localhost with no external dependencies.
+The app copies BIP 157/158 block filter indexes (~13 GB) from your home node, enabling Lightning wallet support on the phone.
 
 ### How It Works
 1. Tap "Add Lightning Support" on the dashboard
 2. Enter your home node SSH credentials
 3. The app detects block filters on your node, stops it briefly, archives filters alongside chainstate, downloads everything, and restarts your home node
-4. Your phone's bitcoind restarts with `blockfilterindex=1`, `peerblockfilters=1`, `listen=1`, `bind=127.0.0.1`
-5. Zeus connects via Neutrino to `127.0.0.1` for compact block filters
+4. Your phone's bitcoind restarts with `blockfilterindex=1` and `peerblockfilters=1`
+5. Install a Lightning wallet (Zeus with embedded LND) and it syncs via Neutrino
 
-### Zeus Setup
-1. Install **Zeus v0.12.2** from [GitHub releases](https://github.com/ZeusLN/zeus/releases/tag/v0.12.2) (v0.12.3+ has a [SQLite bug](https://github.com/ZeusLN/zeus/issues/3672) that stalls sync at block 123,000)
-2. Open Zeus, select **Create embedded LND**
-3. Wait ~15 minutes on the boot animation while initial header sync completes (don't change settings yet)
-4. Restart the app
-5. Wait for the warning icon to appear at the top of the screen
-6. Tap the warning icon to open node settings
-7. Go to **Embedded node > Peers > Neutrino Peers**
-8. Delete all default Neutrino peers
-9. Add `127.0.0.1` as the only Neutrino peer
-10. Restart Zeus. It connects to your local bitcoind and the wallet appears
-11. To confirm: **Settings > Embedded node > Peers > Neutrino Peers** should show `127.0.0.1` as the only peer
+### Current Status: Zeus with Internet Peers
 
-### Full Sovereign Stack
-```
-bitcoind (phone) --> block filters --> Zeus Neutrino --> Lightning wallet
-         all on localhost, zero external dependencies
-```
+Zeus's embedded LND uses Neutrino for chain sync. Neutrino requires peers to advertise `NODE_NETWORK` (service bit 0), but our pruned bitcoind only advertises `NODE_NETWORK_LIMITED` (bit 10). Neutrino silently rejects the local node during the P2P handshake, so Zeus syncs via internet peers instead. This works, and Neutrino is privacy-preserving (it doesn't reveal which addresses you're watching), but it means Zeus doesn't use the local bitcoind for P2P. Your local node still handles all on-chain validation, Electrum wallet tracking, mempool, and fee estimation.
+
+### Future: LDK Migration
+
+The planned LDK (Lightning Dev Kit) migration eliminates this limitation entirely. LDK connects to bitcoind via RPC (not P2P Neutrino), so pruned nodes work natively. No service bit checks, no cross-app restrictions, no duplicate sync engine. See [LDK Research](docs/LDK-RESEARCH.md).
 
 ## Target Platform
 
@@ -293,7 +276,7 @@ app/src/main/java/com/pocketnode/
 - **Desktop port:** Same app on Linux, macOS, Windows via Compose Multiplatform. Same UI, same chainstate copy, same version selection. See [design doc](docs/DESKTOP-PORT.md).
 - **Home node watchtower:** Your home node watches your phone's Lightning channels when you're away. Enabled automatically during setup. See [design doc](docs/WATCHTOWER-MESH.md).
 - **Policy settings:** Expose Knots datacarrier flags as toggleable settings.
-- **LDK migration:** Replace Zeus embedded LND with LDK for native Lightning.
+- **LDK migration:** Replace Zeus embedded LND with LDK for native in-process Lightning. Solves the NODE_NETWORK service bit limitation (pruned nodes can't serve Neutrino) by using bitcoind RPC directly.
 
 ## Tested On
 
