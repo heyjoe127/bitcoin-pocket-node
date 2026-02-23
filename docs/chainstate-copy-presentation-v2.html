@@ -450,6 +450,58 @@
     color: var(--text-dim);
     margin: 2px;
   }
+
+  /* Mobile responsive */
+  @media (max-width: 768px) {
+    .slide { padding: 24px 16px; }
+
+    h1 { font-size: 2em; }
+    h2 { font-size: 1.5em; margin-bottom: 16px; }
+    h3 { font-size: 1em; margin-bottom: 8px; }
+
+    .subtitle { font-size: 1em; }
+
+    .stats { flex-direction: column; gap: 12px; margin: 16px 0; }
+    .stat { padding: 16px 20px; }
+    .stat-value { font-size: 1.8em; }
+
+    .diagram { flex-direction: column; gap: 16px; }
+    .device { min-width: unset; width: 100%; padding: 20px; }
+    .device-icon { font-size: 2em; }
+
+    .arrow { display: none; }
+
+    .two-col { flex-direction: column; gap: 20px; }
+
+    .comparison { flex-direction: column; gap: 12px; }
+    .compare-time { font-size: 2em; }
+    .compare-card { padding: 20px; }
+
+    .file-tree { min-width: unset; width: 100%; padding: 16px; font-size: 0.8em; }
+
+    .steps { gap: 10px; }
+    .step { padding: 14px 16px; gap: 12px; }
+    .step-num { width: 28px; height: 28px; font-size: 0.85em; }
+
+    .flow-container { width: 100%; height: 140px; }
+    .flow-node { padding: 10px 14px; }
+    .flow-node .flow-node-icon { font-size: 1.5em; }
+    .flow-packets { left: 120px; width: 40%; }
+
+    .nav-arrows { right: 16px; bottom: 16px; }
+    .slide-counter { left: 16px; bottom: 20px; }
+    .nav { bottom: 16px; }
+    .nav-dot { width: 8px; height: 8px; }
+  }
+
+  @media (max-width: 480px) {
+    .slide { padding: 20px 12px; }
+    h1 { font-size: 1.6em; }
+    h2 { font-size: 1.3em; }
+    .stat-value { font-size: 1.5em; }
+    .file-tree { font-size: 0.7em; line-height: 1.8; }
+    .flow-container { display: none; }
+  }
 </style>
 </head>
 <body>
