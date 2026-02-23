@@ -170,11 +170,17 @@ fun SetupChecklistScreen(
 
                 // Step 6: Lightning (only shown when remote node configured)
                 if (state.remoteNodeConfigured) {
+                    val wtManager = remember { com.pocketnode.service.WatchtowerManager(context) }
+                    val wtConfigured = remember { wtManager.isConfigured() }
+
                     ChecklistItem(
                         step = 6,
                         title = "Lightning Support",
                         description = when {
-                            state.blockFiltersInstalled -> "Block filters installed — connect Zeus wallet"
+                            state.blockFiltersInstalled && wtConfigured ->
+                                "Block filters installed, watchtower active 🛡️"
+                            state.blockFiltersInstalled ->
+                                "Block filters installed — connect Zeus wallet"
                             state.nodeSynced -> "Copy block filters from your home node via dashboard"
                             else -> "Sync node first, then add Lightning"
                         },
@@ -182,6 +188,21 @@ fun SetupChecklistScreen(
                         optional = true,
                         onClick = {}
                     )
+
+                    // Step 7: Watchtower (only shown when Lightning is set up)
+                    if (state.blockFiltersInstalled) {
+                        ChecklistItem(
+                            step = 7,
+                            title = "Watchtower",
+                            description = when {
+                                wtConfigured -> "Home node protecting your channels 🛡️"
+                                else -> "Not configured — set up from dashboard"
+                            },
+                            completed = wtConfigured,
+                            optional = true,
+                            onClick = {}
+                        )
+                    }
                 }
 
                 Spacer(Modifier.height(16.dp))

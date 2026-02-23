@@ -556,10 +556,29 @@ class ChainstateManager private constructor(private val context: Context) {
                 .edit().putBoolean("node_was_running", true).apply()
 
             val filtersDeployed = dataDir.resolve("indexes/blockfilter/basic/db").exists()
+
+            // Auto-detect and configure watchtower if LND is on the home node
+            var watchtowerMsg = ""
+            try {
+                _state.value = _state.value.copy(progress = "Checking for Lightning watchtower...")
+                val wtSession = SshUtils.connectSsh(sshHost, sshPort, sshUser, sshPassword)
+                val wtManager = com.pocketnode.service.WatchtowerManager(context)
+                val wtResult = wtManager.autoSetup(wtSession, sshPassword)
+                wtSession.disconnect()
+                watchtowerMsg = when (wtResult) {
+                    com.pocketnode.service.WatchtowerManager.SetupResult.SUCCESS ->
+                        " Watchtower configured! 🛡️"
+                    else -> "" // Silent if no LND found
+                }
+                Log.i(TAG, "Watchtower auto-setup result: $wtResult")
+            } catch (e: Exception) {
+                Log.w(TAG, "Watchtower auto-setup skipped", e)
+            }
+
             val finalMessage = if (filtersDeployed)
-                "Node running at chain tip — Lightning ready! ⚡"
+                "Node running at chain tip — Lightning ready! ⚡$watchtowerMsg"
             else
-                "Node running at chain tip — no background validation needed!"
+                "Node running at chain tip — no background validation needed!$watchtowerMsg"
             _state.value = _state.value.copy(step = Step.COMPLETE,
                 progress = finalMessage)
             true

@@ -401,8 +401,23 @@ class BlockFilterManager(private val context: Context) {
                 progress = "Configuring local node...")
             enableLocalConfig()
 
+            // Auto-detect watchtower while SSH is fresh
+            var watchtowerMsg = ""
+            try {
+                _state.value = _state.value.copy(progress = "Checking for Lightning watchtower...")
+                val wtSession = SshUtils.connectSsh(sshHost, sshPort, sshUser, sshPassword)
+                val wtManager = com.pocketnode.service.WatchtowerManager(context)
+                val wtResult = wtManager.autoSetup(wtSession, sshPassword)
+                wtSession.disconnect()
+                if (wtResult == com.pocketnode.service.WatchtowerManager.SetupResult.SUCCESS) {
+                    watchtowerMsg = " Watchtower configured! 🛡️"
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Watchtower auto-setup skipped", e)
+            }
+
             _state.value = _state.value.copy(step = Step.COMPLETE,
-                progress = "Lightning support enabled!",
+                progress = "Lightning support enabled!$watchtowerMsg",
                 localHasFilters = true)
             true
         } catch (e: Exception) {
