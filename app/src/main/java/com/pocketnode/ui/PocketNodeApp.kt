@@ -127,6 +127,7 @@ fun PocketNodeApp(
                     onNavigateToSnapshot = { navController.navigate("snapshot") },
                     onNavigateToNodeAccess = { navController.navigate("node_access") },
                     onNavigateToNetworkSettings = { navController.navigate("network_settings") },
+                    onNavigateToBlockFilter = { navController.navigate("block_filter") },
                     onStartNode = {
                         // Navigate back to dashboard — starting happens there
                         navController.popBackStack("status", inclusive = false)

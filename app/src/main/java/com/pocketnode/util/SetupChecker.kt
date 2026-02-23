@@ -22,7 +22,8 @@ object SetupChecker {
         val nodeRunning: Boolean = false,
         val blockHeight: Long = -1,
         val headerHeight: Long = -1,
-        val syncProgress: Double = 0.0
+        val syncProgress: Double = 0.0,
+        val blockFiltersInstalled: Boolean = false
     )
 
     /**
@@ -75,6 +76,11 @@ object SetupChecker {
                     (chainstate.listFiles()?.isNotEmpty() == true)
         }
 
+        // Check if block filters are installed (Lightning prerequisite)
+        val filterDir = File(context.filesDir, "bitcoin/indexes/blockfilter/basic")
+        val blockFiltersInstalled = filterDir.exists() && filterDir.isDirectory &&
+                (filterDir.listFiles()?.isNotEmpty() == true)
+
         SetupState(
             binaryInstalled = binaryInstalled,
             configGenerated = configGenerated,
@@ -84,7 +90,8 @@ object SetupChecker {
             nodeRunning = nodeRunning,
             blockHeight = blockHeight,
             headerHeight = headerHeight,
-            syncProgress = syncProgress
+            syncProgress = syncProgress,
+            blockFiltersInstalled = blockFiltersInstalled
         )
     }
 

@@ -33,7 +33,8 @@ fun SetupChecklistScreen(
     onNavigateToSnapshot: () -> Unit,
     onNavigateToNodeAccess: () -> Unit,
     onNavigateToNetworkSettings: () -> Unit,
-    onStartNode: () -> Unit
+    onStartNode: () -> Unit,
+    onNavigateToBlockFilter: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -166,6 +167,22 @@ fun SetupChecklistScreen(
                     completed = state.nodeSynced,
                     onClick = if (state.snapshotLoaded && !state.nodeRunning) onStartNode else ({})
                 )
+
+                // Step 6: Lightning (only shown when remote node configured)
+                if (state.remoteNodeConfigured) {
+                    ChecklistItem(
+                        step = 6,
+                        title = "Lightning Support",
+                        description = when {
+                            state.blockFiltersInstalled -> "Block filters installed — connect Zeus wallet"
+                            state.nodeSynced -> "Copy block filters from your home node"
+                            else -> "Sync node first, then add Lightning"
+                        },
+                        completed = state.blockFiltersInstalled,
+                        optional = true,
+                        onClick = onNavigateToBlockFilter
+                    )
+                }
 
                 Spacer(Modifier.height(16.dp))
 
