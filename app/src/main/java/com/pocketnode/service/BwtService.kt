@@ -104,7 +104,8 @@ class BwtService(private val context: Context) {
                     "--electrum-addr", "$ELECTRUM_HOST:$ELECTRUM_PORT",
                     "--no-wait-sync",
                     "--rescan-since", "now",
-                    "-W", // Create wallet if missing
+                    // Wallet pre-created by ensureBwtWallet() — don't let BWT create it
+                    // (BWT defaults to legacy/BDB which may not be compiled in)
                     "--no-startup-banner",
                     "-v"
                 )
@@ -219,9 +220,9 @@ class BwtService(private val context: Context) {
             return
         }
 
-        // Create new wallet (legacy for importmulti compatibility)
+        // Create wallet — try legacy first (for importmulti), fall back to descriptor
         Log.i(TAG, "Creating BWT wallet...")
-        val createResult = rpc.call("createwallet", org.json.JSONArray().apply {
+        var createResult = rpc.call("createwallet", org.json.JSONArray().apply {
             put(BWT_WALLET_NAME)  // name
             put(true)             // disable_private_keys
             put(true)             // blank
@@ -229,6 +230,18 @@ class BwtService(private val context: Context) {
             put(false)            // avoid_reuse
             put(false)            // descriptors (false = legacy, needed for importmulti)
         })
+        // If legacy fails (no BDB), try descriptor wallet
+        if (createResult == null || createResult.optJSONObject("error") != null) {
+            Log.i(TAG, "Legacy wallet creation failed, trying descriptor wallet...")
+            createResult = rpc.call("createwallet", org.json.JSONArray().apply {
+                put(BWT_WALLET_NAME)  // name
+                put(true)             // disable_private_keys
+                put(true)             // blank
+                put("")               // passphrase
+                put(false)            // avoid_reuse
+                put(true)             // descriptors (true = SQLite descriptor wallet)
+            })
+        }
         if (createResult != null) {
             Log.i(TAG, "Created BWT wallet")
         }
