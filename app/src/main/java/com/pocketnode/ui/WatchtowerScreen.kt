@@ -74,6 +74,8 @@ fun WatchtowerScreen(onBack: () -> Unit) {
                 // Status card
                 val status = wtManager.getStatus()
                 if (status is WatchtowerManager.WatchtowerStatus.Configured) {
+                    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(
@@ -97,11 +99,57 @@ fun WatchtowerScreen(onBack: () -> Unit) {
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                             )
+                            // Full URI with copy button
                             Text(
-                                "URI: ${status.uri.take(20)}...${status.uri.takeLast(15)}",
+                                "Tower URI",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                            )
+                            Text(
+                                status.uri,
                                 style = MaterialTheme.typography.bodySmall,
                                 fontFamily = FontFamily.Monospace,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                            )
+                            var copied by remember { mutableStateOf(false) }
+                            Button(
+                                onClick = {
+                                    clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(status.uri))
+                                    copied = true
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Text(if (copied) "Copied ✓" else "Copy URI")
+                            }
+                        }
+                    }
+
+                    // Zeus setup instructions
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("Connect Zeus", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                "1. Open Zeus → Tools → Watchtowers",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Text(
+                                "2. Tap Add Watchtower",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Text(
+                                "3. Paste the URI above (or scan QR from another device)",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Text(
+                                "Zeus connects to your home node's watchtower via Tor automatically. Your channels will be monitored even when your phone is offline.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                             )
                         }
                     }
