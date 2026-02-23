@@ -129,7 +129,7 @@ object ConfigGenerator {
 
             // Whitelist localhost so Zeus/Neutrino can always connect
             // even when maxconnections slots are full
-            if (!content.contains("whitelist") || !content.contains("127.0.0.1")) {
+            if (!content.contains("whitelist=download@127.0.0.1")) {
                 additions.add("whitelist=download@127.0.0.1")
             }
 
