@@ -453,7 +453,14 @@
 
   /* Mobile responsive */
   @media (max-width: 768px) {
-    .slide { padding: 24px 16px; }
+    body { overflow: hidden; }
+    .slide {
+      padding: 24px 16px 80px;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      justify-content: flex-start;
+      padding-top: 32px;
+    }
 
     h1 { font-size: 2em; }
     h2 { font-size: 1.5em; margin-bottom: 16px; }
