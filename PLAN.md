@@ -70,7 +70,9 @@ Pruned Bitcoin Core on the phone with BIP 157/158 block filters. Zeus with embed
 - [x] Unified atomic snapshot: stop donor, archive chainstate + filters together, restart
 - [x] Revert listen/bind config when Lightning removed
 
-**Proven on device:** Zeus v0.12.2 synced to chain at block 937,527. `127.0.0.1` as only Neutrino peer. Full stack: bitcoind → block filters → Zeus Neutrino → Lightning wallet, all localhost.
+**Proven on device:** Zeus v0.12.2 with embedded LND syncs and operates on the phone. Block filters copied from home node. Full Lightning wallet functional.
+
+**Known limitation: NODE_NETWORK service bit.** Our pruned bitcoind advertises `NODE_NETWORK_LIMITED` (service bit 10) instead of `NODE_NETWORK` (service bit 0). Neutrino requires `NODE_NETWORK | NODE_WITNESS | NODE_CF` from peers, so it silently rejects our local node during the P2P handshake. Zeus falls back to internet peers for Neutrino sync. This means Zeus does not use our local bitcoind for P2P block/filter fetching, only internet peers. This is not a sovereignty gap (Neutrino is privacy-preserving and verifies everything locally), but it means two independent sync engines run on the phone. The LDK migration (Phase 4) eliminates this entirely by using bitcoind's RPC directly instead of P2P Neutrino.
 
 ### Additional Completed Features
 - [x] Onboarding flow (SetupChecklistScreen with auto-detection)
@@ -130,6 +132,8 @@ See [Watchtower Design](docs/WATCHTOWER-MESH.md) for details.
 
 ### Lightning Phase 4: LDK Migration
 Replace Zeus embedded LND with LDK (Lightning Dev Kit): modular Lightning library with native Android bindings. Designed for mobile (constrained storage, intermittent connectivity).
+
+This phase also solves the NODE_NETWORK roadblock: LDK connects to bitcoind via RPC (not P2P Neutrino), so pruned nodes work natively. No service bit checks, no cross-app localhost issues, no duplicate sync engine. One bitcoind, one Lightning implementation, all in-process.
 
 - [ ] LDK integration with native Android bindings
 - [ ] LDK uses local bitcoind RPC as chain source (already available)

@@ -478,6 +478,19 @@ builder.setStorageDirPath(context.filesDir.resolve("lightning").absolutePath)
 
 **Biggest risk:** Mobile uptime and channel state safety. Mitigated by watchtowers, SCB backups, and using Lightning primarily for spending (not as a routing node).
 
+### Why LDK solves the Zeus/Neutrino roadblock
+
+Zeus's embedded LND uses Neutrino for chain sync. Neutrino connects to Bitcoin peers via P2P and requires `NODE_NETWORK` (service bit 0) from its peers. Our pruned bitcoind only advertises `NODE_NETWORK_LIMITED` (bit 10), so Neutrino silently rejects it during the version handshake and falls back to internet peers. This means Zeus does not use the local bitcoind for P2P at all.
+
+LDK takes a fundamentally different approach: it uses bitcoind's JSON-RPC interface directly (`getblock`, `getblockheader`, `getbestblockhash`, etc.) instead of the P2P protocol. There are no service bit checks, no Neutrino, and no cross-app localhost restrictions (it runs in-process). A pruned node with RPC access is fully sufficient.
+
+This eliminates:
+- The `NODE_NETWORK` service bit requirement
+- The duplicate sync engine (Neutrino syncing independently from bitcoind)
+- The GrapheneOS cross-app localhost restriction (LDK runs in our app process)
+- The Zeus version pinning (v0.12.2 due to SQLite bug #3672)
+- The peer optimizer overwriting user-configured peers
+
 ---
 
 ## Key Links
