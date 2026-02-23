@@ -260,12 +260,10 @@ class BlockFilterManager(private val context: Context) {
 
             val session = SshUtils.connectSsh(sshHost, sshPort, sshUser, sshPassword)
 
-            // Save SSH credentials for later watchtower detection
+            // Save host info for later watchtower detection (no admin password stored)
             context.getSharedPreferences("ssh_prefs", android.content.Context.MODE_PRIVATE).edit()
                 .putString("ssh_host", sshHost)
                 .putInt("ssh_port", sshPort)
-                .putString("ssh_user", sshUser)
-                .putString("ssh_password", sshPassword)
                 .apply()
 
             val bitcoinDir = SshUtils.findBitcoinDataDir(session, sshPassword)

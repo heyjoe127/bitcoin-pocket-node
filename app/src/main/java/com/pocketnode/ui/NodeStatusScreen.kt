@@ -1358,54 +1358,118 @@ private fun ActionButtons(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                             )
+
+                            val savedHost = remember {
+                                wtContext.getSharedPreferences("ssh_prefs", android.content.Context.MODE_PRIVATE)
+                                    .getString("ssh_host", "") ?: ""
+                            }
+                            val savedPort = remember {
+                                wtContext.getSharedPreferences("ssh_prefs", android.content.Context.MODE_PRIVATE)
+                                    .getInt("ssh_port", 22)
+                            }
+                            var showPasswordPrompt by remember { mutableStateOf(false) }
+                            var adminUser by remember { mutableStateOf("") }
+                            var adminPassword by remember { mutableStateOf("") }
+                            var hostField by remember { mutableStateOf(savedHost) }
                             var checking by remember { mutableStateOf(false) }
                             var checkResult by remember { mutableStateOf("") }
-                            OutlinedButton(
-                                onClick = {
-                                    checking = true
-                                    checkResult = ""
-                                    kotlinx.coroutines.MainScope().launch {
-                                        val result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                                            wtManager.manualSetup(
-                                                host = wtContext.getSharedPreferences("ssh_prefs", android.content.Context.MODE_PRIVATE)
-                                                    .getString("ssh_host", "") ?: "",
-                                                port = wtContext.getSharedPreferences("ssh_prefs", android.content.Context.MODE_PRIVATE)
-                                                    .getInt("ssh_port", 22),
-                                                user = wtContext.getSharedPreferences("ssh_prefs", android.content.Context.MODE_PRIVATE)
-                                                    .getString("ssh_user", "") ?: "",
-                                                password = wtContext.getSharedPreferences("ssh_prefs", android.content.Context.MODE_PRIVATE)
-                                                    .getString("ssh_password", "") ?: ""
-                                            )
-                                        }
-                                        checking = false
-                                        when (result) {
-                                            com.pocketnode.service.WatchtowerManager.SetupResult.SUCCESS -> {
-                                                wtConfigured = true
+
+                            if (!showPasswordPrompt) {
+                                OutlinedButton(
+                                    onClick = { showPasswordPrompt = true },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                                ) {
+                                    Text("Check Now", style = MaterialTheme.typography.labelSmall)
+                                }
+                            } else {
+                                // Admin credentials prompt (not saved)
+                                OutlinedTextField(
+                                    value = hostField,
+                                    onValueChange = { hostField = it },
+                                    label = { Text("Host") },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    textStyle = MaterialTheme.typography.bodySmall
+                                )
+                                OutlinedTextField(
+                                    value = adminUser,
+                                    onValueChange = { adminUser = it },
+                                    label = { Text("Admin username") },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    textStyle = MaterialTheme.typography.bodySmall
+                                )
+                                OutlinedTextField(
+                                    value = adminPassword,
+                                    onValueChange = { adminPassword = it },
+                                    label = { Text("Admin password") },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    textStyle = MaterialTheme.typography.bodySmall,
+                                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
+                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    OutlinedButton(
+                                        onClick = {
+                                            showPasswordPrompt = false
+                                            checkResult = ""
+                                        },
+                                        modifier = Modifier.weight(1f),
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                                    ) {
+                                        Text("Cancel", style = MaterialTheme.typography.labelSmall)
+                                    }
+                                    Button(
+                                        onClick = {
+                                            checking = true
+                                            checkResult = ""
+                                            kotlinx.coroutines.MainScope().launch {
+                                                val result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                                    wtManager.manualSetup(
+                                                        host = hostField,
+                                                        port = savedPort,
+                                                        user = adminUser,
+                                                        password = adminPassword
+                                                    )
+                                                }
+                                                checking = false
+                                                adminPassword = "" // Clear password from memory
+                                                when (result) {
+                                                    com.pocketnode.service.WatchtowerManager.SetupResult.SUCCESS -> {
+                                                        wtConfigured = true
+                                                        showPasswordPrompt = false
+                                                    }
+                                                    com.pocketnode.service.WatchtowerManager.SetupResult.NOT_ENABLED ->
+                                                        checkResult = "Watchtower not enabled. Enable it in Lightning → Advanced → Watchtower, then retry."
+                                                    com.pocketnode.service.WatchtowerManager.SetupResult.NO_LND ->
+                                                        checkResult = "LND not found on this node."
+                                                    com.pocketnode.service.WatchtowerManager.SetupResult.NO_URI ->
+                                                        checkResult = "Watchtower active but URI not available yet. Wait a moment and retry."
+                                                    com.pocketnode.service.WatchtowerManager.SetupResult.CONNECTION_FAILED ->
+                                                        checkResult = "Could not connect. Check host, username, and password."
+                                                }
                                             }
-                                            com.pocketnode.service.WatchtowerManager.SetupResult.NOT_ENABLED ->
-                                                checkResult = "Watchtower not enabled on home node. Enable it in Lightning → Advanced → Watchtower."
-                                            com.pocketnode.service.WatchtowerManager.SetupResult.NO_LND ->
-                                                checkResult = "LND not found on home node."
-                                            com.pocketnode.service.WatchtowerManager.SetupResult.NO_URI ->
-                                                checkResult = "Watchtower active but URI not available yet. Wait a moment and retry."
-                                            com.pocketnode.service.WatchtowerManager.SetupResult.CONNECTION_FAILED ->
-                                                checkResult = "Could not connect. Make sure you're on the same network as your home node."
+                                        },
+                                        enabled = !checking && hostField.isNotEmpty() && adminUser.isNotEmpty() && adminPassword.isNotEmpty(),
+                                        modifier = Modifier.weight(1f),
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                                    ) {
+                                        if (checking) {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(16.dp),
+                                                strokeWidth = 2.dp,
+                                                color = MaterialTheme.colorScheme.onPrimary
+                                            )
+                                            Spacer(Modifier.width(8.dp))
+                                            Text("Checking...", style = MaterialTheme.typography.labelSmall)
+                                        } else {
+                                            Text("Check", style = MaterialTheme.typography.labelSmall)
                                         }
                                     }
-                                },
-                                enabled = !checking,
-                                modifier = Modifier.fillMaxWidth(),
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
-                            ) {
-                                if (checking) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(16.dp),
-                                        strokeWidth = 2.dp
-                                    )
-                                    Spacer(Modifier.width(8.dp))
-                                    Text("Checking...", style = MaterialTheme.typography.labelSmall)
-                                } else {
-                                    Text("Check Now", style = MaterialTheme.typography.labelSmall)
                                 }
                             }
                             if (checkResult.isNotEmpty()) {
