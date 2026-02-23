@@ -17,57 +17,110 @@ The phone already pairs with the home node via SSH during setup. The watchtower 
 
 ## How It Works
 
-During the existing admin SSH setup (NodeSetupManager), one additional step:
+### Automatic During SSH Setup
 
-1. Add `watchtower.active=1` to the home node's `lnd.conf`
-2. Restart LND on the home node
-3. Read the tower URI from `lncli tower info` (pubkey + .onion address)
-4. On the phone, call `wtclient add <tower-uri>`
+During the existing SSH flow (chainstate copy, block filter copy), the app already connects to the home node. Watchtower setup happens automatically as part of this flow:
 
-Done. Home node watches the phone's channels. No ongoing configuration needed.
+1. SSH into home node (credentials already provided)
+2. Detect node OS and LND location (see Node Detection below)
+3. Enable `watchtower.active=1` in LND config if not already set
+4. Restart LND if config changed
+5. Read watchtower .onion URI via `lncli tower info`
+6. Store URI locally on phone
+7. When Lightning is active, embedded Tor connects to watchtower automatically
+
+**User experience: zero additional steps.** If they set up their home node for chainstate copy, watchtower protection comes free.
+
+### Node Detection
+
+The app detects which node OS is running and finds LND accordingly:
+
+| Node OS | Detection | LND Access |
+|---------|-----------|------------|
+| **Umbrel** | `~/umbrel/` directory exists | `docker exec lightning lncli tower info` |
+| **Citadel** | `~/citadel/` directory (Umbrel fork) | Similar Docker path |
+| **Start9** | `start-cli` available | Docker service, `start-cli` wrapper |
+| **RaspiBlitz** | `/mnt/hdd/lnd/` or raspiblitz config | `lncli tower info` (native) |
+| **myNode** | `/mnt/hdd/mynode/` | `lncli tower info` (native or Docker) |
+| **Manual LND** | `lncli` in PATH or common locations | `lncli tower info` directly |
+
+Detection order: check for known markers via SSH, fall back to generic `lncli` detection. If no LND is found, skip watchtower gracefully (Bitcoin-only nodes are fine).
+
+### SshUtils.kt Integration
+
+Extends existing `SshUtils.kt` (already has `detectDockerContainer`, `findBitcoinDataDir`):
+
+```kotlin
+// New functions
+fun detectLnd(session: Session): LndInfo?
+fun enableWatchtower(session: Session, lndInfo: LndInfo): Boolean
+fun getWatchtowerUri(session: Session, lndInfo: LndInfo): String?
+```
+
+`LndInfo` data class holds: node OS type, LND path, Docker container name (if applicable), lncli command prefix.
+
+## Embedded Tor
+
+The app bundles a lightweight Tor client (~5-10 MB) for watchtower connectivity:
+
+- Starts silently when Lightning is active and a watchtower URI is configured
+- Connects to the home node's .onion watchtower address
+- Works from anywhere (home WiFi, cellular, public WiFi)
+- No Orbot dependency, no user configuration
+
+| Location | Connection |
+|----------|-----------|
+| Home WiFi | Tor .onion (consistent path, works even if LAN IP changes) |
+| Away from home | Tor .onion (same path, works everywhere) |
+
+Using Tor for all watchtower connections (even on LAN) simplifies the logic: one code path, always works, no IP discovery needed.
 
 ## Reachability
 
-The home node's watchtower listens on port 9911. The phone needs to reach it:
+The home node's watchtower listens on port 9911. Umbrel (and most node OSes) already run Tor and expose LND services via hidden services. The tower's .onion address is typically available without additional configuration.
 
-| Location | How it works |
-|---|---|
-| Home WiFi | Direct LAN connection (e.g. 10.0.1.127:9911) |
-| Away from home | Tor .onion address (Umbrel already runs Tor) |
-
-Umbrel nodes already expose LND services via Tor hidden services. The tower's .onion address is typically available without additional configuration.
+If Tor is not running on the home node, the setup flow detects this and prompts the user. Most node OSes include Tor by default.
 
 ## Implementation
 
 ### Changes to Existing Code
 
-**NodeSetupManager.kt** (during admin SSH setup):
-- Detect if home node runs LND
-- Add `watchtower.active=1` to lnd.conf if not already present
-- Restart LND
-- Read tower info and save URI to SharedPreferences
+**SshUtils.kt** (shared SSH utility):
+- `detectLnd()`: probe for LND across node OS types
+- `enableWatchtower()`: add config line, restart LND if needed
+- `getWatchtowerUri()`: run lncli, parse .onion URI
 
-**New: WatchtowerManager.kt** (in `snapshot/` package):
+**NodeSetupManager.kt** (during admin SSH setup):
+- After chainstate/filter operations, call watchtower detection
+- Store tower URI in SharedPreferences
+- Silent: no UI unless LND restart is needed
+
+**New: TorManager.kt**:
+- Manage embedded Tor lifecycle
+- Start when Lightning active + watchtower configured
+- Provide SOCKS proxy for watchtower client connection
+
+**New: WatchtowerManager.kt**:
 - On Lightning setup completion, add home node tower via LND wtclient API
 - Store tower URI in SharedPreferences
 - Dashboard status: "Protected by home node" or "No watchtower configured"
 
 **NodeStatusScreen.kt** (dashboard):
-- Watchtower status row showing protection state
+- Watchtower status indicator (shield icon when protected)
 
-**ConnectWalletScreen.kt** (Zeus setup guide):
-- Note that watchtower protection is automatic when Lightning is set up via home node
+**SetupChecklistScreen.kt**:
+- Watchtower auto-detected as part of Lightning step status
 
 ### LND API Calls
 
-All available via LND REST API on the home node:
+All available via LND REST API:
 
 ```
-# Get tower info (server side, during setup)
-GET /v2/tower/info
+# Get tower info (server side, during setup via SSH)
+lncli tower info
 → { "pubkey": "02f1...", "uris": ["02f1...@abc.onion:9911"] }
 
-# Add tower (client side, on phone)
+# Add tower (client side, on phone Zeus/LND)
 POST /v2/watchtower/client
 { "pubkey": "02f1...", "address": "abc.onion:9911" }
 
@@ -76,19 +129,30 @@ GET /v2/watchtower/client
 → { "towers": [...] }
 ```
 
+## Setup Checklist Integration
+
+The Lightning step (Step 6) in the setup checklist reflects watchtower status:
+
+- "Block filters installed, watchtower configured" (all green)
+- "Block filters installed, no watchtower" (Lightning works but unprotected)
+- "Copy block filters from your home node via dashboard" (not yet set up)
+
 ## What Is NOT Being Built
 
 - Mesh discovery
 - Nostr integration
 - Go daemon
 - WireGuard provisioning
-- CLN support
+- CLN support (future consideration)
 - Custom protocol
+- Orbot dependency
 
-This is one config line on the home node and one API call on the phone.
+This is automatic detection during SSH setup, an embedded Tor client, and one API call on the phone.
 
 ## Future
 
-If the user base grows and there's demand for mesh redundancy (multiple watchtowers from other users), Nostr-based discovery can be added later as a separate feature. The home node watchtower remains the primary, mesh peers become optional backups.
+- **CLN support**: if demand exists, add Core Lightning watchtower protocol
+- **Mesh redundancy**: Nostr-based discovery for multiple watchtowers from other users (optional backup layer on top of home node)
+- **IPv6 direct**: for users with IPv6, skip Tor for lower latency watchtower connection
 
-But that's a future decision, not a current one.
+The home node watchtower remains the primary. Everything else is optional enhancement.
