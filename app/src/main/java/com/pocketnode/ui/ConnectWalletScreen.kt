@@ -153,6 +153,7 @@ fun ConnectWalletScreen(onBack: () -> Unit) {
                         val (statusText, statusColor) = when (bwtState.status) {
                             BwtService.BwtState.Status.RUNNING -> "Running" to Color(0xFF4CAF50)
                             BwtService.BwtState.Status.STARTING -> "Starting..." to Color(0xFFFF9800)
+                            BwtService.BwtState.Status.SYNCING -> "Syncing ${(bwtState.syncProgress * 100).toInt()}%" to Color(0xFFFF9800)
                             BwtService.BwtState.Status.ERROR -> "Error" to MaterialTheme.colorScheme.error
                             BwtService.BwtState.Status.STOPPED -> "Stopped" to MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                         }

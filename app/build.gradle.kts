@@ -13,6 +13,11 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "0.1.0"
+
+        // Only include ARM64 native libs (bitcoind + libbwt_jni)
+        ndk {
+            abiFilters += "arm64-v8a"
+        }
     }
 
     buildFeatures {
@@ -48,6 +53,9 @@ android {
 }
 
 dependencies {
+    // BWT JNI (Electrum server, in-process via AAR)
+    implementation(files("libs/libbwt.aar"))
+
     // Compose BOM
     val composeBom = platform("androidx.compose:compose-bom:2024.02.02")
     implementation(composeBom)
