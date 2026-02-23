@@ -6,16 +6,12 @@ import com.jcraft.jsch.Session
 import com.pocketnode.ssh.SshUtils
 
 /**
- * Manages watchtower configuration: auto-detect during SSH setup,
+ * Manages watchtower configuration: detect on home node via SSH,
  * store URI, provide status for dashboard.
  *
- * Watchtower is automatically configured when:
- * 1. User connects to home node via SSH (chainstate/filter copy)
- * 2. LND is detected on the home node
- * 3. Watchtower server is enabled (or already was)
- * 4. .onion URI is read and stored locally
- *
- * The phone's Zeus/LND connects to the watchtower via embedded Tor.
+ * We never modify the remote node's LND config. The user enables
+ * watchtower via their node's UI (Umbrel Advanced Settings, etc).
+ * We detect if it's active, read the .onion URI, and store it locally.
  */
 class WatchtowerManager(private val context: Context) {
 
@@ -31,9 +27,9 @@ class WatchtowerManager(private val context: Context) {
     private val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     /**
-     * Auto-setup watchtower during SSH connection.
+     * Auto-detect watchtower during SSH connection.
      * Called after chainstate/filter copy completes.
-     * Returns a result describing what happened.
+     * Does NOT modify the remote node. Only reads status.
      */
     fun autoSetup(session: Session, sshPassword: String): SetupResult {
         Log.i(TAG, "Starting watchtower auto-detection...")
@@ -46,24 +42,16 @@ class WatchtowerManager(private val context: Context) {
         }
         Log.i(TAG, "LND detected: ${lndInfo.nodeOs} (docker=${lndInfo.isDocker})")
 
-        // Step 2: Enable watchtower server if not already
-        val configChanged = SshUtils.enableWatchtower(session, sshPassword, lndInfo)
-        if (configChanged) {
-            Log.i(TAG, "Watchtower config added to lnd.conf, restarting LND...")
-            val restarted = SshUtils.restartLnd(session, sshPassword, lndInfo)
-            if (!restarted) {
-                Log.w(TAG, "LND restart failed after config change")
-                return SetupResult.RESTART_FAILED
-            }
-            Log.i(TAG, "LND restarted successfully")
-        } else {
-            Log.i(TAG, "Watchtower already enabled in config")
+        // Step 2: Check if watchtower is active
+        if (!SshUtils.isWatchtowerActive(session, sshPassword, lndInfo)) {
+            Log.i(TAG, "Watchtower not active on remote node")
+            return SetupResult.NOT_ENABLED
         }
 
         // Step 3: Get watchtower URI
         val uri = SshUtils.getWatchtowerUri(session, sshPassword, lndInfo)
         if (uri == null) {
-            Log.w(TAG, "Could not read watchtower URI")
+            Log.w(TAG, "Watchtower active but could not read URI")
             return SetupResult.NO_URI
         }
         Log.i(TAG, "Watchtower URI obtained: ${uri.take(20)}...")
@@ -98,7 +86,7 @@ class WatchtowerManager(private val context: Context) {
     }
 
     /**
-     * Remove watchtower configuration.
+     * Remove watchtower configuration (local only, does not touch remote node).
      */
     fun remove() {
         prefs.edit()
@@ -109,31 +97,19 @@ class WatchtowerManager(private val context: Context) {
         Log.i(TAG, "Watchtower configuration removed")
     }
 
-    /**
-     * Check if watchtower is configured and enabled.
-     */
     fun isConfigured(): Boolean {
         return prefs.getBoolean(KEY_ENABLED, false) &&
                 prefs.getString(KEY_TOWER_URI, null) != null
     }
 
-    /**
-     * Get the stored watchtower URI.
-     */
     fun getTowerUri(): String? {
         return if (isConfigured()) prefs.getString(KEY_TOWER_URI, null) else null
     }
 
-    /**
-     * Get the node OS type of the watchtower.
-     */
     fun getNodeOs(): String? {
         return prefs.getString(KEY_NODE_OS, null)
     }
 
-    /**
-     * Get status info for dashboard display.
-     */
     fun getStatus(): WatchtowerStatus {
         if (!isConfigured()) return WatchtowerStatus.NOT_CONFIGURED
         val uri = prefs.getString(KEY_TOWER_URI, null) ?: return WatchtowerStatus.NOT_CONFIGURED
@@ -145,7 +121,7 @@ class WatchtowerManager(private val context: Context) {
     enum class SetupResult {
         SUCCESS,
         NO_LND,
-        RESTART_FAILED,
+        NOT_ENABLED,
         NO_URI,
         CONNECTION_FAILED
     }

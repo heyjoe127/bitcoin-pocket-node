@@ -115,7 +115,7 @@ object SshUtils {
     fun detectLnd(session: Session, sshPassword: String): LndInfo? {
         // Check for Umbrel LND container
         val umbrelLnd = execSudo(session, sshPassword,
-            "docker ps --format '{{.Names}}' 2>/dev/null | grep -iE '^lightning\$|^lnd\$|umbrel.*lnd' | head -1")
+            "docker ps --format '{{.Names}}' 2>/dev/null | grep -iE '_lnd_|^lnd\$|^lnd_|umbrel.*lnd' | head -1")
             .trim().lines().lastOrNull()?.trim()
         if (!umbrelLnd.isNullOrEmpty()) {
             // Verify lncli works inside the container
@@ -186,34 +186,21 @@ object SshUtils {
     }
 
     /**
-     * Enable watchtower server on the remote LND node.
-     * Adds watchtower.active=1 to lnd.conf if not present.
-     * Returns true if config was changed (LND restart needed).
+     * Check if watchtower server is active on the remote LND node.
+     * Returns true if watchtower.active=true in the running config.
      */
-    fun enableWatchtower(session: Session, sshPassword: String, lndInfo: LndInfo): Boolean {
-        if (lndInfo.confPath == null) return false
-
-        // Check if watchtower is already enabled
-        val confContent = execSudo(session, sshPassword,
-            "cat '${lndInfo.confPath}' 2>/dev/null")
+    fun isWatchtowerActive(session: Session, sshPassword: String, lndInfo: LndInfo): Boolean {
+        val result = execSudo(session, sshPassword,
+            "${lndInfo.lncliPrefix} tower info 2>/dev/null")
             .trim()
-
-        if (confContent.contains("watchtower.active=1") || confContent.contains("watchtower.active=true")) {
-            return false // Already enabled
-        }
-
-        // Append watchtower config
-        execSudo(session, sshPassword,
-            "echo '' >> '${lndInfo.confPath}' && " +
-            "echo '[watchtower]' >> '${lndInfo.confPath}' && " +
-            "echo 'watchtower.active=1' >> '${lndInfo.confPath}'")
-
-        return true // Config changed, restart needed
+        // If "tower info" returns valid JSON with pubkey, watchtower is active
+        return result.contains("pubkey") && !result.contains("watchtower not active")
     }
 
     /**
      * Get the watchtower .onion URI from the remote LND node.
      * Returns the full tower URI (pubkey@onion:port) or null if unavailable.
+     * Watchtower must already be enabled by the user via their node's UI.
      */
     fun getWatchtowerUri(session: Session, sshPassword: String, lndInfo: LndInfo): String? {
         val result = execSudo(session, sshPassword,
@@ -221,7 +208,7 @@ object SshUtils {
             .trim()
 
         // Parse the URI from tower info output
-        // Format: { "pubkey": "02abc...", "listeners": [...], "uris": ["02abc...@xyz.onion:9911"] }
+        // Format: { "pubkey": "02abc...", "listeners": [...], "uris": ["02abc...@onion:9911"] }
         val uriMatch = Regex(""""uris":\s*\[\s*"([^"]+\.onion:\d+[^"]*)"""").find(result)
         if (uriMatch != null) {
             return uriMatch.groupValues[1]
@@ -235,35 +222,6 @@ object SshUtils {
         }
 
         return null
-    }
-
-    /**
-     * Restart LND on the remote node after config changes.
-     * Handles Docker and native installs.
-     */
-    fun restartLnd(session: Session, sshPassword: String, lndInfo: LndInfo): Boolean {
-        return try {
-            if (lndInfo.isDocker) {
-                val containerName = lndInfo.lncliPrefix
-                    .removePrefix("docker exec ").split(" ").first()
-                execSudo(session, sshPassword,
-                    "docker restart $containerName 2>&1")
-            } else {
-                // Try systemctl first, then manual restart
-                execSudo(session, sshPassword,
-                    "systemctl restart lnd 2>/dev/null || " +
-                    "(lncli stop 2>/dev/null; sleep 3; lnd &)")
-            }
-            // Wait for LND to come back
-            Thread.sleep(10_000)
-            // Verify it's running
-            val check = execSudo(session, sshPassword,
-                "${lndInfo.lncliPrefix} getinfo 2>/dev/null | head -1")
-                .trim()
-            check.contains("identity_pubkey") || check.contains("{")
-        } catch (_: Exception) {
-            false
-        }
     }
 
     private fun findBySearch(session: Session, sshPassword: String): String {
