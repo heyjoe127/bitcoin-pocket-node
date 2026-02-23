@@ -77,11 +77,11 @@ class BwtService(private val context: Context) {
 
                 // Get saved xpubs/descriptors/addresses from preferences
                 val prefs = context.getSharedPreferences("bwt_prefs", Context.MODE_PRIVATE)
-                val xpubs = prefs.getStringSet("xpubs", emptySet()) ?: emptySet()
+                val xpubSet = prefs.getStringSet("xpubs", emptySet()) ?: emptySet()
                 val addresses = prefs.getStringSet("addresses", emptySet()) ?: emptySet()
                 val descriptors = prefs.getStringSet("descriptors", emptySet()) ?: emptySet()
 
-                if (xpubs.isEmpty() && addresses.isEmpty() && descriptors.isEmpty()) {
+                if (xpubSet.isEmpty() && addresses.isEmpty() && descriptors.isEmpty()) {
                     _state.value = BwtState(status = BwtState.Status.ERROR,
                         error = "No xpubs, descriptors, or addresses configured. Add them in Connect Wallet settings.")
                     return@launch
@@ -94,30 +94,23 @@ class BwtService(private val context: Context) {
                     allDescriptors.add("addr($addr)")
                 }
 
-                Log.i(TAG, "Starting BWT JNI with ${xpubs.size} xpubs, ${descriptors.size} descriptors, ${addresses.size} addresses")
+                Log.i(TAG, "Starting BWT JNI with ${xpubSet.size} xpubs, ${descriptors.size} descriptors, ${addresses.size} addresses")
 
+                // BwtConfig is serialized to JSON via Gson for the JNI bridge.
+                // Point at bitcoind directly; patch warnings in-line.
                 val config = BwtConfig().apply {
                     bitcoindUrl = "http://127.0.0.1:8332"
                     bitcoindAuth = "${creds.first}:${creds.second}"
                     electrumAddr = "$ELECTRUM_HOST:$ELECTRUM_PORT"
-                    rescanSince = 0  // "now" equivalent: don't rescan history
                     verbose = 1
-                    setupLogger = false  // we handle logging ourselves
-                    requireAddresses = false
-                    electrumSkipMerkle = true  // faster, BlueWallet doesn't verify merkle proofs
-                }
-
-                if (xpubs.isNotEmpty()) {
-                    config.xpubs = xpubs.toTypedArray()
-                }
-                if (allDescriptors.isNotEmpty()) {
-                    config.descriptors = allDescriptors.toTypedArray()
+                    this.xpubs = if (xpubSet.isNotEmpty()) xpubSet.toTypedArray() else null
+                    this.descriptors = if (allDescriptors.isNotEmpty()) allDescriptors.toTypedArray() else null
                 }
 
                 val bwt = BwtDaemon(config)
                 daemon = bwt
 
-                val trackedCount = xpubs.size + descriptors.size + addresses.size
+                val trackedCount = xpubSet.size + descriptors.size + addresses.size
 
                 // start() blocks until shutdown, so it runs on this IO coroutine
                 bwt.start(object : ProgressNotifier {

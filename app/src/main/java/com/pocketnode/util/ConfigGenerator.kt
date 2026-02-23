@@ -70,6 +70,9 @@ object ConfigGenerator {
             # Wallet enabled for BWT (Electrum server) address tracking
             # disablewallet=0
             deprecatedrpc=create_bdb
+            
+            # BWT v0.2.4 compat: return warnings as string, not array (Core 28+)
+            deprecatedrpc=warnings
         """.trimIndent()
 
         confFile.writeText(config)
@@ -131,6 +134,11 @@ object ConfigGenerator {
             // even when maxconnections slots are full
             if (!content.contains("whitelist=download@127.0.0.1")) {
                 additions.add("whitelist=download@127.0.0.1")
+            }
+
+            // BWT v0.2.4 compat: warnings as string not array (Core 28+)
+            if (!content.contains("deprecatedrpc=warnings")) {
+                additions.add("deprecatedrpc=warnings")
             }
 
             if (additions.isNotEmpty()) {

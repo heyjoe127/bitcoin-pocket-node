@@ -79,6 +79,9 @@ dependencies {
     // JSON parsing for RPC
     implementation("org.json:json:20231013")
 
+    // Gson (required by libbwt-jni)
+    implementation("com.google.code.gson:gson:2.10.1")
+
     // SSH/SFTP
     implementation("com.jcraft:jsch:0.1.55")
 
