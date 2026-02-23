@@ -124,10 +124,11 @@ object SshUtils {
                 .trim().lines().lastOrNull()?.trim() ?: ""
             if (test.contains("{") || test.contains("identity_pubkey")) {
                 // Determine node OS
+                // sudo changes home dir, so use absolute paths and check common locations
                 val nodeOs = when {
-                    execSudo(session, sshPassword, "test -d ~/umbrel && echo YES")
+                    execSudo(session, sshPassword, "test -d /home/umbrel/umbrel && echo YES || test -f /usr/local/bin/umbreld && echo YES")
                         .trim().lines().lastOrNull()?.trim() == "YES" -> "umbrel"
-                    execSudo(session, sshPassword, "test -d ~/citadel && echo YES")
+                    execSudo(session, sshPassword, "test -d /home/citadel/citadel && echo YES")
                         .trim().lines().lastOrNull()?.trim() == "YES" -> "citadel"
                     else -> "docker"
                 }
