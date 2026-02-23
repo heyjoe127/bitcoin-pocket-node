@@ -1284,6 +1284,106 @@ private fun ActionButtons(
             }
         }
 
+        // Watchtower card — shown when Lightning is set up
+        if (hasFilters) {
+            val wtContext = LocalContext.current
+            val wtManager = remember { com.pocketnode.service.WatchtowerManager(wtContext) }
+            var wtConfigured by remember { mutableStateOf(wtManager.isConfigured()) }
+            var wtExpanded by remember { mutableStateOf(false) }
+            var showRemoveConfirm by remember { mutableStateOf(false) }
+
+            OutlinedButton(
+                onClick = { wtExpanded = !wtExpanded },
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    if (wtConfigured) "🛡️ Watchtower Active" else "🛡️ Set Up Watchtower",
+                    style = MaterialTheme.typography.labelSmall
+                )
+            }
+
+            // Expanded watchtower details
+            androidx.compose.animation.AnimatedVisibility(
+                visible = wtExpanded,
+                enter = androidx.compose.animation.expandVertically(),
+                exit = androidx.compose.animation.shrinkVertically()
+            ) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        if (wtConfigured) {
+                            val status = wtManager.getStatus()
+                            if (status is com.pocketnode.service.WatchtowerManager.WatchtowerStatus.Configured) {
+                                Text(
+                                    "Home node protecting your channels",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = Color(0xFF4CAF50)
+                                )
+                                Text(
+                                    "Node: ${status.nodeOs}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                )
+                                Text(
+                                    "URI: ${status.uri.take(20)}...${status.uri.takeLast(15)}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontFamily = FontFamily.Monospace,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                )
+                            }
+                            OutlinedButton(
+                                onClick = { showRemoveConfirm = true },
+                                modifier = Modifier.fillMaxWidth(),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Text("Remove", style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.error)
+                            }
+                        } else {
+                            Text(
+                                "Protects your Lightning channels when phone is offline. Auto-configured during home node setup.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                            )
+                            Text(
+                                "Re-run block filter copy to auto-detect, or configure manually from your home node SSH credentials.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Remove confirmation dialog
+            if (showRemoveConfirm) {
+                AlertDialog(
+                    onDismissRequest = { showRemoveConfirm = false },
+                    title = { Text("Remove Watchtower?") },
+                    text = { Text("Your Lightning channels will not be protected when the phone is offline. The watchtower server on your home node will keep running.") },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            wtManager.remove()
+                            wtConfigured = false
+                            showRemoveConfirm = false
+                            wtExpanded = false
+                        }) { Text("Remove", color = MaterialTheme.colorScheme.error) }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showRemoveConfirm = false }) { Text("Cancel") }
+                    }
+                )
+            }
+        }
+
         Button(
             onClick = onToggleNode,
             modifier = Modifier
