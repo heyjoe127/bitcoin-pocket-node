@@ -62,6 +62,7 @@ fun NodeStatusScreen(
     onNavigateToNodeAccess: () -> Unit = {},
     onNavigateToWallet: () -> Unit = {},
     onNavigateToBlockFilter: () -> Unit = {},
+    onNavigateToWatchtower: () -> Unit = {},
     mempoolPaneVisible: Boolean = false
 ) {
     val context = LocalContext.current
@@ -472,6 +473,7 @@ fun NodeStatusScreen(
                     onNavigateToSetup = onNavigateToSetup,
                     onNavigateToWallet = onNavigateToWallet,
                     onNavigateToBlockFilter = onNavigateToBlockFilter,
+                    onNavigateToWatchtower = onNavigateToWatchtower,
                     mempoolPaneVisible = mempoolPaneVisible,
                     onToggleNode = {
                         if (isRunning) {
@@ -833,6 +835,7 @@ private fun ActionButtons(
     onNavigateToSetup: () -> Unit = {},
     onNavigateToWallet: () -> Unit = {},
     onNavigateToBlockFilter: () -> Unit = {},
+    onNavigateToWatchtower: () -> Unit = {},
     mempoolPaneVisible: Boolean = false,
     onToggleNode: () -> Unit
 ) {
@@ -1284,223 +1287,20 @@ private fun ActionButtons(
             }
         }
 
-        // Watchtower card — shown when Lightning is set up
+        // Watchtower button — shown when Lightning is set up
         if (hasFilters) {
             val wtContext = LocalContext.current
-            val wtManager = remember { com.pocketnode.service.WatchtowerManager(wtContext) }
-            var wtConfigured by remember { mutableStateOf(wtManager.isConfigured()) }
-            var wtExpanded by remember { mutableStateOf(false) }
-            var showRemoveConfirm by remember { mutableStateOf(false) }
-
+            val wtConfigured = remember {
+                com.pocketnode.service.WatchtowerManager(wtContext).isConfigured()
+            }
             OutlinedButton(
-                onClick = { wtExpanded = !wtExpanded },
+                onClick = onNavigateToWatchtower,
                 modifier = Modifier.fillMaxWidth(),
                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)
             ) {
                 Text(
                     if (wtConfigured) "🛡️ Watchtower Active" else "🛡️ Set Up Watchtower",
                     style = MaterialTheme.typography.labelSmall
-                )
-            }
-
-            // Expanded watchtower details
-            androidx.compose.animation.AnimatedVisibility(
-                visible = wtExpanded,
-                enter = androidx.compose.animation.expandVertically(),
-                exit = androidx.compose.animation.shrinkVertically()
-            ) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
-                ) {
-                    Column(
-                        modifier = Modifier.padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        if (wtConfigured) {
-                            val status = wtManager.getStatus()
-                            if (status is com.pocketnode.service.WatchtowerManager.WatchtowerStatus.Configured) {
-                                Text(
-                                    "Home node protecting your channels",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = Color(0xFF4CAF50)
-                                )
-                                Text(
-                                    "Node: ${status.nodeOs}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                                )
-                                Text(
-                                    "URI: ${status.uri.take(20)}...${status.uri.takeLast(15)}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontFamily = FontFamily.Monospace,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                                )
-                            }
-                            OutlinedButton(
-                                onClick = { showRemoveConfirm = true },
-                                modifier = Modifier.fillMaxWidth(),
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
-                            ) {
-                                Text("Remove", style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.error)
-                            }
-                        } else {
-                            Text(
-                                "Protects your Lightning channels when phone is offline.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                            )
-                            Text(
-                                "Enable Watchtower Service in your home node's Lightning settings (Advanced → Watchtower), then tap Check Now.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                            )
-
-                            val savedHost = remember {
-                                wtContext.getSharedPreferences("ssh_prefs", android.content.Context.MODE_PRIVATE)
-                                    .getString("ssh_host", "") ?: ""
-                            }
-                            val savedPort = remember {
-                                wtContext.getSharedPreferences("ssh_prefs", android.content.Context.MODE_PRIVATE)
-                                    .getInt("ssh_port", 22)
-                            }
-                            var showPasswordPrompt by remember { mutableStateOf(false) }
-                            var adminUser by remember { mutableStateOf("") }
-                            var adminPassword by remember { mutableStateOf("") }
-                            var hostField by remember { mutableStateOf(savedHost) }
-                            var checking by remember { mutableStateOf(false) }
-                            var checkResult by remember { mutableStateOf("") }
-
-                            if (!showPasswordPrompt) {
-                                OutlinedButton(
-                                    onClick = { showPasswordPrompt = true },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
-                                ) {
-                                    Text("Check Now", style = MaterialTheme.typography.labelSmall)
-                                }
-                            } else {
-                                // Admin credentials prompt (not saved)
-                                OutlinedTextField(
-                                    value = hostField,
-                                    onValueChange = { hostField = it },
-                                    label = { Text("Host") },
-                                    singleLine = true,
-                                    modifier = Modifier.fillMaxWidth(),
-                                    textStyle = MaterialTheme.typography.bodySmall
-                                )
-                                OutlinedTextField(
-                                    value = adminUser,
-                                    onValueChange = { adminUser = it },
-                                    label = { Text("Admin username") },
-                                    singleLine = true,
-                                    modifier = Modifier.fillMaxWidth(),
-                                    textStyle = MaterialTheme.typography.bodySmall
-                                )
-                                OutlinedTextField(
-                                    value = adminPassword,
-                                    onValueChange = { adminPassword = it },
-                                    label = { Text("Admin password") },
-                                    singleLine = true,
-                                    modifier = Modifier.fillMaxWidth(),
-                                    textStyle = MaterialTheme.typography.bodySmall,
-                                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
-                                )
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    OutlinedButton(
-                                        onClick = {
-                                            showPasswordPrompt = false
-                                            checkResult = ""
-                                        },
-                                        modifier = Modifier.weight(1f),
-                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
-                                    ) {
-                                        Text("Cancel", style = MaterialTheme.typography.labelSmall)
-                                    }
-                                    Button(
-                                        onClick = {
-                                            checking = true
-                                            checkResult = ""
-                                            kotlinx.coroutines.MainScope().launch {
-                                                val result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                                                    wtManager.manualSetup(
-                                                        host = hostField,
-                                                        port = savedPort,
-                                                        user = adminUser,
-                                                        password = adminPassword
-                                                    )
-                                                }
-                                                checking = false
-                                                adminPassword = "" // Clear password from memory
-                                                when (result) {
-                                                    com.pocketnode.service.WatchtowerManager.SetupResult.SUCCESS -> {
-                                                        wtConfigured = true
-                                                        showPasswordPrompt = false
-                                                    }
-                                                    com.pocketnode.service.WatchtowerManager.SetupResult.NOT_ENABLED ->
-                                                        checkResult = "Watchtower not enabled. Enable it in Lightning → Advanced → Watchtower, then retry."
-                                                    com.pocketnode.service.WatchtowerManager.SetupResult.NO_LND ->
-                                                        checkResult = "LND not found on this node."
-                                                    com.pocketnode.service.WatchtowerManager.SetupResult.NO_URI ->
-                                                        checkResult = "Watchtower active but URI not available yet. Wait a moment and retry."
-                                                    com.pocketnode.service.WatchtowerManager.SetupResult.CONNECTION_FAILED ->
-                                                        checkResult = "Could not connect. Check host, username, and password."
-                                                }
-                                            }
-                                        },
-                                        enabled = !checking && hostField.isNotEmpty() && adminUser.isNotEmpty() && adminPassword.isNotEmpty(),
-                                        modifier = Modifier.weight(1f),
-                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
-                                    ) {
-                                        if (checking) {
-                                            CircularProgressIndicator(
-                                                modifier = Modifier.size(16.dp),
-                                                strokeWidth = 2.dp,
-                                                color = MaterialTheme.colorScheme.onPrimary
-                                            )
-                                            Spacer(Modifier.width(8.dp))
-                                            Text("Checking...", style = MaterialTheme.typography.labelSmall)
-                                        } else {
-                                            Text("Check", style = MaterialTheme.typography.labelSmall)
-                                        }
-                                    }
-                                }
-                            }
-                            if (checkResult.isNotEmpty()) {
-                                Text(
-                                    checkResult,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.error
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Remove confirmation dialog
-            if (showRemoveConfirm) {
-                AlertDialog(
-                    onDismissRequest = { showRemoveConfirm = false },
-                    title = { Text("Remove Watchtower?") },
-                    text = { Text("Your Lightning channels will not be protected when the phone is offline. The watchtower server on your home node will keep running.") },
-                    confirmButton = {
-                        TextButton(onClick = {
-                            wtManager.remove()
-                            wtConfigured = false
-                            showRemoveConfirm = false
-                            wtExpanded = false
-                        }) { Text("Remove", color = MaterialTheme.colorScheme.error) }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = { showRemoveConfirm = false }) { Text("Cancel") }
-                    }
                 )
             }
         }

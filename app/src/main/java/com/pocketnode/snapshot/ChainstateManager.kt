@@ -177,10 +177,11 @@ class ChainstateManager private constructor(private val context: Context) {
 
                 val setupSession = SshUtils.connectSsh(sshHost, sshPort, sshUser, sshPassword)
 
-                // Save host info for later watchtower detection (no admin password stored)
+                // Save host info + admin username for watchtower detection (no password stored)
                 context.getSharedPreferences("ssh_prefs", Context.MODE_PRIVATE).edit()
                     .putString("ssh_host", sshHost)
                     .putInt("ssh_port", sshPort)
+                    .putString("ssh_admin_user", sshUser)
                     .apply()
 
                 _state.value = _state.value.copy(progress = "Finding Bitcoin data directory...")
