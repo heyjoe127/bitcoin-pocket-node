@@ -122,13 +122,15 @@ Your home node watches your phone's Lightning channels when the phone is offline
 
 See [Watchtower Design](docs/WATCHTOWER-MESH.md) for details.
 
-**What we build:**
-- [ ] Enable `watchtower.active=1` on home node during admin SSH setup
-- [ ] Read tower URI and save to SharedPreferences
-- [ ] Add home node as wtclient tower on phone after Lightning setup
-- [ ] Dashboard status row: "Protected by home node"
-
-**Estimated effort:** 1 week. One config line on the home node, one API call on the phone.
+**What we built:**
+- [x] Read-only watchtower detection via SSH (`lncli tower info`)
+- [x] Dedicated WatchtowerScreen with credential fields and status display
+- [x] Tower URI (pubkey + .onion host) saved to SharedPreferences
+- [x] Auto-detect during chainstate/filter copy flows (when admin SSH in scope)
+- [x] Copy pubkey and host separately (matches Zeus's Add Watchtower UI)
+- [x] SSH host/port/admin username saved, password prompted each time
+- [x] Dashboard navigation button to watchtower screen
+- [x] No remote config modification: user enables watchtower via their node's UI
 
 ### Lightning Phase 4: LDK Migration
 Replace Zeus embedded LND with LDK (Lightning Dev Kit): modular Lightning library with native Android bindings. Designed for mobile (constrained storage, intermittent connectivity).
