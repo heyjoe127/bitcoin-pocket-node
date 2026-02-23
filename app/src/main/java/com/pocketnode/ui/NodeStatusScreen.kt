@@ -1349,15 +1349,72 @@ private fun ActionButtons(
                             }
                         } else {
                             Text(
-                                "Protects your Lightning channels when phone is offline. Auto-configured during home node setup.",
+                                "Protects your Lightning channels when phone is offline.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                             )
                             Text(
-                                "Re-run block filter copy to auto-detect, or configure manually from your home node SSH credentials.",
+                                "Enable Watchtower Service in your home node's Lightning settings (Advanced → Watchtower), then tap Check Now.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                             )
+                            var checking by remember { mutableStateOf(false) }
+                            var checkResult by remember { mutableStateOf("") }
+                            OutlinedButton(
+                                onClick = {
+                                    checking = true
+                                    checkResult = ""
+                                    kotlinx.coroutines.MainScope().launch {
+                                        val result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                            wtManager.manualSetup(
+                                                host = wtContext.getSharedPreferences("ssh_prefs", android.content.Context.MODE_PRIVATE)
+                                                    .getString("ssh_host", "") ?: "",
+                                                port = wtContext.getSharedPreferences("ssh_prefs", android.content.Context.MODE_PRIVATE)
+                                                    .getInt("ssh_port", 22),
+                                                user = wtContext.getSharedPreferences("ssh_prefs", android.content.Context.MODE_PRIVATE)
+                                                    .getString("ssh_user", "") ?: "",
+                                                password = wtContext.getSharedPreferences("ssh_prefs", android.content.Context.MODE_PRIVATE)
+                                                    .getString("ssh_password", "") ?: ""
+                                            )
+                                        }
+                                        checking = false
+                                        when (result) {
+                                            com.pocketnode.service.WatchtowerManager.SetupResult.SUCCESS -> {
+                                                wtConfigured = true
+                                            }
+                                            com.pocketnode.service.WatchtowerManager.SetupResult.NOT_ENABLED ->
+                                                checkResult = "Watchtower not enabled on home node. Enable it in Lightning → Advanced → Watchtower."
+                                            com.pocketnode.service.WatchtowerManager.SetupResult.NO_LND ->
+                                                checkResult = "LND not found on home node."
+                                            com.pocketnode.service.WatchtowerManager.SetupResult.NO_URI ->
+                                                checkResult = "Watchtower active but URI not available yet. Wait a moment and retry."
+                                            com.pocketnode.service.WatchtowerManager.SetupResult.CONNECTION_FAILED ->
+                                                checkResult = "Could not connect. Make sure you're on the same network as your home node."
+                                        }
+                                    }
+                                },
+                                enabled = !checking,
+                                modifier = Modifier.fillMaxWidth(),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                if (checking) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(16.dp),
+                                        strokeWidth = 2.dp
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Text("Checking...", style = MaterialTheme.typography.labelSmall)
+                                } else {
+                                    Text("Check Now", style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
+                            if (checkResult.isNotEmpty()) {
+                                Text(
+                                    checkResult,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
                         }
                     }
                 }

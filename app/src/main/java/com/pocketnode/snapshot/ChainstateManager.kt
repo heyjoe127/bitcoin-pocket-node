@@ -176,6 +176,15 @@ class ChainstateManager private constructor(private val context: Context) {
                     progress = "Connecting to remote node...")
 
                 val setupSession = SshUtils.connectSsh(sshHost, sshPort, sshUser, sshPassword)
+
+                // Save SSH credentials for later watchtower detection
+                context.getSharedPreferences("ssh_prefs", Context.MODE_PRIVATE).edit()
+                    .putString("ssh_host", sshHost)
+                    .putInt("ssh_port", sshPort)
+                    .putString("ssh_user", sshUser)
+                    .putString("ssh_password", sshPassword)
+                    .apply()
+
                 _state.value = _state.value.copy(progress = "Finding Bitcoin data directory...")
 
                 val bitcoinDataDir = SshUtils.findBitcoinDataDir(setupSession, sshPassword)
