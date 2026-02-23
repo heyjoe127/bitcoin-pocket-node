@@ -175,12 +175,12 @@ fun SetupChecklistScreen(
                         title = "Lightning Support",
                         description = when {
                             state.blockFiltersInstalled -> "Block filters installed — connect Zeus wallet"
-                            state.nodeSynced -> "Copy block filters from your home node"
+                            state.nodeSynced -> "Copy block filters from your home node via dashboard"
                             else -> "Sync node first, then add Lightning"
                         },
                         completed = state.blockFiltersInstalled,
                         optional = true,
-                        onClick = onNavigateToBlockFilter
+                        onClick = {}
                     )
                 }
 
