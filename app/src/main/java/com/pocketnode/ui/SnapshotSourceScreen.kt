@@ -30,7 +30,7 @@ fun SnapshotSourceScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Load Snapshot") },
+                title = { Text("Get Started") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
@@ -74,9 +74,8 @@ fun SnapshotSourceScreen(
             SnapshotOption(
                 icon = Icons.Outlined.Lan,
                 title = "Sync from your node (fastest)",
-                subtitle = "Generate a UTXO snapshot on your node and load it via " +
-                    "AssumeUTXO. ~9 GB download, ~30 min total. " +
-                    "Cryptographically verified — no trust required.",
+                subtitle = "Copy chainstate directly from your node over LAN. " +
+                    "Instant full node at chain tip. ~9 GB, ~20 minutes.",
                 onClick = onPullFromNode
             )
 
@@ -93,8 +92,8 @@ fun SnapshotSourceScreen(
                 icon = Icons.Outlined.CloudDownload,
                 title = "Download snapshot",
                 subtitle = "Fetch from utxo.download (~9 GB). " +
-                    "Trustless — block hash verified before loading, background " +
-                    "validation checks every transaction. Safe from any source.",
+                    "Block hash verified before loading, background " +
+                    "validation checks every transaction.",
                 onClick = onDownloadFromInternet
             )
 
