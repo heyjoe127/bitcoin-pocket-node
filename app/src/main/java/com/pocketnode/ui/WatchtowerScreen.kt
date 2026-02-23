@@ -99,28 +99,60 @@ fun WatchtowerScreen(onBack: () -> Unit) {
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                             )
-                            // Full URI with copy button
+                            // Parse URI into pubkey and host
+                            val atIndex = status.uri.indexOf('@')
+                            val pubkey = if (atIndex > 0) status.uri.substring(0, atIndex) else status.uri
+                            val host = if (atIndex > 0) status.uri.substring(atIndex + 1) else ""
+
+                            // Server Pubkey
                             Text(
-                                "Tower URI",
+                                "Server Pubkey",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                             )
                             Text(
-                                status.uri,
+                                pubkey,
                                 style = MaterialTheme.typography.bodySmall,
                                 fontFamily = FontFamily.Monospace,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                             )
-                            var copied by remember { mutableStateOf(false) }
-                            Button(
+                            var copiedPubkey by remember { mutableStateOf(false) }
+                            OutlinedButton(
                                 onClick = {
-                                    clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(status.uri))
-                                    copied = true
+                                    clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(pubkey))
+                                    copiedPubkey = true
                                 },
                                 modifier = Modifier.fillMaxWidth(),
                                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
                             ) {
-                                Text(if (copied) "Copied ✓" else "Copy URI")
+                                Text(if (copiedPubkey) "Copied ✓" else "Copy Pubkey", style = MaterialTheme.typography.labelSmall)
+                            }
+
+                            // Host
+                            if (host.isNotEmpty()) {
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    "Host",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                )
+                                Text(
+                                    host,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontFamily = FontFamily.Monospace,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                )
+                                var copiedHost by remember { mutableStateOf(false) }
+                                OutlinedButton(
+                                    onClick = {
+                                        clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(host))
+                                        copiedHost = true
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                                ) {
+                                    Text(if (copiedHost) "Copied ✓" else "Copy Host", style = MaterialTheme.typography.labelSmall)
+                                }
                             }
                         }
                     }
@@ -135,15 +167,15 @@ fun WatchtowerScreen(onBack: () -> Unit) {
                         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text("Connect Zeus", style = MaterialTheme.typography.titleMedium)
                             Text(
-                                "1. Open Zeus → Tools → Watchtowers",
+                                "1. Open Zeus → Settings → Tools → Manage Watchtowers",
                                 style = MaterialTheme.typography.bodyMedium
                             )
                             Text(
-                                "2. Tap Add Watchtower",
+                                "2. Tap + to add a watchtower",
                                 style = MaterialTheme.typography.bodyMedium
                             )
                             Text(
-                                "3. Paste the URI above (or scan QR from another device)",
+                                "3. Paste the Server Pubkey and Host separately using the copy buttons above",
                                 style = MaterialTheme.typography.bodyMedium
                             )
                             Text(
