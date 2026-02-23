@@ -17,11 +17,11 @@ Turn any Android phone into a fully-validating Bitcoin full node. No server depe
 
 *Running on a Pixel 7 Pro with GrapheneOS*
 
-**Node + On-chain wallet**
+**Setup + On-chain wallet**
 
-| Setup checklist | Electrum server | BlueWallet connected | BlueWallet wallet |
-|:---:|:---:|:---:|:---:|
-| ![Setup checklist all green](docs/images/01-checklist.jpg) | ![Electrum server running with tracked wallets](docs/images/03-electrum-server.jpg) | ![BlueWallet connected to localhost](docs/images/04-bluewallet-connected.jpg) | ![BlueWallet wallet view](docs/images/04-bluewallet-wallet.jpg) |
+| First run | Setup checklist | Electrum server | BlueWallet connected | BlueWallet wallet |
+|:---:|:---:|:---:|:---:|:---:|
+| ![Choose snapshot source](docs/images/00-setup-screen.png) | ![Setup checklist all green](docs/images/01-checklist.jpg) | ![Electrum server running with tracked wallets](docs/images/03-electrum-server.jpg) | ![BlueWallet connected to localhost](docs/images/04-bluewallet-connected.jpg) | ![BlueWallet wallet view](docs/images/04-bluewallet-wallet.jpg) |
 
 **Lightning + Version Selection**
 
