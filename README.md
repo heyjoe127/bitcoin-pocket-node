@@ -17,17 +17,17 @@ Turn any Android phone into a fully-validating Bitcoin full node. No server depe
 
 *Running on a Pixel 7 Pro with GrapheneOS*
 
-**Setup + On-chain wallet**
+**Setup**
 
-| First run | Setup checklist | Electrum server | BlueWallet connected | BlueWallet wallet |
-|:---:|:---:|:---:|:---:|:---:|
-| ![Choose snapshot source](docs/images/00-setup-screen.jpg) | ![Setup checklist all green](docs/images/01-checklist.jpg) | ![Electrum server running with tracked wallets](docs/images/03-electrum-server.jpg) | ![BlueWallet connected to localhost](docs/images/04-bluewallet-connected.jpg) | ![BlueWallet wallet view](docs/images/04-bluewallet-wallet.jpg) |
+| First run | Setup checklist | Electrum server | Connect Wallet |
+|:---:|:---:|:---:|:---:|
+| ![Choose snapshot source](docs/images/00-setup-screen.jpg) | ![Setup checklist all green](docs/images/01-checklist.jpg) | ![Electrum server running with tracked wallets](docs/images/03-electrum-server.jpg) | ![All three wallet services](docs/images/06-connect-wallet.jpg) |
 
-**Lightning + Version Selection**
+**Running**
 
-| Lightning enabled | Connect Wallet | Version picker |
-|:---:|:---:|:---:|
-| ![Dashboard with Lightning Ready](docs/images/05-lightning-dashboard.jpg) | ![All three wallet services](docs/images/06-connect-wallet.jpg) | ![Choose Bitcoin implementation](docs/images/11-version-picker.png) |
+| BlueWallet connected | BlueWallet wallet | Lightning enabled | Version picker |
+|:---:|:---:|:---:|:---:|
+| ![BlueWallet connected to localhost](docs/images/04-bluewallet-connected.jpg) | ![BlueWallet wallet view](docs/images/04-bluewallet-wallet.jpg) | ![Dashboard with Lightning Ready](docs/images/05-lightning-dashboard.jpg) | ![Choose Bitcoin implementation](docs/images/11-version-picker.png) |
 
 ## How It Works
 
