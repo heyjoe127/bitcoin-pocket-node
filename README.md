@@ -69,6 +69,7 @@ See [Version Selection Design](docs/VERSION-SELECTION.md) and [BIP 110 Research]
 - **Two bootstrap paths:** direct chainstate copy (~20 min) or AssumeUTXO (~3 hours)
 - **Pure Kotlin Electrum server** so BlueWallet can query your own node (no native dependencies)
 - **Lightning support** via block filter copy from your home node (Zeus with embedded LND)
+- **Home node watchtower** detection and setup for Lightning channel protection
 - **Sovereign price discovery** using UTXOracle (BTC/USD from on-chain data, no exchange APIs)
 - **Mempool viewer** with fee estimates, projected blocks, and transaction search
 - **Wallet setup guide** for BlueWallet connection
