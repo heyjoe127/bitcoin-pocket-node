@@ -2,22 +2,24 @@ package com.pocketnode.service
 
 import android.content.Context
 import android.util.Log
+import com.pocketnode.electrum.AddressIndex
+import com.pocketnode.electrum.ElectrumMethods
+import com.pocketnode.electrum.ElectrumServer
+import com.pocketnode.electrum.SubscriptionManager
+import com.pocketnode.rpc.BitcoinRpcClient
 import com.pocketnode.util.ConfigGenerator
-import dev.bwt.libbwt.daemon.BwtConfig
-import dev.bwt.libbwt.daemon.BwtDaemon
-import dev.bwt.libbwt.daemon.ProgressNotifier
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import java.util.Date
 
 /**
- * Manages the BWT (Bitcoin Wallet Tracker) Electrum server.
- * Uses libbwt-jni to run BWT in-process via JNI, avoiding
- * Android PhantomProcess restrictions on child processes.
+ * Manages the Electrum server for wallet connectivity (BlueWallet etc.).
  *
- * BWT tracks xpubs/descriptors against the local bitcoind and
- * exposes an Electrum RPC interface for wallets like BlueWallet.
+ * Uses a pure Kotlin Electrum protocol implementation (com.pocketnode.electrum)
+ * backed by the local bitcoind via JSON-RPC. Replaces the previous BWT JNI approach.
+ *
+ * Tracks xpubs/descriptors/addresses via a bitcoind descriptor wallet and
+ * exposes an Electrum RPC interface on localhost:50001.
  */
 class BwtService(private val context: Context) {
 
@@ -33,7 +35,7 @@ class BwtService(private val context: Context) {
         val isRunningFlow: StateFlow<Boolean> = _isRunning
 
         // Shared across all instances so stop/start from different screens works
-        private var daemon: BwtDaemon? = null
+        private var server: ElectrumServer? = null
         private var scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     }
 
@@ -48,16 +50,14 @@ class BwtService(private val context: Context) {
     }
 
     /**
-     * Start BWT in-process via JNI, connecting to the local bitcoind.
-     * Descriptors and xpubs are tracked directly by BWT without
-     * needing a bitcoind wallet (no importmulti or createwallet).
+     * Start the Electrum server, connecting to the local bitcoind.
+     * Imports descriptors/xpubs into a tracking wallet, then starts
+     * the TCP server on localhost:50001.
      */
     fun start(saveState: Boolean = true) {
         // Shut down any existing instance
-        daemon?.let { d ->
-            try { d.shutdown() } catch (_: Exception) {}
-        }
-        daemon = null
+        server?.stop()
+        server = null
         _isRunning.value = false
 
         if (saveState) {
@@ -87,80 +87,74 @@ class BwtService(private val context: Context) {
                     return@launch
                 }
 
-                // Build descriptor list: explicit descriptors + addresses wrapped as addr() descriptors
-                val allDescriptors = mutableListOf<String>()
-                allDescriptors.addAll(descriptors)
-                for (addr in addresses) {
-                    allDescriptors.add("addr($addr)")
-                }
-
-                Log.i(TAG, "Starting BWT JNI with ${xpubSet.size} xpubs, ${descriptors.size} descriptors, ${addresses.size} addresses")
-
-                // BwtConfig is serialized to JSON via Gson for the JNI bridge.
-                // Point at bitcoind directly; patch warnings in-line.
-                val config = BwtConfig().apply {
-                    bitcoindUrl = "http://127.0.0.1:8332"
-                    bitcoindAuth = "${creds.first}:${creds.second}"
-                    electrumAddr = "$ELECTRUM_HOST:$ELECTRUM_PORT"
-                    verbose = 1
-                    this.xpubs = if (xpubSet.isNotEmpty()) xpubSet.toTypedArray() else null
-                    this.descriptors = if (allDescriptors.isNotEmpty()) allDescriptors.toTypedArray() else null
-                }
-
-                val bwt = BwtDaemon(config)
-                daemon = bwt
-
                 val trackedCount = xpubSet.size + descriptors.size + addresses.size
+                Log.i(TAG, "Starting Electrum server with ${xpubSet.size} xpubs, ${descriptors.size} descriptors, ${addresses.size} addresses")
 
-                // start() blocks until shutdown, so it runs on this IO coroutine
-                bwt.start(object : ProgressNotifier {
-                    override fun onBooting() {
-                        Log.i(TAG, "BWT booting...")
-                        _state.value = BwtState(
-                            status = BwtState.Status.STARTING,
-                            trackedAddresses = trackedCount
-                        )
-                    }
+                _state.value = BwtState(
+                    status = BwtState.Status.SYNCING,
+                    trackedAddresses = trackedCount,
+                    syncProgress = 0.2f
+                )
 
-                    override fun onSyncProgress(progress: Float, tip: Date) {
-                        Log.d(TAG, "BWT sync progress: ${(progress * 100).toInt()}%")
-                        _state.value = BwtState(
-                            status = BwtState.Status.SYNCING,
-                            trackedAddresses = trackedCount,
-                            syncProgress = progress
-                        )
-                    }
+                // Build components
+                val rpc = BitcoinRpcClient(creds.first, creds.second)
+                val addressIndex = AddressIndex(rpc)
+                val methods = ElectrumMethods(rpc, addressIndex)
+                val subscriptions = SubscriptionManager(rpc, addressIndex)
 
-                    override fun onScanProgress(progress: Float, eta: Int) {
-                        Log.d(TAG, "BWT scan progress: ${(progress * 100).toInt()}%, ETA: ${eta}s")
-                        _state.value = BwtState(
-                            status = BwtState.Status.SYNCING,
-                            trackedAddresses = trackedCount,
-                            syncProgress = progress
-                        )
-                    }
+                // Ensure tracking wallet exists
+                _state.value = BwtState(
+                    status = BwtState.Status.SYNCING,
+                    trackedAddresses = trackedCount,
+                    syncProgress = 0.4f
+                )
 
-                    override fun onReady() {
-                        Log.i(TAG, "BWT ready, Electrum on $ELECTRUM_HOST:$ELECTRUM_PORT")
-                        _isRunning.value = true
-                        _state.value = BwtState(
-                            status = BwtState.Status.RUNNING,
-                            trackedAddresses = trackedCount,
-                            syncProgress = 1f
-                        )
-                    }
-                })
+                if (!addressIndex.ensureWallet()) {
+                    _state.value = BwtState(status = BwtState.Status.ERROR,
+                        error = "Failed to create tracking wallet")
+                    return@launch
+                }
 
-                // start() returned, meaning BWT shut down
-                _isRunning.value = false
-                Log.i(TAG, "BWT daemon stopped")
-                _state.value = BwtState(status = BwtState.Status.STOPPED)
+                // Import descriptors and addresses
+                _state.value = BwtState(
+                    status = BwtState.Status.SYNCING,
+                    trackedAddresses = trackedCount,
+                    syncProgress = 0.6f
+                )
 
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                Log.d(TAG, "BWT coroutine cancelled (stop)")
+                addressIndex.importDescriptors(
+                    descriptors = descriptors.toList(),
+                    xpubs = xpubSet.toList()
+                )
+
+                if (addresses.isNotEmpty()) {
+                    addressIndex.importAddresses(addresses.toList())
+                }
+
+                _state.value = BwtState(
+                    status = BwtState.Status.SYNCING,
+                    trackedAddresses = trackedCount,
+                    syncProgress = 0.8f
+                )
+
+                // Start the TCP server
+                val electrumServer = ElectrumServer(methods, subscriptions, ELECTRUM_HOST, ELECTRUM_PORT)
+                electrumServer.start()
+                server = electrumServer
+
+                Log.i(TAG, "Electrum server ready on $ELECTRUM_HOST:$ELECTRUM_PORT")
+                _isRunning.value = true
+                _state.value = BwtState(
+                    status = BwtState.Status.RUNNING,
+                    trackedAddresses = trackedCount,
+                    syncProgress = 1f
+                )
+
+            } catch (e: CancellationException) {
+                Log.d(TAG, "Electrum server start cancelled")
             } catch (e: Exception) {
                 _isRunning.value = false
-                Log.e(TAG, "BWT failed: ${e.message}", e)
+                Log.e(TAG, "Electrum server failed: ${e.message}", e)
                 _state.value = BwtState(status = BwtState.Status.ERROR, error = e.message)
             }
         }
@@ -171,22 +165,22 @@ class BwtService(private val context: Context) {
             context.getSharedPreferences("pocketnode_prefs", Context.MODE_PRIVATE)
                 .edit().putBoolean("bwt_was_running", false).apply()
         }
-        daemon?.let { d ->
+        server?.let { s ->
             try {
-                d.shutdown()
-                Log.i(TAG, "BWT shutdown requested")
+                s.stop()
+                Log.i(TAG, "Electrum server stopped")
             } catch (e: Exception) {
-                Log.w(TAG, "BWT shutdown error: ${e.message}")
+                Log.w(TAG, "Electrum server stop error: ${e.message}")
             }
         }
-        daemon = null
+        server = null
         _isRunning.value = false
         _state.value = BwtState(status = BwtState.Status.STOPPED)
         scope.cancel()
         scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     }
 
-    // -- Saved config helpers --
+    // -- Saved config helpers (unchanged, used by ConnectWalletScreen) --
 
     object SavedConfig {
         fun getXpubs(context: Context): Set<String> {

@@ -53,9 +53,6 @@ android {
 }
 
 dependencies {
-    // BWT JNI (Electrum server, in-process via AAR)
-    implementation(files("libs/libbwt.aar"))
-
     // Compose BOM
     val composeBom = platform("androidx.compose:compose-bom:2024.02.02")
     implementation(composeBom)
@@ -78,9 +75,6 @@ dependencies {
 
     // JSON parsing for RPC
     implementation("org.json:json:20231013")
-
-    // Gson (required by libbwt-jni)
-    implementation("com.google.code.gson:gson:2.10.1")
 
     // SSH/SFTP
     implementation("com.jcraft:jsch:0.1.55")
