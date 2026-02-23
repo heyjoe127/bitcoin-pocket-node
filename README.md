@@ -202,8 +202,8 @@ bitcoind (phone) --> block filters --> Zeus Neutrino --> Lightning wallet
 
 ## Target Platform
 
-- **OS:** GrapheneOS (or any Android 10+)
-- **Hardware:** Google Pixel devices (ARM64)
+- **OS:** Android 7+ (tested on GrapheneOS, EMUI, Samsung OneUI)
+- **Hardware:** Any ARM64 device (tested on Pixel, Samsung, Huawei)
 - **Default:** Bitcoin Core v28.1 (non-controversial baseline)
 - **Also bundled:** Core 30, Knots 29.3 with BIP 110 toggle (user selects from dashboard)
 - **AssumeUTXO heights:** 840k (upstream) + 880k, 910k (backported from Core 30)
@@ -297,9 +297,11 @@ app/src/main/java/com/pocketnode/
 
 ## Tested On
 
-| Device | SoC | Result |
-|--------|-----|--------|
-| Pixel 7 Pro | Tensor G2 | ✅ Direct chainstate copy to chain tip, 167M UTXOs loaded via AssumeUTXO, phone stays cool |
+| Device | SoC | OS | Result |
+|--------|-----|----|--------|
+| Pixel 7 Pro | Tensor G2 | GrapheneOS | ✅ Full stack: chainstate copy, Lightning, BIP 110, all features verified |
+| Samsung Galaxy Z Fold | Snapdragon | Android | ✅ Dual-pane foldable layout working, IBD syncing |
+| Huawei Mate 20 Lite | Kirin 710 | EMUI | ✅ Clean install, IBD syncing from genesis |
 
 ## Known Issues
 
