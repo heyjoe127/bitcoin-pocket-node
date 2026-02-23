@@ -19,8 +19,9 @@ Turn any Android phone into a fully-validating Bitcoin full node. No server depe
 
 **First run**
 
-| ![Choose snapshot source](docs/images/00-setup-screen.jpg) |
-|:---:|
+<p align="center">
+  <img src="docs/images/00-setup-screen.jpg" width="250" alt="Choose snapshot source">
+</p>
 
 **Node + On-chain wallet**
 
