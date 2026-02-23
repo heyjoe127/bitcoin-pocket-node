@@ -45,6 +45,11 @@ fun PocketNodeApp(
         val context = LocalContext.current
         val setupManager = remember { NodeSetupManager(context) }
 
+        // First run detection: if no bitcoin.conf exists, start on setup screen
+        val isFirstRun = remember {
+            !java.io.File(context.filesDir, "bitcoin/bitcoin.conf").exists()
+        }
+
         // Observe network state — reactively watch for service starting
         val serviceMonitor by BitcoindService.activeNetworkMonitorFlow.collectAsState()
         val serviceController by BitcoindService.activeSyncControllerFlow.collectAsState()
@@ -64,7 +69,7 @@ fun PocketNodeApp(
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             val isWideScreen = maxWidth >= 550.dp
 
-        NavHost(navController = navController, startDestination = "status") {
+        NavHost(navController = navController, startDestination = if (isFirstRun) "setup" else "status") {
             composable("status") {
                 if (isWideScreen) {
                     // Dual-pane: dashboard left, mempool right
