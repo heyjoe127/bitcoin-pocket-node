@@ -127,7 +127,7 @@ Download from `https://utxo.download/utxo-910000.dat` (9 GB). Same `loadtxoutset
 │  └──────────────┬────────────────────────┘  │
 │                 │                           │
 │  ┌──────────────┴──────────────────┐        │
-│  │     BWT (Electrum server)       │        │
+│  │     Electrum server (Kotlin)    │        │
 │  │     Local Electrum protocol     │        │
 │  └──────────────┬──────────────────┘        │
 │                 │                           │
@@ -162,7 +162,7 @@ You can view the pocketnode credentials and **fully remove access** from the app
 ### Android Security
 - `network_security_config.xml` allows cleartext HTTP only to `127.0.0.1` (local RPC)
 - bitcoind runs as `libbitcoind.so` in `jniLibs/` for GrapheneOS W^X compliance
-- No internet-facing ports. RPC and BWT Electrum are both localhost only
+- No internet-facing ports. RPC and Electrum server are both localhost only
 
 ## Lightning Support
 
@@ -220,7 +220,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 app/src/main/java/com/pocketnode/
 ├── service/
 │   ├── BitcoindService.kt      # Foreground service managing bitcoind
-│   ├── BwtService.kt           # BWT Electrum server service
+│   ├── BwtService.kt           # Electrum server lifecycle management
 │   └── SyncController.kt       # Network-aware sync pause/resume
 ├── network/
 │   └── NetworkMonitor.kt       # WiFi/cellular/VPN detection + data tracking

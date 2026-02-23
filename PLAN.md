@@ -45,7 +45,7 @@
 ### Phase 5: Wallet RPC Interface ✅
 - [x] Localhost RPC endpoint for external wallet apps
 - [x] Connection instructions with copy buttons (ConnectWalletScreen)
-- [x] Electrum server integration (BWT runs alongside bitcoind, BlueWallet connects locally)
+- [x] Electrum server integration (pure Kotlin Electrum server, BlueWallet connects locally)
 
 ### Bitcoin Core Version Selection ✅
 - [x] Bundle 4 implementations: Core 28.1 (13 MB), Core 30 (8.6 MB), Knots 29.3 (9 MB), Knots BIP 110 (9 MB)
@@ -193,12 +193,11 @@ See [Desktop Port Design](docs/DESKTOP-PORT.md) for the full design document.
 - [ ] Copy more block files (~3-4 blk/rev pairs) to cover full pruning window (reorg safety)
 - [ ] Rust GBT native lib for mempool block projection performance
 
-### BWT / Wallet
+### Electrum Server / Wallet
 - [ ] Descriptor wallet support: replace `importmulti` with `importdescriptors`
 - [ ] Taproot/P2TR output recognition
 - [ ] Multisig support (comes with descriptor wallets)
 - [ ] Remove `deprecatedrpc=create_bdb` dependency
-- [ ] BWT fork maintenance and modernization
 
 ### Chainstate Copy
 - [ ] XOR re-encoding: decode source obfuscation keys, re-encode with locally generated keys so every node is unique on disk
