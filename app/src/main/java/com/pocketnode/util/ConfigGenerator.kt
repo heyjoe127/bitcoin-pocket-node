@@ -47,6 +47,7 @@ object ConfigGenerator {
             listen=1
             bind=127.0.0.1
             maxconnections=4
+            whitelist=download@127.0.0.1
             
             # Storage — pruned to ~2GB
             prune=2048
@@ -124,6 +125,12 @@ object ConfigGenerator {
 
             if (!content.contains("persistmempool")) {
                 additions.add("persistmempool=1")
+            }
+
+            // Whitelist localhost so Zeus/Neutrino can always connect
+            // even when maxconnections slots are full
+            if (!content.contains("whitelist") || !content.contains("127.0.0.1")) {
+                additions.add("whitelist=download@127.0.0.1")
             }
 
             if (additions.isNotEmpty()) {
