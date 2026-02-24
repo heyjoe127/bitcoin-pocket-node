@@ -135,12 +135,30 @@ See [Watchtower Design](docs/WATCHTOWER-MESH.md) for details.
 ### Lightning Phase 4: LDK Migration
 Replace Zeus embedded LND with LDK (Lightning Dev Kit): modular Lightning library with native Android bindings. Designed for mobile (constrained storage, intermittent connectivity).
 
-This phase also solves the NODE_NETWORK roadblock: LDK connects to bitcoind via RPC (not P2P Neutrino), so pruned nodes work natively. No service bit checks, no cross-app localhost issues, no duplicate sync engine. One bitcoind, one Lightning implementation, all in-process.
+This phase solves the NODE_NETWORK roadblock: LDK connects to bitcoind via RPC (not P2P Neutrino), so pruned nodes work natively. No service bit checks, no cross-app localhost issues, no duplicate sync engine. One bitcoind, one Lightning implementation, all in-process.
 
-- [ ] LDK integration with native Android bindings
-- [ ] LDK uses local bitcoind RPC as chain source (already available)
-- [ ] Justice transaction fee incentives
+**Architecture:**
+```
+bitcoind ← RPC → ldk-node (in-process)
+                    │
+            ┌───────┴────────┐
+            │                │
+      Built-in UI      LNDHub API (:3000)
+      (send/receive/        │
+       channels)       External wallets
+                       (BlueWallet, Zeus)
+```
+
+- [ ] ldk-node integration with bitcoind RPC backend (in-process, no cross-app issues)
+- [ ] Built-in Lightning wallet UI (send, receive, channels, payment history)
+- [ ] LNDHub-compatible localhost API for external wallet apps
+- [ ] Pruned node recovery: auto-detect missing blocks, temporarily grow prune window, show recovery progress, shrink back when caught up
+- [ ] Watchtower support via ldk-node tower client
 - [ ] VLS (Validating Lightning Signer): phone holds signing keys, remote server runs always-online node
+
+**Pruned node compatibility:** ldk-node uses `getblock` via RPC, no service bit checks. Works natively with pruned nodes for normal use. If the phone is offline longer than the prune window (~2 weeks at `prune=2048`), ldk-node can't fetch blocks it missed. Recovery: temporarily increase prune setting, let bitcoind re-download the gap blocks, ldk-node catches up, then shrink prune back to normal. User sees a "Recovering Lightning state..." screen with progress.
+
+**Estimated effort:** 8-14 weeks for built-in wallet + LNDHub API.
 
 ### Desktop Port (Compose Multiplatform)
 Same app, same experience, phone or desktop. Using Jetpack Compose Multiplatform to share UI code between Android and desktop (Linux, macOS, Windows).
