@@ -283,7 +283,20 @@ app/src/main/java/com/pocketnode/
 - **Desktop port:** Same app on Linux, macOS, Windows via Compose Multiplatform. Same UI, same chainstate copy, same version selection. See [design doc](docs/DESKTOP-PORT.md).
 - **Home node watchtower:** Your home node watches your phone's Lightning channels when you're away. Enabled automatically during setup. See [design doc](docs/WATCHTOWER-MESH.md).
 - **Policy settings:** Expose Knots datacarrier flags as toggleable settings.
-- **LDK migration:** Replace Zeus embedded LND with LDK for native in-process Lightning. Solves the NODE_NETWORK service bit limitation (pruned nodes can't serve Neutrino) by using bitcoind RPC directly.
+- **LDK migration:** Replace Zeus with native in-process Lightning (LDK). Built-in wallet UI, LNDHub API for external wallets, and **cellular Lightning mode**: payments work on mobile data with zero blockchain bandwidth. bitcoind pauses sync, LDK keeps operating via localhost RPC, watchtower monitors channels at home, full sync resumes on WiFi. Only possible because the entire stack runs in one app.
+
+```
+bitcoind ← RPC → ldk-node (in-process)
+                    │
+            ┌───────┴────────┐
+            │                │
+      Built-in UI      LNDHub API (:3000)
+      (send/receive/        │
+       channels)       External wallets
+                       (BlueWallet, Zeus)
+
+  Electrum server (:50001) — on-chain wallets
+```
 
 ## Tested On
 
