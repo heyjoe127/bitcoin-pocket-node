@@ -107,17 +107,19 @@ fun ConnectWalletScreen(onBack: () -> Unit) {
                     )
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("⚡ Lightning", fontWeight = FontWeight.Bold)
+                        Text("⚡ Lightning (BIP 157/158)", fontWeight = FontWeight.Bold)
                         Spacer(Modifier.height(8.dp))
-                        Text("BIP 157/158 compact block filters installed",
+                        CopyableValue("Host", "127.0.0.1", connClip)
+                        CopyableValue("Port", "8333", connClip)
+                        Text("Compact block filters enabled",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            "Install Zeus (v0.12.2) with embedded LND for Lightning. " +
-                            "Note: due to a NODE_NETWORK service bit limitation, Zeus syncs via internet peers " +
-                            "rather than the local node. This is privacy-safe (Neutrino doesn't reveal your addresses) " +
-                            "and will be resolved when we migrate to LDK.",
+                            "Connect any Neutrino-compatible Lightning wallet. " +
+                            "Note: pruned nodes advertise NODE_NETWORK_LIMITED, so Neutrino clients " +
+                            "may sync via internet peers instead of localhost. " +
+                            "Native LDK integration coming soon.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                         )
@@ -173,28 +175,11 @@ fun ConnectWalletScreen(onBack: () -> Unit) {
                 }
             }
 
-            // Start/Stop button
+            // Auto-start Electrum server when wallets are configured
             val hasConfig = xpubs.isNotEmpty() || addresses.isNotEmpty()
-            if (bwtRunning) {
-                OutlinedButton(
-                    onClick = { bwtService.stop() },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                ) {
-                    Text("Stop Electrum Server")
-                }
-            } else {
-                Button(
-                    onClick = { bwtService.start() },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = hasConfig,
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF7931A))
-                ) {
-                    Text(
-                        if (hasConfig) "Start Electrum Server" else "Add an xpub or address first",
-                        fontWeight = FontWeight.Bold,
-                        color = if (hasConfig) Color.Black else Color.Gray
-                    )
+            LaunchedEffect(hasConfig, bwtRunning) {
+                if (hasConfig && !bwtRunning) {
+                    bwtService.start()
                 }
             }
 
