@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bitcoin Pocket Node — Full node on your phone in 20 minutes</title>
+<meta name="description" content="Turn any Android phone into a fully-validating Bitcoin full node. No server dependency, no ongoing tethering. Your phone becomes a sovereign Bitcoin node.">
+<meta property="og:title" content="Bitcoin Pocket Node">
+<meta property="og:description" content="Full Bitcoin node on your phone in under 20 minutes. Sovereign validation, Lightning support, built-in Electrum server.">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>₿</text></svg>">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&family=JetBrains+Mono:wght@400;600&display=swap');
+
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --card: #1c2333;
+    --orange: #F7931A;
+    --orange-dim: #F7931A30;
+    --green: #4CAF50;
+    --blue: #58a6ff;
+    --text: #e6edf3;
+    --text-dim: #8b949e;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  a { color: var(--orange); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+
+  /* Nav */
+  nav {
+    position: fixed;
+    top: 0;
+    width: 100%;
+    background: var(--bg);
+    border-bottom: 1px solid #21262d;
+    z-index: 100;
+    backdrop-filter: blur(12px);
+    background: rgba(13, 17, 23, 0.9);
+  }
+
+  nav .container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 64px;
+  }
+
+  .nav-logo {
+    font-weight: 700;
+    font-size: 1.1em;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .nav-logo span { color: var(--orange); }
+
+  .nav-links {
+    display: flex;
+    gap: 24px;
+    align-items: center;
+    list-style: none;
+  }
+
+  .nav-links a {
+    color: var(--text-dim);
+    font-size: 0.9em;
+    font-weight: 500;
+    transition: color 0.2s;
+  }
+
+  .nav-links a:hover { color: var(--text); text-decoration: none; }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.95em;
+    transition: all 0.2s;
+    border: none;
+    cursor: pointer;
+  }
+
+  .btn-primary {
+    background: var(--orange);
+    color: #000;
+  }
+
+  .btn-primary:hover { background: #ffaa33; text-decoration: none; }
+
+  .btn-outline {
+    background: transparent;
+    color: var(--text);
+    border: 1px solid #30363d;
+  }
+
+  .btn-outline:hover { border-color: var(--orange); text-decoration: none; }
+
+  /* Hero */
+  .hero {
+    padding: 140px 0 80px;
+    text-align: center;
+  }
+
+  .hero-badge {
+    display: inline-block;
+    background: var(--orange-dim);
+    color: var(--orange);
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 0.85em;
+    font-weight: 600;
+    margin-bottom: 24px;
+  }
+
+  .hero h1 {
+    font-size: 3.5em;
+    font-weight: 900;
+    line-height: 1.1;
+    margin-bottom: 20px;
+  }
+
+  .hero h1 .highlight { color: var(--orange); }
+
+  .hero .subtitle {
+    font-size: 1.25em;
+    color: var(--text-dim);
+    max-width: 600px;
+    margin: 0 auto 40px;
+    line-height: 1.6;
+  }
+
+  .hero-buttons {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  /* Stats */
+  .stats-row {
+    display: flex;
+    justify-content: center;
+    gap: 40px;
+    margin: 60px 0;
+    flex-wrap: wrap;
+  }
+
+  .stat {
+    text-align: center;
+  }
+
+  .stat-value {
+    font-size: 2.2em;
+    font-weight: 900;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--orange);
+  }
+
+  .stat-label {
+    color: var(--text-dim);
+    font-size: 0.9em;
+    margin-top: 4px;
+  }
+
+  /* Screenshots */
+  .screenshots {
+    padding: 60px 0;
+  }
+
+  .screenshots h2 {
+    text-align: center;
+    font-size: 2em;
+    margin-bottom: 40px;
+  }
+
+  .screenshot-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+
+  .screenshot-grid img {
+    width: 100%;
+    border-radius: 12px;
+    border: 1px solid #21262d;
+    transition: transform 0.3s;
+  }
+
+  .screenshot-grid img:hover {
+    transform: scale(1.03);
+  }
+
+  /* Features */
+  .features {
+    padding: 80px 0;
+  }
+
+  .features h2 {
+    text-align: center;
+    font-size: 2em;
+    margin-bottom: 16px;
+  }
+
+  .features .section-sub {
+    text-align: center;
+    color: var(--text-dim);
+    margin-bottom: 48px;
+    font-size: 1.1em;
+  }
+
+  .feature-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+  }
+
+  .feature-card {
+    background: var(--card);
+    border-radius: 12px;
+    padding: 28px;
+    border: 1px solid #21262d;
+    transition: border-color 0.2s;
+  }
+
+  .feature-card:hover { border-color: var(--orange); }
+
+  .feature-icon {
+    font-size: 2em;
+    margin-bottom: 12px;
+  }
+
+  .feature-card h3 {
+    font-size: 1.1em;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+
+  .feature-card p {
+    color: var(--text-dim);
+    font-size: 0.9em;
+    line-height: 1.6;
+  }
+
+  /* How it works */
+  .how-it-works {
+    padding: 80px 0;
+  }
+
+  .how-it-works h2 {
+    text-align: center;
+    font-size: 2em;
+    margin-bottom: 48px;
+  }
+
+  .steps {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    max-width: 700px;
+    margin: 0 auto;
+  }
+
+  .step {
+    display: flex;
+    align-items: flex-start;
+    gap: 20px;
+    background: var(--card);
+    padding: 24px;
+    border-radius: 12px;
+    border-left: 4px solid var(--orange);
+  }
+
+  .step-num {
+    background: var(--orange);
+    color: #000;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  .step-title { font-weight: 600; margin-bottom: 4px; }
+  .step-desc { color: var(--text-dim); font-size: 0.9em; }
+
+  /* Architecture */
+  .architecture {
+    padding: 80px 0;
+  }
+
+  .architecture h2 {
+    text-align: center;
+    font-size: 2em;
+    margin-bottom: 16px;
+  }
+
+  .architecture .section-sub {
+    text-align: center;
+    color: var(--text-dim);
+    margin-bottom: 40px;
+    font-size: 1.1em;
+  }
+
+  .arch-diagram {
+    background: var(--card);
+    border-radius: 12px;
+    padding: 32px;
+    border: 1px solid #21262d;
+    max-width: 700px;
+    margin: 0 auto;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.9em;
+    line-height: 1.8;
+    white-space: pre;
+    overflow-x: auto;
+  }
+
+  .arch-diagram .orange { color: var(--orange); }
+  .arch-diagram .green { color: var(--green); }
+  .arch-diagram .blue { color: var(--blue); }
+  .arch-diagram .dim { color: var(--text-dim); }
+
+  /* Versions */
+  .versions {
+    padding: 80px 0;
+  }
+
+  .versions h2 {
+    text-align: center;
+    font-size: 2em;
+    margin-bottom: 40px;
+  }
+
+  .version-cards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+    max-width: 800px;
+    margin: 0 auto;
+  }
+
+  .version-card {
+    background: var(--card);
+    border-radius: 12px;
+    padding: 24px;
+    text-align: center;
+    border: 1px solid #21262d;
+  }
+
+  .version-card h3 { font-size: 1em; margin-bottom: 8px; }
+  .version-card .size { color: var(--orange); font-family: 'JetBrains Mono', monospace; font-weight: 600; }
+  .version-card .policy { color: var(--text-dim); font-size: 0.85em; margin-top: 8px; }
+
+  /* CTA */
+  .cta {
+    padding: 80px 0;
+    text-align: center;
+  }
+
+  .cta h2 {
+    font-size: 2.2em;
+    margin-bottom: 16px;
+  }
+
+  .cta p {
+    color: var(--text-dim);
+    font-size: 1.1em;
+    margin-bottom: 32px;
+  }
+
+  .cta-buttons {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  /* Footer */
+  footer {
+    border-top: 1px solid #21262d;
+    padding: 40px 0;
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 0.85em;
+  }
+
+  footer a { color: var(--text-dim); }
+  footer a:hover { color: var(--orange); }
+
+  .footer-links {
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    margin-bottom: 16px;
+  }
+
+  /* Mobile */
+  @media (max-width: 768px) {
+    .hero { padding: 100px 0 60px; }
+    .hero h1 { font-size: 2.2em; }
+    .hero .subtitle { font-size: 1.05em; }
+
+    .stats-row { gap: 24px; }
+    .stat-value { font-size: 1.6em; }
+
+    .screenshot-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+
+    .feature-grid { grid-template-columns: 1fr; }
+
+    .version-cards { grid-template-columns: 1fr; }
+
+    .nav-links { gap: 16px; }
+    .nav-links a { font-size: 0.8em; }
+
+    .arch-diagram { font-size: 0.75em; padding: 20px; }
+  }
+
+  @media (max-width: 480px) {
+    .hero h1 { font-size: 1.8em; }
+    .nav-links .hide-mobile { display: none; }
+    .hero-buttons { flex-direction: column; align-items: center; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="container">
+    <div class="nav-logo">₿ <span>Pocket Node</span></div>
+    <ul class="nav-links">
+      <li><a href="#features" class="hide-mobile">Features</a></li>
+      <li><a href="#how-it-works" class="hide-mobile">How It Works</a></li>
+      <li><a href="#architecture" class="hide-mobile">Architecture</a></li>
+      <li><a href="https://github.com/FreeOnlineUser/bitcoin-pocket-node" class="btn btn-outline">GitHub</a></li>
+    </ul>
+  </div>
+</nav>
+
+<section class="hero">
+  <div class="container">
+    <div class="hero-badge">✅ Proven on Pixel, Samsung, Huawei</div>
+    <h1>Bitcoin node in your<br><span class="highlight">pocket</span> in 20 minutes</h1>
+    <p class="subtitle">Turn any Android phone into a fully-validating Bitcoin full node. Sovereign validation, built-in Electrum server, Lightning support. No server dependency.</p>
+    <div class="hero-buttons">
+      <a href="https://github.com/FreeOnlineUser/bitcoin-pocket-node/releases/latest" class="btn btn-primary">⬇ Download APK</a>
+      <a href="https://github.com/FreeOnlineUser/bitcoin-pocket-node" class="btn btn-outline">View Source</a>
+      <a href="chainstate-copy-presentation-v2.html" class="btn btn-outline">📊 How It Works</a>
+    </div>
+  </div>
+</section>
+
+<div class="container">
+  <div class="stats-row">
+    <div class="stat">
+      <div class="stat-value">~13 GB</div>
+      <div class="stat-label">Total disk with Lightning</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">20 min</div>
+      <div class="stat-label">Zero to full node</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">3</div>
+      <div class="stat-label">Bitcoin implementations</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">76 MB</div>
+      <div class="stat-label">APK size</div>
+    </div>
+  </div>
+</div>
+
+<section class="screenshots" id="screenshots">
+  <div class="container">
+    <h2>Running on a Pixel with GrapheneOS</h2>
+    <div class="screenshot-grid">
+      <img src="images/01-checklist.jpg" alt="Setup checklist" loading="lazy">
+      <img src="images/03-electrum-server.jpg" alt="Electrum server" loading="lazy">
+      <img src="images/05-lightning-dashboard.jpg" alt="Dashboard with Lightning" loading="lazy">
+      <img src="images/11-version-picker.png" alt="Version picker" loading="lazy">
+    </div>
+  </div>
+</section>
+
+<section class="features" id="features">
+  <div class="container">
+    <h2>Everything runs on your phone</h2>
+    <p class="section-sub">No external servers. No trusted third parties. Your keys, your node, your rules.</p>
+    <div class="feature-grid">
+      <div class="feature-card">
+        <div class="feature-icon">⚡</div>
+        <h3>Direct Chainstate Copy</h3>
+        <p>Copy your home node's validated state over LAN. Full node at chain tip in 20 minutes. No days-long sync.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🔌</div>
+        <h3>Built-in Electrum Server</h3>
+        <p>Pure Kotlin Electrum server on localhost. BlueWallet connects directly to your own node. No external servers.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🔮</div>
+        <h3>Sovereign Price Discovery</h3>
+        <p>UTXOracle derives BTC/USD from on-chain transaction patterns. Zero external APIs. Updates with each block.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🛡️</div>
+        <h3>Home Node Watchtower</h3>
+        <p>Your home node watches your Lightning channels when the phone is offline. Auto-detected during setup.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📊</div>
+        <h3>Mempool Viewer</h3>
+        <p>Fee estimates, projected blocks, transaction search. All from your own node's mempool.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🔄</div>
+        <h3>Version Selection</h3>
+        <p>Core 28.1, Core 30, or Knots 29.3 with BIP 110 toggle. Switch with one tap, same chainstate.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🔋</div>
+        <h3>Mobile-Optimized</h3>
+        <p>Battery saver, auto-start on boot, metered network detection, persistent mempool across restarts.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📱</div>
+        <h3>GrapheneOS Native</h3>
+        <p>W^X compliant, no root needed. Tested on Pixel, Samsung, Huawei. Android 7+.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🌐</div>
+        <h3>Lightning Support</h3>
+        <p>BIP 157/158 block filters from your home node. Zeus with embedded LND. Native LDK integration coming.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="how-it-works" id="how-it-works">
+  <div class="container">
+    <h2>How it works</h2>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div>
+          <div class="step-title">Install the app</div>
+          <div class="step-desc">Download the APK (76 MB, 3 bundled bitcoind binaries). No Google Play needed.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div>
+          <div class="step-title">Connect to your home node</div>
+          <div class="step-desc">Enter SSH credentials. The app creates a restricted SFTP account on your node automatically.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div>
+          <div class="step-title">Copy chainstate (~20 min)</div>
+          <div class="step-desc">The app copies your node's validated UTXO set (~11 GB) over WiFi. Creates stub files for historical blocks. Starts bitcoind with the proven state.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div>
+          <div class="step-title">You're a full node</div>
+          <div class="step-desc">bitcoind catches up the few blocks mined during copy. Your phone validates every transaction. Trusts no one. Connect BlueWallet via the built-in Electrum server.</div>
+        </div>
+      </div>
+    </div>
+    <p style="text-align: center; margin-top: 32px; color: var(--text-dim);">
+      No home node? <a href="https://github.com/FreeOnlineUser/bitcoin-pocket-node#-path-2-download-from-internet-assumeutxo-3-hours">Download a snapshot</a> from the internet (~3 hours via AssumeUTXO).
+    </p>
+  </div>
+</section>
+
+<section class="architecture" id="architecture">
+  <div class="container">
+    <h2>Architecture</h2>
+    <p class="section-sub">Everything in one app, all localhost. Coming soon: native Lightning with cellular mode.</p>
+    <div class="arch-diagram"><span class="orange">bitcoind</span> <span class="dim">← RPC →</span> <span class="orange">ldk-node</span> <span class="dim">(in-process, coming soon)</span>
+                    <span class="dim">│</span>
+            <span class="dim">┌───────┴────────┐</span>
+            <span class="dim">│                │</span>
+      <span class="green">Built-in UI</span>      <span class="blue">LNDHub API</span> <span class="dim">(:3000)</span>
+      <span class="dim">(send/receive/</span>        <span class="dim">│</span>
+       <span class="dim">channels)</span>       <span class="blue">External wallets</span>
+                       <span class="dim">(BlueWallet, Zeus)</span>
+
+  <span class="green">Electrum server</span> <span class="dim">(:50001) — on-chain wallets</span>
+  <span class="green">UTXOracle</span> <span class="dim">— sovereign price from on-chain data</span></div>
+    <p style="text-align: center; margin-top: 24px; color: var(--text-dim); font-size: 0.95em;">
+      <strong style="color: var(--orange);">Cellular Lightning mode:</strong> Payments work on mobile data with zero blockchain bandwidth.<br>
+      bitcoind pauses sync, Lightning keeps operating via localhost RPC. Watchtower monitors at home.
+    </p>
+  </div>
+</section>
+
+<section class="versions" id="versions">
+  <div class="container">
+    <h2>Choose your implementation</h2>
+    <div class="version-cards">
+      <div class="version-card">
+        <h3>Bitcoin Core 28.1</h3>
+        <div class="size">13 MB</div>
+        <div class="policy">Neutral: standard relay rules</div>
+      </div>
+      <div class="version-card">
+        <h3>Bitcoin Core 30</h3>
+        <div class="size">8.6 MB</div>
+        <div class="policy">Permissive: larger OP_RETURN</div>
+      </div>
+      <div class="version-card">
+        <h3>Bitcoin Knots 29.3</h3>
+        <div class="size">9 MB</div>
+        <div class="policy">Restrictive + BIP 110 toggle</div>
+      </div>
+    </div>
+    <p style="text-align: center; margin-top: 24px; color: var(--text-dim);">All share the same chainstate. Switch without re-syncing.</p>
+  </div>
+</section>
+
+<section class="cta">
+  <div class="container">
+    <h2>Run your own node today</h2>
+    <p>Open source. MIT licensed. No tracking. No accounts. Just Bitcoin.</p>
+    <div class="cta-buttons">
+      <a href="https://github.com/FreeOnlineUser/bitcoin-pocket-node/releases/latest" class="btn btn-primary">⬇ Download APK</a>
+      <a href="https://github.com/FreeOnlineUser/bitcoin-pocket-node" class="btn btn-outline">GitHub</a>
+      <a href="chainstate-copy-presentation-v2.html" class="btn btn-outline">📊 Slide Deck</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    <div class="footer-links">
+      <a href="https://github.com/FreeOnlineUser/bitcoin-pocket-node">Source Code</a>
+      <a href="https://github.com/FreeOnlineUser/bitcoin-pocket-node/releases">Releases</a>
+      <a href="https://github.com/FreeOnlineUser/bitcoin-pocket-node/blob/main/PLAN.md">Roadmap</a>
+      <a href="chainstate-copy-presentation-v2.html">Presentation</a>
+    </div>
+    <p>Built by <a href="https://github.com/FreeOnlineUser">@FreeOnlineUser</a> — MIT License</p>
+  </div>
+</footer>
+
+</body>
+</html>
