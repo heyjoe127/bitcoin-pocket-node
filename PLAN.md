@@ -158,7 +158,9 @@ bitcoind ← RPC → ldk-node (in-process)
 
 **Pruned node compatibility:** ldk-node uses `getblock` via RPC, no service bit checks. Works natively with pruned nodes for normal use. If the phone is offline longer than the prune window (~2 weeks at `prune=2048`), ldk-node can't fetch blocks it missed. Recovery: temporarily increase prune setting, let bitcoind re-download the gap blocks, ldk-node catches up, then shrink prune back to normal. User sees a "Recovering Lightning state..." screen with progress.
 
-**Estimated effort:** 8-14 weeks for built-in wallet + LNDHub API.
+**Cellular Lightning mode:** When on cellular/metered network, bitcoind pauses block sync (zero download bandwidth) but stays running for RPC. ldk-node continues operating Lightning normally: payments, channel updates, invoice generation all work over the Lightning peer network. On-chain transactions still broadcast via minimal peer connection. Force-close monitoring handled by home node watchtower. Full block sync resumes automatically on WiFi. Dashboard shows "Lightning active, blockchain paused." Only possible because everything runs in-process via localhost RPC.
+
+**Estimated effort:** 8-14 weeks for built-in wallet + LNDHub API + cellular mode.
 
 ### Desktop Port (Compose Multiplatform)
 Same app, same experience, phone or desktop. Using Jetpack Compose Multiplatform to share UI code between Android and desktop (Linux, macOS, Windows).
