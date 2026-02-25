@@ -162,7 +162,7 @@ fun ConnectWalletScreen(onBack: () -> Unit) {
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            "Connect a wallet app like BlueWallet to this address.",
+                            "Connect a wallet app like BlueWallet to this address. Make sure to add your wallet's xpub below so the server knows which addresses to track.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                         )
