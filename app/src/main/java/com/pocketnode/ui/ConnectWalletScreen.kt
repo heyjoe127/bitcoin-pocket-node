@@ -190,6 +190,11 @@ fun ConnectWalletScreen(onBack: () -> Unit) {
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text("Electrum Tracked Wallets", fontWeight = FontWeight.Bold)
+                    Text(
+                        "This is a lightweight Electrum server for mobile. Add the wallets you want to track here.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
 
                     if (xpubs.isEmpty() && addresses.isEmpty()) {
                         Spacer(Modifier.height(12.dp))
