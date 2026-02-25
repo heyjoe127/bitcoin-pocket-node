@@ -168,6 +168,15 @@ fun ConnectWalletScreen(onBack: () -> Unit) {
                         )
                     }
 
+                    if (bwtState.status == BwtService.BwtState.Status.RUNNING && xpubs.isEmpty() && addresses.isEmpty()) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "⚠️ No wallets tracked. Add your xpub below to see balances and transactions.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFFFF9800)
+                        )
+                    }
+
                     if (bwtState.error != null) {
                         Text(bwtState.error!!, color = MaterialTheme.colorScheme.error,
                             style = MaterialTheme.typography.bodySmall)
