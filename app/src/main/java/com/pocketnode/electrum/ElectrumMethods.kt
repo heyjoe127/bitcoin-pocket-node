@@ -36,7 +36,8 @@ class ElectrumMethods(
 
     fun serverBanner(): String {
         return "Bitcoin Pocket Node - Personal Electrum Server\n" +
-            "Connected to your own full node. Self-validated, no third parties."
+            "Connected to your own full node. Self-validated, no third parties.\n" +
+            "Add your wallet's xpub in the app to track balances and transactions."
     }
 
     fun serverDonationAddress(): String {
