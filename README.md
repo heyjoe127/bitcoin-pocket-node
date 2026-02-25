@@ -4,6 +4,8 @@
 
 Turn any Android phone into a fully-validating Bitcoin full node. No server dependency, no ongoing tethering. Your phone becomes a sovereign Bitcoin node.
 
+📖 **[Project overview and how chainstate copy works](https://freeonlineuser.github.io/bitcoin-pocket-node/)**
+
 ## ✅ Proven
 
 - **Direct chainstate copy:** full node at chain tip in ~20 minutes (167M UTXOs, 4 peers, instant)
