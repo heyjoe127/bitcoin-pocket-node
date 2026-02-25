@@ -35,7 +35,8 @@ Three user-facing power modes control how aggressively the node syncs and consum
 - Persistent low-peer connections drain battery maintaining TCP keepalives for hours
 - Burst sync uses the same or less total data but concentrates it into short active windows
 - Phone radio can sleep between bursts (huge battery win on cellular)
-- Syncing with 4 peers for 30 seconds beats 2 peers trickling for 15 minutes
+- More peers during burst = faster parallel block download = shorter burst = less total radio time
+- 10 peers for 15 seconds beats 2 peers trickling for 15 minutes
 
 **Typical user:** Going about their day, wants the node to stay current without thinking about it.
 
@@ -83,7 +84,7 @@ Burst frequency adapts:
 
 | Setting | Max Power | Low Power | Out and About |
 |---------|-----------|-----------|---------------|
-| maxconnections | 8 | 4 (during burst) | 2 (during burst) |
+| maxconnections | 8 | 8-10 (during burst) | 4 (during burst) |
 | dbcache | 450 | 300 | 100 |
 | blocksonly | 0 | 0 | 1 |
 | mempoolfullrbf | 1 | 1 | n/a (blocksonly) |
