@@ -481,7 +481,7 @@ class BlockFilterManager(private val context: Context) {
 
         var content = confFile.readText()
 
-        // Lightning wallets (Zeus/Neutrino) connect via Bitcoin's P2P protocol to fetch
+        // Lightning wallets (Lightning/Neutrino) connect via Bitcoin's P2P protocol to fetch
         // compact block filters (BIP 157). This requires listen=1, but we bind to localhost
         // only so the node isn't exposed to the internet -- only local apps can connect.
         if (content.contains("listen=0")) {

@@ -57,6 +57,9 @@ class BitcoindService : Service() {
             get() = _activeBatteryMonitor.value
             private set(value) { _activeBatteryMonitor.value = value }
 
+        private val _batterySaverActiveGlobal = MutableStateFlow(false)
+        val batterySaverActiveFlow: StateFlow<Boolean> = _batterySaverActiveGlobal
+
         const val PREF_KEY_BATTERY_SAVER = "battery_saver_enabled"
         const val BATTERY_THRESHOLD = 50
 
@@ -68,7 +71,7 @@ class BitcoindService : Service() {
     private var bitcoindProcess: Process? = null
     private var notificationJob: Job? = null
     private var batterySaverJob: Job? = null
-    private var _batterySaverActive = MutableStateFlow(false)
+    private var _batterySaverActive = _batterySaverActiveGlobal
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     // Network-aware sync control

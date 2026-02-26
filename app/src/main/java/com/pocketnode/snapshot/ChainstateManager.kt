@@ -502,7 +502,7 @@ class ChainstateManager private constructor(private val context: Context) {
                         confText += "\n# Lightning support (BIP 157/158 block filters)\nblockfilterindex=1\npeerblockfilters=1\n"
                         Log.i(TAG, "Added blockfilterindex=1 to bitcoin.conf (filters included in archive)")
                     }
-                    // Enable listening on localhost so Zeus/Neutrino can connect
+                    // Enable listening on localhost so Lightning/Neutrino can connect
                     if (confText.contains("listen=0")) {
                         confText = confText.replace("listen=0", "listen=1")
                         if (!confText.contains("bind=")) {

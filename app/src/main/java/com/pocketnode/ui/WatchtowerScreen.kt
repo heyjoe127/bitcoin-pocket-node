@@ -157,7 +157,7 @@ fun WatchtowerScreen(onBack: () -> Unit) {
                         }
                     }
 
-                    // Zeus setup instructions
+                    // Lightning wallet setup instructions
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(
@@ -165,13 +165,13 @@ fun WatchtowerScreen(onBack: () -> Unit) {
                         )
                     ) {
                         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("Connect Zeus", style = MaterialTheme.typography.titleMedium)
+                            Text("Connect Lightning Wallet", style = MaterialTheme.typography.titleMedium)
                             Text(
-                                "1. Open Zeus → Settings → Tools → Manage Watchtowers",
+                                "1. Open your Lightning wallet → Watchtower settings",
                                 style = MaterialTheme.typography.bodyMedium
                             )
                             Text(
-                                "2. Tap + to add a watchtower",
+                                "2. Add a new watchtower",
                                 style = MaterialTheme.typography.bodyMedium
                             )
                             Text(
@@ -179,7 +179,7 @@ fun WatchtowerScreen(onBack: () -> Unit) {
                                 style = MaterialTheme.typography.bodyMedium
                             )
                             Text(
-                                "Zeus connects to your home node's watchtower via Tor automatically. Your channels will be monitored even when your phone is offline.",
+                                "Your Lightning wallet connects to the watchtower via Tor automatically. Your channels will be monitored even when your phone is offline.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                             )

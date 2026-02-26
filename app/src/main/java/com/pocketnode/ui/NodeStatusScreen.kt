@@ -34,6 +34,8 @@ import com.pocketnode.network.DataUsageEntry
 import com.pocketnode.network.NetworkMonitor
 import com.pocketnode.network.NetworkState
 import com.pocketnode.rpc.BitcoinRpcClient
+import androidx.compose.foundation.background
+import com.pocketnode.service.BatteryMonitor
 import com.pocketnode.service.BitcoindService
 import com.pocketnode.service.SyncController
 import com.pocketnode.snapshot.ChainstateManager
@@ -389,6 +391,28 @@ fun NodeStatusScreen(
                 todayUsage = todayUsage,
                 onAllowCellular = onAllowCellular
             )
+
+            // Battery saver banner
+            val batterySaverActive by BitcoindService.batterySaverActiveFlow.collectAsState()
+            val batteryMonitor by BitcoindService.activeBatteryMonitorFlow.collectAsState()
+            val batteryState by (batteryMonitor?.state ?: kotlinx.coroutines.flow.MutableStateFlow(BatteryMonitor.BatteryState())).collectAsState()
+            if (batterySaverActive) {
+                androidx.compose.foundation.layout.Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color(0xFFFF9800))
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        "🔋 Sync paused — battery at ${batteryState.level}%. Plug in to resume.",
+                        color = Color.White,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
 
             Column(
                 modifier = Modifier

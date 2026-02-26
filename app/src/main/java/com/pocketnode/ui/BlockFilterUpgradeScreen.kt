@@ -156,9 +156,9 @@ fun BlockFilterUpgradeScreen(
 
             Text(
                 if (isInstalled) {
-                    "Block filters are installed. Zeus and other Neutrino wallets can connect to your node for sovereign Lightning chain validation."
+                    "Block filters are installed. Neutrino wallets can connect to your node for sovereign Lightning chain validation."
                 } else {
-                    "Download BIP 157/158 block filters from your source node. This enables Zeus and other Lightning wallets to validate against your own full node."
+                    "Download BIP 157/158 block filters from your source node. This enables Lightning wallets to validate against your own full node."
                 },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
@@ -187,7 +187,7 @@ fun BlockFilterUpgradeScreen(
                         Text("Storage used: ${"%.1f".format(sizeGb)} GB",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-                        Text("Zeus connects via Neutrino on localhost:8333",
+                        Text("Lightning wallets connect via Neutrino on localhost:8333",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                     }
@@ -244,7 +244,7 @@ fun BlockFilterUpgradeScreen(
                                 modifier = Modifier.size(20.dp),
                                 tint = Color(0xFFFFB300))
                             Spacer(Modifier.width(8.dp))
-                            Text("Enables Zeus, and other Neutrino wallets",
+                            Text("Enables Neutrino Lightning wallets",
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Medium)
                         }
@@ -467,7 +467,7 @@ fun BlockFilterUpgradeScreen(
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold)
                             Spacer(Modifier.height(4.dp))
-                            Text("Restart your node to activate. Zeus can then connect via Neutrino on localhost.",
+                            Text("Restart your node to activate. Lightning wallets can then connect via Neutrino on localhost.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
                         }
@@ -483,7 +483,7 @@ fun BlockFilterUpgradeScreen(
         AlertDialog(
             onDismissRequest = { showRemoveConfirm = false },
             title = { Text("Remove Lightning Support?") },
-            text = { Text("This will delete ${"%.1f".format(sizeGb)} GB of block filter data and disable Neutrino connections. Zeus will no longer be able to connect to your node.") },
+            text = { Text("This will delete ${"%.1f".format(sizeGb)} GB of block filter data and disable Neutrino connections. Lightning wallets will no longer be able to connect to your node.") },
             confirmButton = {
                 TextButton(onClick = {
                     showRemoveConfirm = false

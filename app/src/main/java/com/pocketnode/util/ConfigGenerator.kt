@@ -131,7 +131,7 @@ object ConfigGenerator {
                 additions.add("persistmempool=1")
             }
 
-            // Whitelist localhost so Zeus/Neutrino can always connect
+            // Whitelist localhost so Lightning/Neutrino can always connect
             // even when maxconnections slots are full
             if (!content.contains("whitelist=download@127.0.0.1")) {
                 additions.add("whitelist=download@127.0.0.1")
@@ -142,7 +142,7 @@ object ConfigGenerator {
                 additions.add("deprecatedrpc=warnings")
             }
 
-            // Disable Tor listener so 8333 stays a normal port (Zeus whitelist works)
+            // Disable Tor listener so 8333 stays a normal port (Lightning whitelist works)
             if (!content.contains("listenonion=0")) {
                 additions.add("listenonion=0")
             }

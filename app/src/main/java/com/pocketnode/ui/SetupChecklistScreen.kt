@@ -180,7 +180,7 @@ fun SetupChecklistScreen(
                             state.blockFiltersInstalled && wtConfigured ->
                                 "Block filters installed, watchtower active 🛡️"
                             state.blockFiltersInstalled ->
-                                "Block filters installed — connect Zeus wallet"
+                                "Block filters installed — Lightning ready"
                             state.nodeSynced -> "Copy block filters from your home node via dashboard"
                             else -> "Sync node first, then add Lightning"
                         },
