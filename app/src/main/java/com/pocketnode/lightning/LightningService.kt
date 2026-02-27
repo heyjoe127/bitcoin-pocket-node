@@ -421,19 +421,49 @@ class LightningService(private val context: Context) {
         // Validate and convert (returns 32 bytes)
         val entropy32 = Bip39.mnemonicToEntropy(words, context)
 
-        // ldk-node expects a 64-byte keys_seed file.
-        // First 32 bytes = primary entropy (from mnemonic)
-        // Second 32 bytes = derived via SHA256 for additional key material
-        val digest = java.security.MessageDigest.getInstance("SHA-256")
-        val secondary = digest.digest(entropy32)
-        val seed64 = entropy32 + secondary
-
-        // Write seed file
         val storageDir = File(context.filesDir, STORAGE_DIR)
         if (!storageDir.exists()) storageDir.mkdirs()
         val seedFile = File(storageDir, "keys_seed")
 
-        // Back up existing seed if present
+        // Check if the current seed matches (same first 32 bytes).
+        // If so, no change needed.
+        if (seedFile.exists()) {
+            val existing = seedFile.readBytes()
+            if (existing.size >= 32 && existing.sliceArray(0 until 32).contentEquals(entropy32)) {
+                Log.i(TAG, "Seed matches current wallet, no change needed")
+                return
+            }
+        }
+
+        // Check backups for matching seed (preserves original ldk-node second 32 bytes)
+        val matchingBackup = storageDir.listFiles()?.filter {
+            it.name.startsWith("keys_seed.bak.")
+        }?.find { bak ->
+            val bytes = bak.readBytes()
+            bytes.size >= 32 && bytes.sliceArray(0 until 32).contentEquals(entropy32)
+        }
+
+        val seed64: ByteArray
+        if (matchingBackup != null) {
+            // Restore exact original file (preserves ldk-node's second 32 bytes)
+            seed64 = matchingBackup.readBytes()
+            Log.i(TAG, "Found matching backup: ${matchingBackup.name}")
+        } else {
+            // New seed: first 32 from mnemonic, second 32 via SHA256
+            // Note: this creates a NEW wallet, not compatible with existing ldk-node state
+            val digest = java.security.MessageDigest.getInstance("SHA-256")
+            seed64 = entropy32 + digest.digest(entropy32)
+            Log.i(TAG, "Creating new wallet from seed (no matching backup found)")
+
+            // Wipe existing ldk-node state since it won't match the new seed
+            val lightningDir = File(context.filesDir, STORAGE_DIR)
+            lightningDir.listFiles()?.filter { it.name != "keys_seed" && !it.name.startsWith("keys_seed.bak.") }?.forEach {
+                it.deleteRecursively()
+                Log.d(TAG, "Removed stale state: ${it.name}")
+            }
+        }
+
+        // Back up existing seed
         if (seedFile.exists()) {
             val backup = File(storageDir, "keys_seed.bak.${System.currentTimeMillis()}")
             seedFile.copyTo(backup)
