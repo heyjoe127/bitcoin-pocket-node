@@ -142,6 +142,14 @@ fun LightningScreen(
                 ) {
                     Text("⚡ Start Lightning Node")
                 }
+                if (!lightning.hasSeed()) {
+                    TextButton(
+                        onClick = onNavigateToSeedBackup,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Restore existing wallet from seed words")
+                    }
+                }
             } else if (lightningState.status == LightningService.LightningState.Status.RUNNING) {
                 OutlinedButton(
                     onClick = { lightning.stop() },

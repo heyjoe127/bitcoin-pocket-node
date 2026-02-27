@@ -247,7 +247,7 @@ fun SeedBackupScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        "Enter your 24 seed words separated by spaces.",
+                        "Enter your seed words separated by spaces (12 or 24 words).",
                         style = MaterialTheme.typography.bodySmall
                     )
                     OutlinedTextField(
@@ -267,9 +267,9 @@ fun SeedBackupScreen(
                     val wordCount = restoreInput.trim().split("\\s+".toRegex())
                         .filter { it.isNotEmpty() }.size
                     Text(
-                        "$wordCount / 24 words",
+                        "$wordCount words" + if (wordCount in listOf(12, 15, 18, 21, 24)) " ✓" else "",
                         style = MaterialTheme.typography.bodySmall,
-                        color = if (wordCount == 24) Color(0xFF4CAF50)
+                        color = if (wordCount in listOf(12, 15, 18, 21, 24)) Color(0xFF4CAF50)
                         else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     restoreError?.let {

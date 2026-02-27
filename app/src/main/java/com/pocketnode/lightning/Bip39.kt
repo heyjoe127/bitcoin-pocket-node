@@ -37,36 +37,47 @@ object Bip39 {
         return words
     }
 
+    // Supported mnemonic sizes: word count -> (entropy bytes, checksum bits)
+    private val VALID_SIZES = mapOf(
+        12 to Pair(16, 4),    // 128-bit entropy
+        15 to Pair(20, 5),    // 160-bit
+        18 to Pair(24, 6),    // 192-bit
+        21 to Pair(28, 7),    // 224-bit
+        24 to Pair(32, 8)     // 256-bit
+    )
+
     /**
-     * Convert 32-byte entropy to a 24-word BIP39 mnemonic.
+     * Convert entropy bytes to a BIP39 mnemonic.
+     * Supports 16 bytes (12 words) through 32 bytes (24 words).
      *
-     * BIP39 for 256 bits:
-     * - Compute SHA256 of entropy
-     * - Append first 8 bits of hash as checksum
-     * - Split 264 bits into 24 groups of 11 bits
-     * - Each 11-bit value indexes the wordlist
+     * BIP39: entropy + SHA256 checksum bits → split into 11-bit groups → word indices.
      */
     fun entropyToMnemonic(entropy: ByteArray, context: Context): List<String> {
-        require(entropy.size == 32) { "Entropy must be 32 bytes for 24-word mnemonic" }
+        val wordCount = when (entropy.size) {
+            16 -> 12; 20 -> 15; 24 -> 18; 28 -> 21; 32 -> 24
+            else -> throw IllegalArgumentException(
+                "Entropy must be 16-32 bytes (got ${entropy.size})")
+        }
+        val checksumBits = entropy.size / 4 // CS = ENT / 32, in bits = ENT_bytes / 4
 
         val words = loadWordList(context)
 
         // SHA256 checksum
         val hash = MessageDigest.getInstance("SHA-256").digest(entropy)
-        val checksumByte = hash[0] // First 8 bits for 256-bit entropy
 
-        // Build bit string: 256 bits of entropy + 8 bits of checksum = 264 bits
-        val bits = BooleanArray(264)
-        for (i in 0 until 256) {
+        // Build bit string: entropy bits + checksum bits
+        val totalBits = entropy.size * 8 + checksumBits
+        val bits = BooleanArray(totalBits)
+        for (i in 0 until entropy.size * 8) {
             bits[i] = (entropy[i / 8].toInt() and (1 shl (7 - i % 8))) != 0
         }
-        for (i in 0 until 8) {
-            bits[256 + i] = (checksumByte.toInt() and (1 shl (7 - i))) != 0
+        for (i in 0 until checksumBits) {
+            bits[entropy.size * 8 + i] = (hash[i / 8].toInt() and (1 shl (7 - i % 8))) != 0
         }
 
-        // Split into 24 groups of 11 bits
+        // Split into 11-bit groups
         val mnemonic = mutableListOf<String>()
-        for (i in 0 until 24) {
+        for (i in 0 until wordCount) {
             var index = 0
             for (j in 0 until 11) {
                 if (bits[i * 11 + j]) {
@@ -80,13 +91,21 @@ object Bip39 {
     }
 
     /**
-     * Convert a 24-word BIP39 mnemonic back to 32-byte entropy.
+     * Convert a BIP39 mnemonic back to entropy bytes.
+     * Supports 12, 15, 18, 21, or 24 words.
      * Validates the checksum.
+     *
+     * For 12-word mnemonics (128-bit), the returned 16 bytes are expanded
+     * to 32 bytes via SHA256 for ldk-node compatibility (which expects 32-byte keys_seed).
      *
      * @throws IllegalArgumentException if words are invalid or checksum fails
      */
     fun mnemonicToEntropy(mnemonic: List<String>, context: Context): ByteArray {
-        require(mnemonic.size == 24) { "Mnemonic must be 24 words" }
+        val size = VALID_SIZES[mnemonic.size]
+            ?: throw IllegalArgumentException(
+                "Mnemonic must be 12, 15, 18, 21, or 24 words (got ${mnemonic.size})")
+
+        val (entropyBytes, checksumBits) = size
 
         val words = loadWordList(context)
         val wordMap = words.withIndex().associate { (i, w) -> w.lowercase() to i }
@@ -94,11 +113,12 @@ object Bip39 {
         // Convert words to 11-bit indices
         val indices = mnemonic.map { word ->
             wordMap[word.lowercase().trim()]
-                ?: throw IllegalArgumentException("Unknown BIP39 word: '$word'")
+                ?: throw IllegalArgumentException("Unknown BIP39 word: '${word.trim()}'")
         }
 
-        // Reconstruct 264 bits
-        val bits = BooleanArray(264)
+        // Reconstruct bits
+        val totalBits = mnemonic.size * 11
+        val bits = BooleanArray(totalBits)
         for (i in indices.indices) {
             val idx = indices[i]
             for (j in 0 until 11) {
@@ -106,30 +126,34 @@ object Bip39 {
             }
         }
 
-        // Extract 256 bits of entropy
-        val entropy = ByteArray(32)
-        for (i in 0 until 256) {
+        // Extract entropy
+        val entropy = ByteArray(entropyBytes)
+        for (i in 0 until entropyBytes * 8) {
             if (bits[i]) {
                 entropy[i / 8] = (entropy[i / 8].toInt() or (1 shl (7 - i % 8))).toByte()
             }
         }
 
-        // Extract 8-bit checksum
+        // Extract and verify checksum
         var checksum = 0
-        for (i in 0 until 8) {
-            if (bits[256 + i]) {
-                checksum = checksum or (1 shl (7 - i))
+        for (i in 0 until checksumBits) {
+            if (bits[entropyBytes * 8 + i]) {
+                checksum = checksum or (1 shl (checksumBits - 1 - i))
             }
         }
 
-        // Verify checksum
         val hash = MessageDigest.getInstance("SHA-256").digest(entropy)
-        val expectedChecksum = hash[0].toInt() and 0xFF
+        val expectedChecksum = (hash[0].toInt() and 0xFF) shr (8 - checksumBits)
         require(checksum == expectedChecksum) {
             "Invalid checksum: mnemonic may be incorrect"
         }
 
-        return entropy
+        // If entropy is shorter than 32 bytes, expand via SHA256 for ldk-node compatibility
+        return if (entropyBytes < 32) {
+            MessageDigest.getInstance("SHA-256").digest(entropy)
+        } else {
+            entropy
+        }
     }
 
     /**
@@ -137,7 +161,9 @@ object Bip39 {
      * Returns null if valid, or an error message if invalid.
      */
     fun validate(mnemonic: List<String>, context: Context): String? {
-        if (mnemonic.size != 24) return "Mnemonic must be 24 words (got ${mnemonic.size})"
+        if (mnemonic.size !in VALID_SIZES) {
+            return "Mnemonic must be 12, 15, 18, 21, or 24 words (got ${mnemonic.size})"
+        }
         return try {
             mnemonicToEntropy(mnemonic, context)
             null // Valid
