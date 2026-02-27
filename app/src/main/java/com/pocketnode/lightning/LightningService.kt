@@ -46,6 +46,7 @@ class LightningService(private val context: Context) {
     }
 
     private var node: Node? = null
+    private var watchtowerBridge: WatchtowerBridge? = null
     private var lndHubServer: LndHubServer? = null
 
     /**
@@ -94,6 +95,9 @@ class LightningService(private val context: Context) {
 
             val nodeId = ldkNode.nodeId()
             Log.i(TAG, "Lightning node started. Node ID: $nodeId")
+
+            // Initialize watchtower bridge
+            watchtowerBridge = WatchtowerBridge(context)
 
             // Start LNDHub API server for external wallet apps
             lndHubServer = LndHubServer(context).also { it.start() }
@@ -189,8 +193,32 @@ class LightningService(private val context: Context) {
             }
             n.eventHandled()
             updateState()
+
+            // Drain watchtower blobs after channel state changes
+            if (event is Event.ChannelReady || event is Event.ChannelClosed) {
+                drainWatchtowerBlobs()
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error handling events", e)
+        }
+    }
+
+    // === Watchtower ===
+
+    /**
+     * Drain pending justice blobs from ldk-node and encrypt for tower push.
+     * Called automatically after channel state changes.
+     */
+    private fun drainWatchtowerBlobs() {
+        val n = node ?: return
+        val bridge = watchtowerBridge ?: return
+        try {
+            val count = bridge.drainAndPush(n)
+            if (count > 0) {
+                Log.i(TAG, "Watchtower: processed $count justice blob(s)")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Watchtower drain failed", e)
         }
     }
 
