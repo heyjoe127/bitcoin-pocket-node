@@ -115,7 +115,7 @@ class WatchtowerBridge(private val context: Context) {
                 towerPubKeyBytes,
                 clientKey,
                 1024, // max updates per session
-                253   // sweep fee rate (sat/kweight, ~1 sat/vB)
+                2500  // sweep fee rate (sat/kweight, ~10 sat/vB) - LND min is 1000
             )
 
             if (connectResult != 0) {
