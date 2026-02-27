@@ -488,6 +488,38 @@ fun NodeStatusScreen(
                     )
                 }
 
+                // Lightning wallet card — shown when Lightning ready
+                run {
+                    val filterDir = java.io.File(LocalContext.current.filesDir, "bitcoin/indexes/blockfilter/basic")
+                    val hasFilters = filterDir.exists() && (filterDir.listFiles()?.size ?: 0) > 1
+                    if (hasFilters) {
+                        val lightningState by com.pocketnode.lightning.LightningService.stateFlow.collectAsState()
+                        Card(
+                            onClick = onNavigateToLightning,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                            )
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(
+                                    when (lightningState.status) {
+                                        com.pocketnode.lightning.LightningService.LightningState.Status.RUNNING ->
+                                            "⚡ Lightning (${lightningState.channelCount} channels)"
+                                        com.pocketnode.lightning.LightningService.LightningState.Status.STARTING ->
+                                            "⚡ Lightning Starting..."
+                                        com.pocketnode.lightning.LightningService.LightningState.Status.ERROR ->
+                                            "⚡ Lightning Error"
+                                        else -> "⚡ Lightning Wallet"
+                                    },
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
+                }
+
                 // About card
                 AboutCard()
 
@@ -1321,45 +1353,6 @@ private fun ActionButtons(
                     style = MaterialTheme.typography.labelSmall
                 )
             }
-        }
-
-        // Watchtower button — shown when Lightning is set up
-        if (hasFilters) {
-            val wtContext = LocalContext.current
-            val wtConfigured = remember {
-                com.pocketnode.service.WatchtowerManager(wtContext).isConfigured()
-            }
-            OutlinedButton(
-                onClick = onNavigateToWatchtower,
-                modifier = Modifier.fillMaxWidth(),
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)
-            ) {
-                Text(
-                    if (wtConfigured) "🛡️ Watchtower Active" else "🛡️ Set Up Watchtower",
-                    style = MaterialTheme.typography.labelSmall
-                )
-            }
-        }
-
-        // Lightning wallet button
-        val lightningState by com.pocketnode.lightning.LightningService.stateFlow.collectAsState()
-        OutlinedButton(
-            onClick = onNavigateToLightning,
-            modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)
-        ) {
-            Text(
-                when (lightningState.status) {
-                    com.pocketnode.lightning.LightningService.LightningState.Status.RUNNING ->
-                        "⚡ Lightning (${lightningState.channelCount} channels)"
-                    com.pocketnode.lightning.LightningService.LightningState.Status.STARTING ->
-                        "⚡ Lightning Starting..."
-                    com.pocketnode.lightning.LightningService.LightningState.Status.ERROR ->
-                        "⚡ Lightning Error"
-                    else -> "⚡ Lightning Wallet"
-                },
-                style = MaterialTheme.typography.labelSmall
-            )
         }
 
         Button(
