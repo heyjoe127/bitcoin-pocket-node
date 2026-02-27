@@ -157,6 +157,15 @@ fun PeerBrowserScreen(
     }
 }
 
+private fun formatSats(sats: Long): String {
+    return when {
+        sats >= 100_000_000 -> "%.2f BTC".format(sats / 100_000_000.0)
+        sats >= 1_000_000 -> "%.1fM sats".format(sats / 1_000_000.0)
+        sats >= 1_000 -> "${sats / 1_000}k sats"
+        else -> "$sats sats"
+    }
+}
+
 @Composable
 private fun NodeCard(
     node: LightningNode,
@@ -211,13 +220,22 @@ private fun NodeCard(
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
                     )
                 }
-                if (node.feeRate >= 0) {
-                    Text(
-                        "${node.feeRate} ppm",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFF4CAF50),
-                        fontWeight = FontWeight.Bold
-                    )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (node.minChannelSize > 0) {
+                        Text(
+                            "min ${formatSats(node.minChannelSize)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFFFF9800)
+                        )
+                    }
+                    if (node.feeRate >= 0) {
+                        Text(
+                            "${node.feeRate} ppm",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFF4CAF50),
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
         }

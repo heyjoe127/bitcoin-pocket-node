@@ -23,7 +23,8 @@ object NodeDirectory {
         val capacity: Long, // sats
         val sockets: String, // comma-separated ip:port addresses
         val country: String,
-        val feeRate: Long = -1 // ppm (parts per million), -1 = unknown
+        val feeRate: Long = -1, // ppm (parts per million), -1 = unknown
+        val minChannelSize: Long = -1 // sats, smallest open channel as proxy for minimum
     ) {
         /** First clearnet address, or first .onion, or empty */
         val address: String get() {
@@ -103,8 +104,11 @@ object NodeDirectory {
             val topNodes = getTopNodes(50) // over-fetch to filter
             val nodesWithFees = topNodes.mapNotNull { node ->
                 try {
-                    val feeRate = getNodeFeeRate(node.publicKey)
-                    if (feeRate >= 0) node.copy(feeRate = feeRate) else null
+                    val stats = getNodeChannelStats(node.publicKey)
+                    if (stats.medianFeeRate >= 0) node.copy(
+                        feeRate = stats.medianFeeRate,
+                        minChannelSize = stats.minChannelSize
+                    ) else null
                 } catch (_: Exception) { null }
             }
             nodesWithFees.sortedBy { it.feeRate }.take(limit)
@@ -114,22 +118,40 @@ object NodeDirectory {
         }
     }
 
-    /** Get median fee rate for a node by sampling its channels */
-    fun getNodeFeeRate(publicKey: String): Long {
+    data class ChannelStats(
+        val medianFeeRate: Long = -1, // ppm
+        val minChannelSize: Long = -1  // sats, smallest open channel
+    )
+
+    /** Get fee rate and min channel size by sampling a node's channels */
+    fun getNodeChannelStats(publicKey: String): ChannelStats {
         return try {
-            val json = fetch("$BASE_URL/channels?public_key=$publicKey&status=open&index=0&length=5")
+            // Fetch more channels and sort by capacity ascending to find smallest
+            val json = fetch("$BASE_URL/channels?public_key=$publicKey&status=open&index=0&length=20")
             val arr = JSONArray(json)
-            if (arr.length() == 0) return -1
+            if (arr.length() == 0) return ChannelStats()
             val fees = mutableListOf<Long>()
+            val sizes = mutableListOf<Long>()
             for (i in 0 until arr.length()) {
-                val feeRate = arr.getJSONObject(i).optLong("fee_rate", -1)
+                val ch = arr.getJSONObject(i)
+                val feeRate = ch.optLong("fee_rate", -1)
+                val capacity = ch.optLong("capacity", -1)
                 if (feeRate >= 0) fees.add(feeRate)
+                if (capacity > 0) sizes.add(capacity)
             }
-            if (fees.isEmpty()) -1 else fees.sorted()[fees.size / 2] // median
+            ChannelStats(
+                medianFeeRate = if (fees.isEmpty()) -1 else fees.sorted()[fees.size / 2],
+                minChannelSize = if (sizes.isEmpty()) -1 else sizes.min()
+            )
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to fetch fee rate for $publicKey", e)
-            -1
+            Log.e(TAG, "Failed to fetch channel stats for $publicKey", e)
+            ChannelStats()
         }
+    }
+
+    /** Get median fee rate for a node (convenience wrapper) */
+    fun getNodeFeeRate(publicKey: String): Long {
+        return getNodeChannelStats(publicKey).medianFeeRate
     }
 
     /** Get full node details including socket addresses */
@@ -137,15 +159,17 @@ object NodeDirectory {
         return try {
             val json = fetch("$BASE_URL/nodes/$publicKey")
             val obj = JSONObject(json)
-            val feeRate = getNodeFeeRate(obj.getString("public_key"))
+            val pk = obj.getString("public_key")
+            val stats = getNodeChannelStats(pk)
             LightningNode(
-                publicKey = obj.getString("public_key"),
+                publicKey = pk,
                 alias = obj.optString("alias", ""),
                 channels = obj.optInt("active_channel_count", 0),
                 capacity = obj.optLong("capacity", 0),
                 sockets = obj.optString("sockets", ""),
                 country = obj.optJSONObject("country")?.optString("en", "") ?: "",
-                feeRate = feeRate
+                feeRate = stats.medianFeeRate,
+                minChannelSize = stats.minChannelSize
             )
         } catch (e: Exception) {
             Log.e(TAG, "Failed to fetch node details", e)
