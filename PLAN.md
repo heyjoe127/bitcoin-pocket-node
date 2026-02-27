@@ -164,8 +164,9 @@ bitcoind ← RPC → ldk-node (in-process)
 - [x] LNDHub-compatible localhost API (:3000) for external wallet apps (BlueWallet, Zeus)
 - [x] Auto-start Lightning when bitcoind syncs (SharedPreference persistence)
 - [x] Channel status indicators (Active/Ready/Pending) with outbound capacity display
+- [ ] **Seed backup & restore**: BIP39 mnemonic display (view seed words), restore from existing mnemonic. Users must be able to back up and recover their Lightning wallet
 - [ ] Pruned node recovery: auto-detect missing blocks, temporarily grow prune window, show recovery progress, shrink back when caught up
-- [ ] Watchtower bridge: LDK-to-LND watchtower protocol (in progress, see docs/LDK-WATCHTOWER-BRIDGE.md)
+- [x] Watchtower bridge: LDK-to-LND watchtower protocol (see docs/LDK-WATCHTOWER-BRIDGE.md)
 - [ ] VLS (Validating Lightning Signer): phone holds signing keys, remote server runs always-online node
 
 **What was built:**
