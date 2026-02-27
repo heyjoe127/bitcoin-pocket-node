@@ -99,12 +99,20 @@ class LightningService(private val context: Context) {
             // Initialize watchtower bridge and set sweep address
             watchtowerBridge = WatchtowerBridge(context)
             try {
-                val sweepAddr = ldkNode.onchainPayment().newAddress()
-                // Convert bech32 address to scriptPubKey bytes
+                val prefs = context.getSharedPreferences("watchtower_prefs", MODE_PRIVATE)
+                var sweepAddr = prefs.getString("sweep_address", null)
+                if (sweepAddr == null) {
+                    // Generate once and persist -- reused across restarts so tower
+                    // blobs always sweep to an address we control
+                    sweepAddr = ldkNode.onchainPayment().newAddress()
+                    prefs.edit().putString("sweep_address", sweepAddr).apply()
+                    Log.i(TAG, "Generated new watchtower sweep address: $sweepAddr")
+                } else {
+                    Log.i(TAG, "Reusing watchtower sweep address: $sweepAddr")
+                }
                 val scriptPubKey = bech32ToScriptPubKey(sweepAddr)
                 if (scriptPubKey != null) {
                     ldkNode.watchtowerSetSweepAddress(scriptPubKey)
-                    Log.i(TAG, "Watchtower sweep address set: $sweepAddr")
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to set watchtower sweep address: ${e.message}")
