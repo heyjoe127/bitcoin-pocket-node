@@ -208,22 +208,17 @@ fun SeedBackupScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
-                    if (lightningService.isRunning()) {
-                        Text(
-                            "Stop Lightning before restoring.",
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
-
                     Button(
                         onClick = {
+                            // Auto-stop Lightning if running
+                            if (lightningService.isRunning()) {
+                                lightningService.stop()
+                            }
                             restoreInput = ""
                             restoreError = null
                             restoreSuccess = false
                             showRestoreDialog = true
-                        },
-                        enabled = !lightningService.isRunning()
+                        }
                     ) {
                         Text("Restore from Mnemonic")
                     }
@@ -256,7 +251,9 @@ fun SeedBackupScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        "Enter your seed words separated by spaces (12 or 24 words).",
+                        "Enter your seed words separated by spaces (12 or 24 words). " +
+                                "If you enter 12 words, they will be converted to a 24-word seed. " +
+                                "Use the backup screen afterward to save your new 24 words.",
                         style = MaterialTheme.typography.bodySmall
                     )
                     OutlinedTextField(
