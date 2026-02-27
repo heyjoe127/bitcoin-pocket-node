@@ -35,7 +35,8 @@ fun LightningScreen(
     onNavigateToReceive: () -> Unit = {},
     onNavigateToHistory: () -> Unit = {},
     onNavigateToOpenChannel: () -> Unit = {},
-    onNavigateToSeedBackup: () -> Unit = {}
+    onNavigateToSeedBackup: () -> Unit = {},
+    onNavigateToWatchtower: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -435,6 +436,50 @@ fun LightningScreen(
                     }
                 }
 
+                // Watchtower status card
+                val wtPrefs = remember { context.getSharedPreferences("watchtower_prefs", android.content.Context.MODE_PRIVATE) }
+                val towerConfigured = remember { wtPrefs.getString("tower_pubkey", null) != null }
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (towerConfigured)
+                            Color(0xFF1B5E20).copy(alpha = 0.15f)
+                        else MaterialTheme.colorScheme.surfaceVariant
+                    )
+                ) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (towerConfigured) {
+                            Text("🛡️ Watchtower Active", fontWeight = FontWeight.Bold, color = Color(0xFF4CAF50))
+                            Text(
+                                "Home node watches your channels when phone is offline. " +
+                                    "Justice blobs are pushed automatically after each payment.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
+                            val sshHost = wtPrefs.getString("ssh_host", "") ?: ""
+                            if (sshHost.isNotEmpty()) {
+                                Text(
+                                    "Node: $sshHost",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontFamily = FontFamily.Monospace,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                )
+                            }
+                        } else {
+                            Text("🛡️ Watchtower", fontWeight = FontWeight.Bold)
+                            Text(
+                                "Protect your channels when your phone is offline. " +
+                                    "Connect to your home node's watchtower to automatically back up channel states.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
+                        }
+                        OutlinedButton(onClick = onNavigateToWatchtower) {
+                            Text(if (towerConfigured) "Watchtower Settings" else "Set Up Watchtower")
+                        }
+                    }
+                }
             }
         }
     }

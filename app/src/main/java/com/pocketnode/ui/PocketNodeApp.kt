@@ -252,7 +252,8 @@ fun PocketNodeApp(
                     onNavigateToReceive = { navController.navigate("lightning_receive") },
                     onNavigateToHistory = { navController.navigate("lightning_history") },
                     onNavigateToOpenChannel = { navController.navigate("lightning_open_channel") },
-                    onNavigateToSeedBackup = { navController.navigate("seed_backup") }
+                    onNavigateToSeedBackup = { navController.navigate("seed_backup") },
+                    onNavigateToWatchtower = { navController.navigate("watchtower") }
                 )
             }
             composable("seed_backup") {
