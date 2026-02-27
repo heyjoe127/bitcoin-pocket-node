@@ -80,7 +80,7 @@ See [Version Selection Design](docs/VERSION-SELECTION.md) and [BIP 110 Research]
 - **Pure Kotlin Electrum server** so BlueWallet can query your own node (no native dependencies)
 - **Built-in Lightning node** powered by LDK (send, receive, channels, peer browser, seed backup/restore)
 - **LNDHub API** on localhost:3000 for external wallet connectivity (BlueWallet, Zeus)
-- **Home node watchtower** with automatic channel protection via LDK-to-LND bridge
+- **Home node watchtower** with automatic channel protection via LDK-to-LND bridge (Tor or SSH)
 - **Sovereign price discovery** using UTXOracle (BTC/USD from on-chain data, no exchange APIs)
 - **Mempool viewer** with fee estimates, projected blocks, and transaction search
 - **Wallet setup guide** for BlueWallet connection
@@ -337,7 +337,8 @@ app/src/main/java/com/pocketnode/
 - **Cellular Lightning mode:** Lightning payments on mobile data with zero blockchain bandwidth. bitcoind pauses sync, ldk-node keeps operating via localhost RPC, watchtower monitors channels at home, full sync resumes on WiFi
 - **Pruned node recovery:** Auto-detect missing blocks after extended offline, temporarily grow prune window, show recovery progress, shrink back when caught up
 - **Desktop port:** Same app on Linux, macOS, Windows via Compose Multiplatform. See [design doc](docs/DESKTOP-PORT.md)
-- **Built-in Tor (Arti):** Direct .onion connection to home node watchtower, no SSH tunnel or Orbot needed
+- **VLS (Validating Lightning Signer):** Remote signing for always-online Lightning node
+- **Phone-to-phone chainstate copy:** WiFi Direct or hotspot
 - **Power modes:** Max/Low/Away profiles with burst sync for mobile efficiency. See [design doc](docs/POWER-MODES.md)
 
 ## Tested On

@@ -171,12 +171,17 @@ For our use case (push blobs after a payment), this is fine. Payment completes i
 - **GrapheneOS**: Arti runs in-process (not a child process), so seccomp/PhantomProcess restrictions should not apply. Needs verification
 - **Binary size**: Arti pulls in a lot of crypto crates, but many overlap with what we already use (chacha20poly1305, sha2, etc.)
 
-## Estimated Effort
+## Status: IMPLEMENTED ✅
 
-- Phase 1: 1-2 days (cross-compile, verify bootstrap)
-- Phase 2: 1 day (wire into client, test)
-- Phase 3: 1 day (Android UI, fallback logic)
-- Total: 3-4 days
+Completed Feb 28, 2026. All phases done in a single session:
+
+- Phase 1: Arti 0.39.0 cross-compiled for aarch64-linux-android (rustls + static-sqlite)
+- Phase 2: BrontideTransport made generic (BoxedStream), Tor path wired into client.rs
+- Phase 3: Android integration (WatchtowerBridge.kt tries Tor first, SSH fallback)
+- **Verified on live hardware**: Pixel 9 (GrapheneOS) → Tor → .onion:9911 → LND watchtower on Umbrel
+- Binary size: 13 MB stripped (watchtower .so with Arti embedded)
+- APK size unchanged at 131 MB (compression)
+- GrapheneOS SELinux cgroup denials are cosmetic, do not affect functionality
 
 ## Grant Relevance
 
