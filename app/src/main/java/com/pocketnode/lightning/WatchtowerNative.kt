@@ -1,0 +1,64 @@
+package com.pocketnode.lightning
+
+import com.sun.jna.Library
+import com.sun.jna.Native
+import com.sun.jna.Pointer
+
+/**
+ * JNA bindings to libldk_watchtower_client.so.
+ *
+ * Provides the Noise_XK transport + LND wire protocol for pushing
+ * encrypted justice blobs to an LND watchtower.
+ */
+interface WatchtowerNative : Library {
+
+    /**
+     * Connect to an LND watchtower and establish a session.
+     *
+     * @param address Tower address as "host:port"
+     * @param towerPubkey 33-byte compressed secp256k1 public key
+     * @param clientKey 32-byte private key for this client
+     * @param maxUpdates Maximum updates per session
+     * @param sweepFeeRate Fee rate in sat/kweight for justice txs
+     * @return 0 on success, -1 on error
+     */
+    fun wtclient_connect(
+        address: String,
+        towerPubkey: ByteArray,
+        clientKey: ByteArray,
+        maxUpdates: Short,
+        sweepFeeRate: Long
+    ): Int
+
+    /**
+     * Send a single backup (encrypted justice blob) to the tower.
+     *
+     * @return 0 on success, -1 on error
+     */
+    fun wtclient_send_backup(
+        breachTxid: ByteArray,
+        revPubkey: ByteArray,
+        localDelayPubkey: ByteArray,
+        csvDelay: Int,
+        sweepAddr: ByteArray,
+        sweepAddrLen: Int,
+        toLocalSig: ByteArray,
+        toRemotePubkey: ByteArray,
+        toRemoteSig: ByteArray
+    ): Int
+
+    /** Disconnect from the tower. */
+    fun wtclient_disconnect()
+
+    /** Check if connected. Returns 1 if connected, 0 if not. */
+    fun wtclient_is_connected(): Int
+
+    /** Get remaining update slots. Returns count or -1 if not connected. */
+    fun wtclient_remaining_updates(): Int
+
+    companion object {
+        val INSTANCE: WatchtowerNative by lazy {
+            Native.load("ldk_watchtower_client", WatchtowerNative::class.java)
+        }
+    }
+}

@@ -6,9 +6,6 @@ import com.jcraft.jsch.JSch
 import com.jcraft.jsch.Session
 import org.lightningdevkit.ldknode.Node
 import org.lightningdevkit.ldknode.WatchtowerJusticeBlob
-import java.io.DataInputStream
-import java.io.DataOutputStream
-import java.net.Socket
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import javax.crypto.Cipher
@@ -88,7 +85,6 @@ class WatchtowerBridge(private val context: Context) {
         try {
             // SSH tunnel to Umbrel, forward local port to tower's onion port
             val jsch = JSch()
-            // Load SSH key if available
             val keyFile = java.io.File(context.filesDir, "ssh_key")
             if (keyFile.exists()) {
                 jsch.addIdentity(keyFile.absolutePath)
@@ -97,52 +93,69 @@ class WatchtowerBridge(private val context: Context) {
             sshSession = jsch.getSession(sshUser, sshHost, sshPort)
             sshSession.setConfig("StrictHostKeyChecking", "no")
 
-            // If we have a password saved, use it
             val sshPassword = prefs.getString("ssh_password", null)
             if (sshPassword != null) {
                 sshSession.setPassword(sshPassword)
             }
 
-            sshSession.connect(15000) // 15s timeout
+            sshSession.connect(15000)
 
-            // Forward a local port to the tower (onion address resolves on Umbrel)
+            // Forward local port to tower (onion address resolves on Umbrel via Tor)
             val towerOnion = prefs.getString("tower_onion", "127.0.0.1")!!
             localPort = sshSession.setPortForwardingL(0, towerOnion, towerPort)
             Log.i(TAG, "SSH tunnel established, local port $localPort -> $towerOnion:$towerPort")
 
-            // Connect to tower through tunnel
-            val socket = Socket("127.0.0.1", localPort)
-            socket.soTimeout = 30000 // 30s read timeout
+            // Connect native watchtower client through the tunnel
+            val clientKey = getOrCreateClientKey()
+            val towerPubKeyBytes = hexToBytes(towerPubKey)
 
-            try {
-                // TODO: Noise_XK handshake with tower public key
-                // For now, encrypt and store blobs locally for manual push
-                // The full Noise handshake requires the snow/noise library ported to Kotlin
-                // or the Rust watchtower-client cross-compiled as a separate .so
+            val native = WatchtowerNative.INSTANCE
+            val connectResult = native.wtclient_connect(
+                "127.0.0.1:$localPort",
+                towerPubKeyBytes,
+                clientKey,
+                1024, // max updates per session
+                253   // sweep fee rate (sat/kweight, ~1 sat/vB)
+            )
 
-                for (blob in blobs) {
-                    val encrypted = encryptJusticeBlob(blob)
-                    if (encrypted != null) {
-                        // Store locally until wire protocol is implemented
-                        storeEncryptedBlob(blob.breachTxid, encrypted)
-                        pushed++
-                    }
-                }
-
-                Log.i(TAG, "Encrypted $pushed blob(s) — wire protocol push pending")
-            } finally {
-                socket.close()
+            if (connectResult != 0) {
+                Log.e(TAG, "Failed to connect to watchtower via Noise_XK")
+                // Fall back to local storage
+                return encryptAndStoreLocally(blobs)
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "Watchtower push failed: ${e.message}")
-            // Still encrypt and store locally
+
+            Log.i(TAG, "Connected to LND tower via Noise_XK")
+
+            // Push each blob through the native wire protocol
             for (blob in blobs) {
-                val encrypted = encryptJusticeBlob(blob)
-                if (encrypted != null) {
-                    storeEncryptedBlob(blob.breachTxid, encrypted)
+                val result = native.wtclient_send_backup(
+                    blob.breachTxid,
+                    blob.revocationPubkey,
+                    blob.localDelayPubkey,
+                    blob.csvDelay.toInt(),
+                    blob.sweepAddress,
+                    blob.sweepAddress.size,
+                    blob.toLocalSig,
+                    blob.toRemotePubkey,
+                    blob.toRemoteSig
+                )
+                if (result == 0) {
                     pushed++
+                    Log.d(TAG, "Pushed blob to tower (${pushed}/${blobs.size})")
+                } else {
+                    Log.w(TAG, "Tower rejected blob, storing locally")
+                    val encrypted = encryptJusticeBlob(blob)
+                    if (encrypted != null) storeEncryptedBlob(blob.breachTxid, encrypted)
                 }
             }
+
+            val remaining = native.wtclient_remaining_updates()
+            Log.i(TAG, "Pushed $pushed blob(s) to tower ($remaining slots remaining)")
+
+            native.wtclient_disconnect()
+        } catch (e: Exception) {
+            Log.e(TAG, "Watchtower push failed: ${e.message}, storing locally")
+            pushed = encryptAndStoreLocally(blobs)
         } finally {
             try {
                 if (localPort > 0) sshSession?.delPortForwardingL(localPort)
@@ -151,6 +164,46 @@ class WatchtowerBridge(private val context: Context) {
         }
 
         return pushed
+    }
+
+    /**
+     * Fallback: encrypt all blobs and store locally when tower is unreachable.
+     */
+    private fun encryptAndStoreLocally(blobs: List<WatchtowerJusticeBlob>): Int {
+        var count = 0
+        for (blob in blobs) {
+            val encrypted = encryptJusticeBlob(blob)
+            if (encrypted != null) {
+                storeEncryptedBlob(blob.breachTxid, encrypted)
+                count++
+            }
+        }
+        Log.i(TAG, "Stored $count blob(s) locally (tower unreachable)")
+        return count
+    }
+
+    /**
+     * Get or create a persistent 32-byte secp256k1 private key for this client.
+     * Used as our identity when authenticating with the tower via Noise_XK.
+     */
+    private fun getOrCreateClientKey(): ByteArray {
+        val keyFile = java.io.File(context.filesDir, "watchtower_client_key")
+        if (keyFile.exists()) {
+            return keyFile.readBytes()
+        }
+        val key = ByteArray(32)
+        java.security.SecureRandom().nextBytes(key)
+        keyFile.writeBytes(key)
+        return key
+    }
+
+    private fun hexToBytes(hex: String): ByteArray {
+        val len = hex.length
+        val data = ByteArray(len / 2)
+        for (i in 0 until len step 2) {
+            data[i / 2] = ((Character.digit(hex[i], 16) shl 4) + Character.digit(hex[i + 1], 16)).toByte()
+        }
+        return data
     }
 
     /**
