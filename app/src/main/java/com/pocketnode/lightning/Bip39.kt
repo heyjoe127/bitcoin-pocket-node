@@ -161,8 +161,8 @@ object Bip39 {
      * Returns null if valid, or an error message if invalid.
      */
     fun validate(mnemonic: List<String>, context: Context): String? {
-        if (mnemonic.size !in VALID_SIZES) {
-            return "Mnemonic must be 12, 15, 18, 21, or 24 words (got ${mnemonic.size})"
+        if (mnemonic.size != 24) {
+            return "Mnemonic must be 24 words (got ${mnemonic.size})"
         }
         return try {
             mnemonicToEntropy(mnemonic, context)
