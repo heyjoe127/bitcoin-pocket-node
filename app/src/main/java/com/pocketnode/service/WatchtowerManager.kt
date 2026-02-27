@@ -64,7 +64,21 @@ class WatchtowerManager(private val context: Context) {
             .putLong(KEY_SETUP_TIME, System.currentTimeMillis())
             .apply()
 
-        Log.i(TAG, "Watchtower configured successfully (${lndInfo.nodeOs})")
+        // Also populate watchtower_prefs for WatchtowerBridge (tower pubkey, SSH details)
+        val atIndex = uri.indexOf('@')
+        val towerPubKey = if (atIndex > 0) uri.substring(0, atIndex) else uri
+        val towerOnion = if (atIndex > 0) uri.substring(atIndex + 1).replace(":9911", "") else ""
+        val sshPrefs = context.getSharedPreferences("ssh_prefs", android.content.Context.MODE_PRIVATE)
+        context.getSharedPreferences("watchtower_prefs", android.content.Context.MODE_PRIVATE).edit()
+            .putString("tower_pubkey", towerPubKey)
+            .putString("tower_onion", towerOnion)
+            .putInt("tower_port", 9911)
+            .putString("ssh_host", sshPrefs.getString("ssh_host", ""))
+            .putInt("ssh_port", sshPrefs.getInt("ssh_port", 22))
+            .putString("ssh_user", sshPrefs.getString("ssh_admin_user", ""))
+            .apply()
+
+        Log.i(TAG, "Watchtower configured successfully (${lndInfo.nodeOs}), bridge prefs set")
         return SetupResult.SUCCESS
     }
 

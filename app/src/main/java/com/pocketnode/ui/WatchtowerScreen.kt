@@ -13,7 +13,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import com.pocketnode.service.WatchtowerManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -254,6 +257,7 @@ fun WatchtowerScreen(onBack: () -> Unit) {
                 var host by remember { mutableStateOf(sshPrefs.getString("ssh_host", "") ?: "") }
                 var adminUser by remember { mutableStateOf(sshPrefs.getString("ssh_admin_user", "") ?: "") }
                 var adminPassword by remember { mutableStateOf("") }
+                var showPassword by remember { mutableStateOf(false) }
                 val savedPort = remember { sshPrefs.getInt("ssh_port", 22) }
                 var checking by remember { mutableStateOf(false) }
                 var checkResult by remember { mutableStateOf("") }
@@ -280,7 +284,15 @@ fun WatchtowerScreen(onBack: () -> Unit) {
                     label = { Text("Admin password") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
-                    visualTransformation = PasswordVisualTransformation()
+                    visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { showPassword = !showPassword }) {
+                            Icon(
+                                if (showPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                contentDescription = if (showPassword) "Hide" else "Show"
+                            )
+                        }
+                    }
                 )
 
                 Button(
@@ -302,6 +314,12 @@ fun WatchtowerScreen(onBack: () -> Unit) {
                                 WatchtowerManager.SetupResult.SUCCESS -> {
                                     isConfigured = true
                                     checkResult = ""
+                                    // Save host and username for next time
+                                    sshPrefs.edit()
+                                        .putString("ssh_host", host)
+                                        .putString("ssh_admin_user", adminUser)
+                                        .putInt("ssh_port", savedPort)
+                                        .apply()
                                 }
                                 WatchtowerManager.SetupResult.NOT_ENABLED ->
                                     checkResult = "Watchtower not enabled. Enable it in Lightning → Advanced → Watchtower on your node, then retry."
@@ -346,6 +364,9 @@ fun WatchtowerScreen(onBack: () -> Unit) {
                     }
                 }
             }
+
+            // Keyboard spacer
+            Spacer(Modifier.height(200.dp))
         }
     }
 }
