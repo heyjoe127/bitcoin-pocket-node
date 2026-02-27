@@ -84,6 +84,13 @@ fun PeerBrowserScreen(
                 }
             }
 
+            Text(
+                "Data from mempool.space (the only external service used by this app)",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+            )
+
             // Search bar (visible on Search tab)
             if (selectedTab == 3) {
                 Row(
