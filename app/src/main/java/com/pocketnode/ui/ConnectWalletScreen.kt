@@ -22,6 +22,7 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.pocketnode.service.BitcoindService
 import com.pocketnode.service.ElectrumService
 
 /**
@@ -34,6 +35,7 @@ fun ConnectWalletScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val electrumState by ElectrumService.stateFlow.collectAsState()
     val electrumRunning by ElectrumService.isRunningFlow.collectAsState()
+    val nodeRunning by BitcoindService.isRunningFlow.collectAsState()
 
     var showAddXpub by remember { mutableStateOf(false) }
     var showAddAddress by remember { mutableStateOf(false) }
@@ -160,8 +162,7 @@ fun ConnectWalletScreen(onBack: () -> Unit) {
                         Text(
                             "Connect any Neutrino-compatible Lightning wallet. " +
                             "Note: pruned nodes advertise NODE_NETWORK_LIMITED, so Neutrino clients " +
-                            "may sync via internet peers instead of localhost. " +
-                            "Native LDK integration coming soon.",
+                            "may sync via internet peers instead of localhost.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                         )
@@ -175,7 +176,7 @@ fun ConnectWalletScreen(onBack: () -> Unit) {
                 colors = CardDefaults.cardColors(
                     containerColor = when (electrumState.status) {
                         ElectrumService.ElectrumState.Status.RUNNING -> Color(0xFF1B5E20).copy(alpha = 0.2f)
-                        ElectrumService.ElectrumState.Status.ERROR -> MaterialTheme.colorScheme.errorContainer
+                        ElectrumService.ElectrumState.Status.ERROR -> if (nodeRunning) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surfaceVariant
                         else -> MaterialTheme.colorScheme.surfaceVariant
                     }
                 )
@@ -188,7 +189,7 @@ fun ConnectWalletScreen(onBack: () -> Unit) {
                             ElectrumService.ElectrumState.Status.RUNNING -> "Running" to Color(0xFF4CAF50)
                             ElectrumService.ElectrumState.Status.STARTING -> "Starting..." to Color(0xFFFF9800)
                             ElectrumService.ElectrumState.Status.SYNCING -> "Syncing ${(electrumState.syncProgress * 100).toInt()}%" to Color(0xFFFF9800)
-                            ElectrumService.ElectrumState.Status.ERROR -> "Error" to MaterialTheme.colorScheme.error
+                            ElectrumService.ElectrumState.Status.ERROR -> if (!nodeRunning) "Waiting for node..." to Color(0xFFFF9800) else "Error" to MaterialTheme.colorScheme.error
                             ElectrumService.ElectrumState.Status.STOPPED -> "Stopped" to MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                         }
                         Text("●", color = statusColor)
