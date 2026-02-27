@@ -247,6 +247,24 @@ fun PocketNodeApp(
             }
             composable("lightning") {
                 LightningScreen(
+                    onNavigateBack = { navController.popBackStack() },
+                    onNavigateToSend = { navController.navigate("lightning_send") },
+                    onNavigateToReceive = { navController.navigate("lightning_receive") },
+                    onNavigateToHistory = { navController.navigate("lightning_history") }
+                )
+            }
+            composable("lightning_send") {
+                com.pocketnode.ui.lightning.SendPaymentScreen(
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+            composable("lightning_receive") {
+                com.pocketnode.ui.lightning.ReceivePaymentScreen(
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+            composable("lightning_history") {
+                com.pocketnode.ui.lightning.PaymentHistoryScreen(
                     onNavigateBack = { navController.popBackStack() }
                 )
             }

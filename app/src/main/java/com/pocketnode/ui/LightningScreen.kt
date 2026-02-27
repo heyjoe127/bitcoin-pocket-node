@@ -27,7 +27,10 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LightningScreen(
-    onNavigateBack: () -> Unit = {}
+    onNavigateBack: () -> Unit = {},
+    onNavigateToSend: () -> Unit = {},
+    onNavigateToReceive: () -> Unit = {},
+    onNavigateToHistory: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -141,6 +144,35 @@ fun LightningScreen(
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
                 ) {
                     Text("Stop Lightning Node")
+                }
+            }
+
+            // Action buttons — shown when running
+            if (lightningState.status == LightningService.LightningState.Status.RUNNING) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = onNavigateToSend,
+                        modifier = Modifier.weight(1f).height(48.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800))
+                    ) {
+                        Text("⬆️ Send")
+                    }
+                    Button(
+                        onClick = onNavigateToReceive,
+                        modifier = Modifier.weight(1f).height(48.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
+                    ) {
+                        Text("⬇️ Receive")
+                    }
+                }
+                OutlinedButton(
+                    onClick = onNavigateToHistory,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Payment History")
                 }
             }
 

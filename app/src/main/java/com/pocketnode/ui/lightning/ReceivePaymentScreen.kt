@@ -1,0 +1,209 @@
+package com.pocketnode.ui.lightning
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.dp
+import com.pocketnode.lightning.LightningService
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+/**
+ * Generate a BOLT11 invoice to receive a Lightning payment.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ReceivePaymentScreen(
+    onNavigateBack: () -> Unit = {}
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val clipboardManager = LocalClipboardManager.current
+    val lightning = remember { LightningService.getInstance(context) }
+
+    var amountSats by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf("") }
+    var generating by remember { mutableStateOf(false) }
+    var invoice by remember { mutableStateOf<String?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var copied by remember { mutableStateOf(false) }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Receive Payment") },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(Icons.Default.ArrowBack, "Back")
+                    }
+                }
+            )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(horizontal = 20.dp, vertical = 12.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // Amount input
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("Create Invoice", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(12.dp))
+
+                    OutlinedTextField(
+                        value = amountSats,
+                        onValueChange = {
+                            amountSats = it.filter { c -> c.isDigit() }
+                            invoice = null
+                            error = null
+                            copied = false
+                        },
+                        label = { Text("Amount (sats)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true
+                    )
+
+                    Spacer(Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = description,
+                        onValueChange = {
+                            description = it
+                            invoice = null
+                            error = null
+                            copied = false
+                        },
+                        label = { Text("Description (optional)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                }
+            }
+
+            // Generate button
+            Button(
+                onClick = {
+                    val sats = amountSats.toLongOrNull()
+                    if (sats == null || sats <= 0) {
+                        error = "Enter a valid amount in sats"
+                        return@Button
+                    }
+                    generating = true
+                    error = null
+                    invoice = null
+                    scope.launch {
+                        withContext(Dispatchers.IO) {
+                            lightning.createInvoice(
+                                amountMsat = sats * 1000, // sats to msats
+                                description = description.ifBlank { "Bitcoin Pocket Node" }
+                            )
+                        }.onSuccess {
+                            invoice = it
+                            generating = false
+                        }.onFailure {
+                            error = it.message ?: "Failed to create invoice"
+                            generating = false
+                        }
+                    }
+                },
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                enabled = !generating && amountSats.isNotBlank(),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800))
+            ) {
+                if (generating) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        color = Color.White,
+                        strokeWidth = 2.dp
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text("Generating...")
+                } else {
+                    Text("⚡ Generate Invoice")
+                }
+            }
+
+            // Invoice display
+            if (invoice != null) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("Invoice", style = MaterialTheme.typography.titleSmall)
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "Share this invoice with the sender. It expires in 1 hour.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                        Spacer(Modifier.height(12.dp))
+
+                        // Invoice text (truncated display, full copy)
+                        Text(
+                            invoice!!,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontFamily = FontFamily.Monospace,
+                            maxLines = 6
+                        )
+
+                        Spacer(Modifier.height(12.dp))
+
+                        Button(
+                            onClick = {
+                                clipboardManager.setText(AnnotatedString(invoice!!))
+                                copied = true
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (copied) Color(0xFF4CAF50) else Color(0xFFFF9800)
+                            )
+                        ) {
+                            Icon(Icons.Default.ContentCopy, "Copy", modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(if (copied) "Copied!" else "Copy Invoice")
+                        }
+                    }
+                }
+            }
+
+            // Error
+            if (error != null) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+                ) {
+                    Text(
+                        error!!,
+                        modifier = Modifier.padding(16.dp),
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            }
+        }
+    }
+}
