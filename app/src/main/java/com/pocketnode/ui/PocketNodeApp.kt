@@ -90,6 +90,7 @@ fun PocketNodeApp(
                                 onNavigateToWallet = { navController.navigate("connect_wallet") },
                                 onNavigateToBlockFilter = { navController.navigate("block_filter") },
                                 onNavigateToWatchtower = { navController.navigate("watchtower") },
+                                onNavigateToLightning = { navController.navigate("lightning") },
                                 mempoolPaneVisible = true
                             )
                         }
@@ -119,7 +120,8 @@ fun PocketNodeApp(
                     onNavigateToNodeAccess = { navController.navigate("node_access") },
                     onNavigateToWallet = { navController.navigate("connect_wallet") },
                     onNavigateToBlockFilter = { navController.navigate("block_filter") },
-                    onNavigateToWatchtower = { navController.navigate("watchtower") }
+                    onNavigateToWatchtower = { navController.navigate("watchtower") },
+                    onNavigateToLightning = { navController.navigate("lightning") }
                 )
                 }
             }
@@ -241,6 +243,11 @@ fun PocketNodeApp(
             composable("watchtower") {
                 WatchtowerScreen(
                     onBack = { navController.popBackStack() }
+                )
+            }
+            composable("lightning") {
+                LightningScreen(
+                    onNavigateBack = { navController.popBackStack() }
                 )
             }
             composable("block_filter") {

@@ -65,6 +65,7 @@ fun NodeStatusScreen(
     onNavigateToWallet: () -> Unit = {},
     onNavigateToBlockFilter: () -> Unit = {},
     onNavigateToWatchtower: () -> Unit = {},
+    onNavigateToLightning: () -> Unit = {},
     mempoolPaneVisible: Boolean = false
 ) {
     val context = LocalContext.current
@@ -498,6 +499,7 @@ fun NodeStatusScreen(
                     onNavigateToWallet = onNavigateToWallet,
                     onNavigateToBlockFilter = onNavigateToBlockFilter,
                     onNavigateToWatchtower = onNavigateToWatchtower,
+                    onNavigateToLightning = onNavigateToLightning,
                     mempoolPaneVisible = mempoolPaneVisible,
                     onToggleNode = {
                         if (isRunning) {
@@ -860,6 +862,7 @@ private fun ActionButtons(
     onNavigateToWallet: () -> Unit = {},
     onNavigateToBlockFilter: () -> Unit = {},
     onNavigateToWatchtower: () -> Unit = {},
+    onNavigateToLightning: () -> Unit = {},
     mempoolPaneVisible: Boolean = false,
     onToggleNode: () -> Unit
 ) {
@@ -1327,6 +1330,27 @@ private fun ActionButtons(
                     style = MaterialTheme.typography.labelSmall
                 )
             }
+        }
+
+        // Lightning wallet button
+        val lightningState by com.pocketnode.lightning.LightningService.stateFlow.collectAsState()
+        OutlinedButton(
+            onClick = onNavigateToLightning,
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)
+        ) {
+            Text(
+                when (lightningState.status) {
+                    com.pocketnode.lightning.LightningService.LightningState.Status.RUNNING ->
+                        "⚡ Lightning (${lightningState.channelCount} channels)"
+                    com.pocketnode.lightning.LightningService.LightningState.Status.STARTING ->
+                        "⚡ Lightning Starting..."
+                    com.pocketnode.lightning.LightningService.LightningState.Status.ERROR ->
+                        "⚡ Lightning Error"
+                    else -> "⚡ Lightning Wallet"
+                },
+                style = MaterialTheme.typography.labelSmall
+            )
         }
 
         Button(
