@@ -302,10 +302,10 @@ fun ConnectWalletScreen(onBack: () -> Unit) {
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text("⚡ Lightning Wallet (LNDHub)", fontWeight = FontWeight.Bold)
+                    Text("⚡ External Lightning Wallet", fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "Connect BlueWallet or Zeus (LNDHub mode) to your Lightning node.",
+                        "Connect an external wallet app like BlueWallet or Zeus to your Lightning node via LNDHub. Copy the URL below into the external app.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )

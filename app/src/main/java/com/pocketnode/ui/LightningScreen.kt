@@ -468,8 +468,7 @@ fun LightningScreen(
                         if (towerConfigured) {
                             Text("🛡️ Watchtower Active", fontWeight = FontWeight.Bold, color = Color(0xFF4CAF50))
                             Text(
-                                "Home node watches your channels when phone is offline. " +
-                                    "Justice blobs are pushed automatically after each payment.",
+                                "Your wallet is automatically protected. Your home node watches your channels when this phone is offline and justice data is pushed after each payment.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                             )
