@@ -181,14 +181,6 @@ fun LightningScreen(
                         Text("Restore existing wallet from seed words")
                     }
                 }
-            } else if (lightningState.status == LightningService.LightningState.Status.RUNNING) {
-                OutlinedButton(
-                    onClick = { lightning.stop() },
-                    modifier = Modifier.fillMaxWidth().height(48.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                ) {
-                    Text("Stop Lightning Node")
-                }
             }
 
             // Action buttons — shown when running
@@ -217,12 +209,6 @@ fun LightningScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text("Payment History")
-                }
-                OutlinedButton(
-                    onClick = onNavigateToSeedBackup,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("\uD83D\uDD11 Wallet Seed Backup")
                 }
             }
 
@@ -509,6 +495,23 @@ fun LightningScreen(
                             Text(if (towerConfigured) "Watchtower Settings" else "Set Up Watchtower")
                         }
                     }
+                }
+
+                // Wallet backup
+                OutlinedButton(
+                    onClick = onNavigateToSeedBackup,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("\uD83D\uDD11 Wallet Backup")
+                }
+
+                // Stop node
+                OutlinedButton(
+                    onClick = { lightning.stop() },
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Stop Lightning Node")
                 }
             }
         }
