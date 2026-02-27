@@ -75,7 +75,7 @@ class WatchtowerBridge(private val context: Context) {
             val rpcPort = prefs.getInt("rpc_port", 8332)
             val rpcUser = prefs.getString("rpc_user", "pocketnode") ?: "pocketnode"
             val rpcPass = prefs.getString("rpc_password", "") ?: ""
-            val rpc = BitcoinRpcClient("127.0.0.1", rpcPort, rpcUser, rpcPass)
+            val rpc = BitcoinRpcClient(rpcUser, rpcPass, "127.0.0.1", rpcPort)
 
             val result = runBlocking {
                 rpc.call("estimatesmartfee", JSONArray().put(6))

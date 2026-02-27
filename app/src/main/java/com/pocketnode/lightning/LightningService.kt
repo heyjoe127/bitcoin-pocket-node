@@ -96,8 +96,19 @@ class LightningService(private val context: Context) {
             val nodeId = ldkNode.nodeId()
             Log.i(TAG, "Lightning node started. Node ID: $nodeId")
 
-            // Initialize watchtower bridge
+            // Initialize watchtower bridge and set sweep address
             watchtowerBridge = WatchtowerBridge(context)
+            try {
+                val sweepAddr = ldkNode.onchainPayment().newAddress()
+                // Convert bech32 address to scriptPubKey bytes
+                val scriptPubKey = bech32ToScriptPubKey(sweepAddr)
+                if (scriptPubKey != null) {
+                    ldkNode.watchtowerSetSweepAddress(scriptPubKey)
+                    Log.i(TAG, "Watchtower sweep address set: $sweepAddr")
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to set watchtower sweep address: ${e.message}")
+            }
 
             // Start LNDHub API server for external wallet apps
             lndHubServer = LndHubServer(context).also { it.start() }
@@ -194,8 +205,10 @@ class LightningService(private val context: Context) {
             n.eventHandled()
             updateState()
 
-            // Drain watchtower blobs after channel state changes
-            if (event is Event.ChannelReady || event is Event.ChannelClosed) {
+            // Drain watchtower blobs after any channel state change.
+            // Every payment creates a new commitment tx that needs tower backup.
+            if (event is Event.ChannelReady || event is Event.ChannelClosed
+                || event is Event.PaymentSuccessful || event is Event.PaymentReceived) {
                 drainWatchtowerBlobs()
             }
         } catch (e: Exception) {
@@ -212,14 +225,17 @@ class LightningService(private val context: Context) {
     private fun drainWatchtowerBlobs() {
         val n = node ?: return
         val bridge = watchtowerBridge ?: return
-        try {
-            val count = bridge.drainAndPush(n)
-            if (count > 0) {
-                Log.i(TAG, "Watchtower: processed $count justice blob(s)")
+        // Run on background thread -- involves SSH tunnel + network I/O
+        Thread {
+            try {
+                val count = bridge.drainAndPush(n)
+                if (count > 0) {
+                    Log.i(TAG, "Watchtower: pushed $count justice blob(s) to tower")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Watchtower drain failed: ${e.message}")
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "Watchtower drain failed", e)
-        }
+        }.start()
     }
 
     // === Channel operations ===
@@ -344,4 +360,61 @@ class LightningService(private val context: Context) {
     }
 
     fun isRunning(): Boolean = node != null
+
+    /**
+     * Convert a bech32/bech32m address to its witness scriptPubKey.
+     * Supports p2wpkh (bc1q..., 20 bytes) and p2tr (bc1p..., 32 bytes).
+     */
+    private fun bech32ToScriptPubKey(address: String): ByteArray? {
+        return try {
+            val lower = address.lowercase()
+            val hrpEnd = lower.lastIndexOf('1')
+            if (hrpEnd < 1) return null
+
+            val data = lower.substring(hrpEnd + 1)
+            // Decode bech32 data part to 5-bit values
+            val charset = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
+            val values = data.map { charset.indexOf(it) }.filter { it >= 0 }
+            if (values.size < 8) return null // too short (need checksum + data)
+
+            // Strip the 6-char checksum
+            val payload = values.dropLast(6)
+            if (payload.isEmpty()) return null
+
+            val witnessVersion = payload[0]
+            // Convert remaining 5-bit values to 8-bit
+            val program = convertBits(payload.drop(1), 5, 8, false) ?: return null
+
+            // Build scriptPubKey: [witness_version] [push_length] [program]
+            val script = ByteArray(2 + program.size)
+            script[0] = if (witnessVersion == 0) 0x00 else (0x50 + witnessVersion).toByte()
+            script[1] = program.size.toByte()
+            program.forEachIndexed { i, b -> script[2 + i] = b }
+            script
+        } catch (e: Exception) {
+            Log.e(TAG, "bech32 decode failed: ${e.message}")
+            null
+        }
+    }
+
+    private fun convertBits(data: List<Int>, fromBits: Int, toBits: Int, pad: Boolean): ByteArray? {
+        var acc = 0
+        var bits = 0
+        val result = mutableListOf<Byte>()
+        val maxv = (1 shl toBits) - 1
+        for (value in data) {
+            acc = (acc shl fromBits) or value
+            bits += fromBits
+            while (bits >= toBits) {
+                bits -= toBits
+                result.add(((acc shr bits) and maxv).toByte())
+            }
+        }
+        if (pad && bits > 0) {
+            result.add(((acc shl (toBits - bits)) and maxv).toByte())
+        } else if (bits >= fromBits || ((acc shl (toBits - bits)) and maxv) != 0) {
+            return null
+        }
+        return result.toByteArray()
+    }
 }
