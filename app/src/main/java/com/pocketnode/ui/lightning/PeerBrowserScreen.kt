@@ -37,16 +37,17 @@ fun PeerBrowserScreen(
     var nodes by remember { mutableStateOf<List<LightningNode>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var selectedTab by remember { mutableStateOf(0) }
-    val tabs = listOf("Most Connected", "Largest", "Search")
+    val tabs = listOf("Most Connected", "Largest", "Lowest Fee", "Search")
 
     // Load initial data
     LaunchedEffect(selectedTab) {
-        if (selectedTab < 2) {
+        if (selectedTab < 3) {
             loading = true
             nodes = withContext(Dispatchers.IO) {
                 when (selectedTab) {
                     0 -> NodeDirectory.getTopNodes(30)
                     1 -> NodeDirectory.getTopByCapacity(30)
+                    2 -> NodeDirectory.getTopByLowestFee(20)
                     else -> emptyList()
                 }
             }
@@ -83,7 +84,7 @@ fun PeerBrowserScreen(
             }
 
             // Search bar (visible on Search tab)
-            if (selectedTab == 2) {
+            if (selectedTab == 3) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -123,7 +124,7 @@ fun PeerBrowserScreen(
             } else if (nodes.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
-                        if (selectedTab == 2) "Search for a node by name or pubkey" else "No nodes found",
+                        if (selectedTab == 3) "Search for a node by name or pubkey" else "No nodes found",
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                     )
                 }
@@ -199,12 +200,25 @@ private fun NodeCard(
                     )
                 }
             }
-            if (node.country.isNotEmpty()) {
-                Text(
-                    node.country,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
-                )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                if (node.country.isNotEmpty()) {
+                    Text(
+                        node.country,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                    )
+                }
+                if (node.feeRate >= 0) {
+                    Text(
+                        "${node.feeRate} ppm",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFF4CAF50),
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
         }
     }
