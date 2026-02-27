@@ -82,8 +82,12 @@ class LightningService(private val context: Context) {
             // Gossip: Rapid Gossip Sync for mobile efficiency
             builder.setGossipSourceRgs(RGS_URL)
 
+            // Entropy: read or generate seed in storage dir
+            val seedPath = File(storageDir, "keys_seed").absolutePath
+            val entropy = NodeEntropy.fromSeedPath(seedPath)
+
             // Build and start
-            val ldkNode = builder.build()
+            val ldkNode = builder.build(entropy)
             ldkNode.start()
 
             node = ldkNode

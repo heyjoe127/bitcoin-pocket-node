@@ -76,8 +76,10 @@ dependencies {
     // JSON parsing for RPC
     implementation("org.json:json:20231013")
 
-    // Lightning (LDK Node)
-    implementation("org.lightningdevkit:ldk-node-android:0.7.0")
+    // Lightning (LDK Node) — local AAR with watchtower support
+    implementation(files("libs/ldk-node-android-0.7.0-watchtower.aar"))
+    implementation("net.java.dev.jna:jna:5.12.0@aar")
+    implementation("org.slf4j:slf4j-api:1.7.30")
 
     // SSH/SFTP
     implementation("com.jcraft:jsch:0.1.55")
