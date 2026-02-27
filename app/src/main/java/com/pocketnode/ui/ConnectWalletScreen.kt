@@ -98,78 +98,6 @@ fun ConnectWalletScreen(onBack: () -> Unit) {
                 }
             }
 
-            // LNDHub card — connect external Lightning wallets
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("⚡ Lightning Wallet (LNDHub)", fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        "Connect BlueWallet or Zeus (LNDHub mode) to your Lightning node.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                    )
-                    Spacer(Modifier.height(12.dp))
-
-                    val lndhubUrl = "lndhub://pocketnode:pocketnode@http://127.0.0.1:${com.pocketnode.lightning.LndHubServer.PORT}"
-                    Text("LNDHub URL", style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
-                    Text(
-                        lndhubUrl,
-                        style = MaterialTheme.typography.bodySmall,
-                        fontFamily = FontFamily.Monospace,
-                        maxLines = 2
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedButton(
-                        onClick = { connClip.setText(AnnotatedString(lndhubUrl)) },
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
-                    ) {
-                        Icon(Icons.Outlined.ContentCopy, "Copy", modifier = Modifier.size(14.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("Copy LNDHub URL", style = MaterialTheme.typography.labelSmall)
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        "BlueWallet: Add Wallet \u2192 Import Wallet \u2192 paste URL.\nZeus: Settings \u2192 Add node \u2192 LNDHub \u2192 paste URL.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                    )
-                }
-            }
-
-            // Lightning / Neutrino card (only when block filters installed)
-            val filterDir = context.filesDir.resolve("bitcoin/indexes/blockfilter/basic")
-            val hasFilters = filterDir.exists() && (filterDir.listFiles()?.any { it.name.startsWith("fltr") } == true)
-            if (hasFilters) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = Color(0xFFFFB300).copy(alpha = 0.15f)
-                    )
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text("⚡ Lightning (BIP 157/158)", fontWeight = FontWeight.Bold)
-                        Spacer(Modifier.height(8.dp))
-                        CopyableValue("Host", "127.0.0.1", connClip)
-                        CopyableValue("Port", "8333", connClip)
-                        Text("Compact block filters enabled",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            "Connect any Neutrino-compatible Lightning wallet. " +
-                            "Note: pruned nodes advertise NODE_NETWORK_LIMITED, so Neutrino clients " +
-                            "may sync via internet peers instead of localhost.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                        )
-                    }
-                }
-            }
-
             // Electrum Server card
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -368,7 +296,77 @@ fun ConnectWalletScreen(onBack: () -> Unit) {
                 }
             }
 
-            // Privacy note moved into Connection Details card
+            // LNDHub card — connect external Lightning wallets
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("⚡ Lightning Wallet (LNDHub)", fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Connect BlueWallet or Zeus (LNDHub mode) to your Lightning node.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                    Spacer(Modifier.height(12.dp))
+
+                    val lndhubUrl = "lndhub://pocketnode:pocketnode@http://127.0.0.1:${com.pocketnode.lightning.LndHubServer.PORT}"
+                    Text("LNDHub URL", style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                    Text(
+                        lndhubUrl,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = FontFamily.Monospace,
+                        maxLines = 2
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = { connClip.setText(AnnotatedString(lndhubUrl)) },
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                    ) {
+                        Icon(Icons.Outlined.ContentCopy, "Copy", modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Copy LNDHub URL", style = MaterialTheme.typography.labelSmall)
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "BlueWallet: Add Wallet \u2192 Import Wallet \u2192 paste URL.\nZeus: Settings \u2192 Add node \u2192 LNDHub \u2192 paste URL.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                    )
+                }
+            }
+
+            // Lightning / Neutrino card (only when block filters installed)
+            val filterDir = context.filesDir.resolve("bitcoin/indexes/blockfilter/basic")
+            val hasFilters = filterDir.exists() && (filterDir.listFiles()?.any { it.name.startsWith("fltr") } == true)
+            if (hasFilters) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(0xFFFFB300).copy(alpha = 0.15f)
+                    )
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("⚡ Lightning (BIP 157/158)", fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.height(8.dp))
+                        CopyableValue("Host", "127.0.0.1", connClip)
+                        CopyableValue("Port", "8333", connClip)
+                        Text("Compact block filters enabled",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "Connect any Neutrino-compatible Lightning wallet. " +
+                            "Note: pruned nodes advertise NODE_NETWORK_LIMITED, so Neutrino clients " +
+                            "may sync via internet peers instead of localhost.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        )
+                    }
+                }
+            }
         }
     }
 
