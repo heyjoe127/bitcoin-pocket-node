@@ -1,6 +1,7 @@
 package com.pocketnode.lightning
 
 import android.content.Context
+import android.content.Context.MODE_PRIVATE
 import android.util.Log
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -94,6 +95,10 @@ class LightningService(private val context: Context) {
             lndHubServer = LndHubServer(context).also { it.start() }
             Log.i(TAG, "LNDHub server started on localhost:${LndHubServer.PORT}")
 
+            // Save running state for auto-start on next boot
+            context.getSharedPreferences("pocketnode_prefs", Context.MODE_PRIVATE)
+                .edit().putBoolean("lightning_was_running", true).apply()
+
             updateState()
 
         } catch (e: Exception) {
@@ -113,6 +118,9 @@ class LightningService(private val context: Context) {
             lndHubServer?.stop()
             lndHubServer = null
             node?.stop()
+            // Clear auto-start flag
+            context.getSharedPreferences("pocketnode_prefs", MODE_PRIVATE)
+                .edit().putBoolean("lightning_was_running", false).apply()
             Log.i(TAG, "Lightning node stopped")
         } catch (e: Exception) {
             Log.e(TAG, "Error stopping Lightning node", e)
