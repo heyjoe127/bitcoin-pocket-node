@@ -1,7 +1,9 @@
 package com.pocketnode.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -10,6 +12,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
@@ -250,27 +253,120 @@ fun LightningScreen(
                                 }
                             }
 
-                            // Channel list
+                            // Channel list — tap to close
                             Spacer(Modifier.height(12.dp))
                             val channels = remember(lightningState) { lightning.listChannels() }
+                            var selectedChannel by remember { mutableStateOf<org.lightningdevkit.ldknode.ChannelDetails?>(null) }
                             channels.forEach { ch ->
                                 Divider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
-                                Spacer(Modifier.height(8.dp))
                                 Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .clickable { selectedChannel = ch }
+                                        .padding(vertical = 10.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text(
-                                        ch.counterpartyNodeId.take(12) + "...",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        fontFamily = FontFamily.Monospace
-                                    )
-                                    Text(
-                                        "${"%,d".format(ch.channelValueSats.toLong())} sats",
-                                        style = MaterialTheme.typography.bodySmall
-                                    )
+                                    Column {
+                                        Text(
+                                            ch.counterpartyNodeId.take(12) + "...",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            fontFamily = FontFamily.Monospace
+                                        )
+                                        val status = when {
+                                            ch.isUsable -> "Active"
+                                            ch.isChannelReady -> "Ready"
+                                            else -> "Pending"
+                                        }
+                                        val statusColor = when {
+                                            ch.isUsable -> Color(0xFF4CAF50)
+                                            ch.isChannelReady -> Color(0xFFFF9800)
+                                            else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                        }
+                                        Text(status, style = MaterialTheme.typography.labelSmall, color = statusColor)
+                                    }
+                                    Column(horizontalAlignment = Alignment.End) {
+                                        Text(
+                                            "${"%,d".format(ch.channelValueSats.toLong())} sats",
+                                            style = MaterialTheme.typography.bodySmall
+                                        )
+                                        val outbound = ch.outboundCapacityMsat.toLong() / 1000
+                                        Text(
+                                            "can send ${"%,d".format(outbound)}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                        )
+                                    }
                                 }
-                                Spacer(Modifier.height(8.dp))
+                            }
+
+                            // Close channel dialog
+                            selectedChannel?.let { ch ->
+                                var closing by remember { mutableStateOf(false) }
+                                var closeError by remember { mutableStateOf<String?>(null) }
+                                AlertDialog(
+                                    onDismissRequest = { if (!closing) selectedChannel = null },
+                                    title = { Text("Channel Options") },
+                                    text = {
+                                        Column {
+                                            Text(
+                                                ch.counterpartyNodeId,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                fontFamily = FontFamily.Monospace,
+                                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                            )
+                                            Spacer(Modifier.height(8.dp))
+                                            Text("${"%,d".format(ch.channelValueSats.toLong())} sats capacity")
+                                            if (closeError != null) {
+                                                Spacer(Modifier.height(8.dp))
+                                                Text(closeError!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                                            }
+                                            if (closing) {
+                                                Spacer(Modifier.height(8.dp))
+                                                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                                            }
+                                        }
+                                    },
+                                    confirmButton = {
+                                        // Cooperative close
+                                        TextButton(
+                                            onClick = {
+                                                closing = true
+                                                closeError = null
+                                                scope.launch {
+                                                    lightning.closeChannel(ch.userChannelId, ch.counterpartyNodeId)
+                                                        .onSuccess { selectedChannel = null }
+                                                        .onFailure { closing = false; closeError = it.message }
+                                                }
+                                            },
+                                            enabled = !closing
+                                        ) { Text("Close") }
+                                    },
+                                    dismissButton = {
+                                        Row {
+                                            // Force close
+                                            TextButton(
+                                                onClick = {
+                                                    closing = true
+                                                    closeError = null
+                                                    scope.launch {
+                                                        lightning.forceCloseChannel(ch.userChannelId, ch.counterpartyNodeId)
+                                                            .onSuccess { selectedChannel = null }
+                                                            .onFailure { closing = false; closeError = it.message }
+                                                    }
+                                                },
+                                                enabled = !closing,
+                                                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                                            ) { Text("Force Close") }
+                                            // Cancel
+                                            TextButton(
+                                                onClick = { selectedChannel = null },
+                                                enabled = !closing
+                                            ) { Text("Cancel") }
+                                        }
+                                    }
+                                )
                             }
 
                             Spacer(Modifier.height(4.dp))

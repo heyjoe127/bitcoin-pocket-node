@@ -221,13 +221,6 @@ private fun NodeCard(
                     )
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (node.minChannelSize > 0) {
-                        Text(
-                            "min ${formatSats(node.minChannelSize)}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFFFF9800)
-                        )
-                    }
                     if (node.feeRate >= 0) {
                         Text(
                             "${node.feeRate} ppm",
