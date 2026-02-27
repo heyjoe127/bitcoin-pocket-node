@@ -251,7 +251,14 @@ fun PocketNodeApp(
                     onNavigateToSend = { navController.navigate("lightning_send") },
                     onNavigateToReceive = { navController.navigate("lightning_receive") },
                     onNavigateToHistory = { navController.navigate("lightning_history") },
-                    onNavigateToOpenChannel = { navController.navigate("lightning_open_channel") }
+                    onNavigateToOpenChannel = { navController.navigate("lightning_open_channel") },
+                    onNavigateToSeedBackup = { navController.navigate("seed_backup") }
+                )
+            }
+            composable("seed_backup") {
+                com.pocketnode.ui.lightning.SeedBackupScreen(
+                    lightningService = com.pocketnode.lightning.LightningService.getInstance(context),
+                    onBack = { navController.popBackStack() }
                 )
             }
             composable("lightning_send") {

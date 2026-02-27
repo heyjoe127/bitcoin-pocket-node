@@ -34,7 +34,8 @@ fun LightningScreen(
     onNavigateToSend: () -> Unit = {},
     onNavigateToReceive: () -> Unit = {},
     onNavigateToHistory: () -> Unit = {},
-    onNavigateToOpenChannel: () -> Unit = {}
+    onNavigateToOpenChannel: () -> Unit = {},
+    onNavigateToSeedBackup: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -177,6 +178,12 @@ fun LightningScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text("Payment History")
+                }
+                OutlinedButton(
+                    onClick = onNavigateToSeedBackup,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("\uD83D\uDD11 Wallet Seed Backup")
                 }
             }
 

@@ -370,6 +370,67 @@ class LightningService(private val context: Context) {
 
     fun isRunning(): Boolean = node != null
 
+    // === Seed Backup & Restore ===
+
+    /**
+     * Get the 24-word BIP39 mnemonic for the current Lightning wallet seed.
+     * Returns null if no seed file exists.
+     */
+    fun getSeedWords(): List<String>? {
+        val seedFile = File(context.filesDir, "$STORAGE_DIR/keys_seed")
+        if (!seedFile.exists()) return null
+        val entropy = seedFile.readBytes()
+        if (entropy.size != 32) return null
+        return try {
+            Bip39.entropyToMnemonic(entropy, context)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to convert seed to mnemonic: ${e.message}")
+            null
+        }
+    }
+
+    /**
+     * Check if a Lightning wallet seed already exists.
+     */
+    fun hasSeed(): Boolean {
+        return File(context.filesDir, "$STORAGE_DIR/keys_seed").exists()
+    }
+
+    /**
+     * Restore wallet from a 24-word BIP39 mnemonic.
+     * Must be called BEFORE start() -- overwrites the existing seed file.
+     *
+     * @throws IllegalArgumentException if the mnemonic is invalid
+     * @throws IllegalStateException if the node is currently running
+     */
+    fun restoreFromMnemonic(words: List<String>) {
+        if (node != null) {
+            throw IllegalStateException("Cannot restore while Lightning node is running. Stop it first.")
+        }
+
+        // Validate and convert
+        val entropy = Bip39.mnemonicToEntropy(words, context)
+
+        // Write seed file
+        val storageDir = File(context.filesDir, STORAGE_DIR)
+        if (!storageDir.exists()) storageDir.mkdirs()
+        val seedFile = File(storageDir, "keys_seed")
+
+        // Back up existing seed if present
+        if (seedFile.exists()) {
+            val backup = File(storageDir, "keys_seed.bak.${System.currentTimeMillis()}")
+            seedFile.copyTo(backup)
+            Log.i(TAG, "Backed up existing seed to ${backup.name}")
+        }
+
+        seedFile.writeBytes(entropy)
+        Log.i(TAG, "Wallet seed restored from mnemonic (${words.size} words)")
+
+        // Clear cached sweep address since node identity will change
+        context.getSharedPreferences("watchtower_prefs", MODE_PRIVATE)
+            .edit().clear().apply()
+    }
+
     /**
      * Convert a bech32/bech32m address to its witness scriptPubKey.
      * Supports p2wpkh (bc1q..., 20 bytes) and p2tr (bc1p..., 32 bytes).
