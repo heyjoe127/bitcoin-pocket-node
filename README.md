@@ -337,7 +337,6 @@ app/src/main/java/com/pocketnode/
 - **Cellular Lightning mode:** Lightning payments on mobile data with zero blockchain bandwidth. bitcoind pauses sync, ldk-node keeps operating via localhost RPC, watchtower monitors channels at home, full sync resumes on WiFi
 - **Pruned node recovery:** Auto-detect missing blocks after extended offline, temporarily grow prune window, show recovery progress, shrink back when caught up
 - **Desktop port:** Same app on Linux, macOS, Windows via Compose Multiplatform. See [design doc](docs/DESKTOP-PORT.md)
-- **Policy settings:** Expose Knots datacarrier flags as toggleable settings
 - **Built-in Tor (Arti):** Direct .onion connection to home node watchtower, no SSH tunnel or Orbot needed
 - **Power modes:** Max/Low/Away profiles with burst sync for mobile efficiency. See [design doc](docs/POWER-MODES.md)
 
