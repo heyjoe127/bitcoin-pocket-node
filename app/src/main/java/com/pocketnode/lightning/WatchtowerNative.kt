@@ -69,6 +69,22 @@ interface WatchtowerNative : Library {
      * @param cacheDir Directory for Tor temp cache
      * @return 0 on success, -1 on error
      */
+    /** Test connection via TCP (handshake + Init only, no session). */
+    fun wtclient_test_connection(
+        address: String,
+        towerPubkey: ByteArray,
+        clientKey: ByteArray
+    ): Int
+
+    /** Test connection via Tor (handshake + Init only, no session). */
+    fun wtclient_test_connection_tor(
+        onionAddress: String,
+        towerPubkey: ByteArray,
+        clientKey: ByteArray,
+        stateDir: String,
+        cacheDir: String
+    ): Int
+
     fun wtclient_connect_tor(
         onionAddress: String,
         towerPubkey: ByteArray,
