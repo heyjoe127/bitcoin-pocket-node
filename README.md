@@ -338,7 +338,7 @@ app/src/main/java/com/pocketnode/
 - **Pruned node recovery:** Auto-detect missing blocks after extended offline, temporarily grow prune window, show recovery progress, shrink back when caught up
 - **Desktop port:** Same app on Linux, macOS, Windows via Compose Multiplatform. See [design doc](docs/DESKTOP-PORT.md)
 - **Policy settings:** Expose Knots datacarrier flags as toggleable settings
-- **LDK-to-LND watchtower bridge:** Use your home node's existing LND watchtower to protect phone Lightning channels. Pure Rust implementation of LND's watchtower wire protocol. See [design doc](docs/LDK-WATCHTOWER-BRIDGE.md)
+- **Built-in Tor (Arti):** Direct .onion connection to home node watchtower, no SSH tunnel or Orbot needed
 - **Power modes:** Max/Low/Away profiles with burst sync for mobile efficiency. See [design doc](docs/POWER-MODES.md)
 
 ## Tested On
