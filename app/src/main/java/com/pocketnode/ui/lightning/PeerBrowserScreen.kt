@@ -23,7 +23,8 @@ import kotlinx.coroutines.withContext
 
 /**
  * Browse and search Lightning network peers.
- * Uses mempool.space API for node directory.
+ * Uses mempool.space API for node directory -- the only third-party/centralized
+ * dependency in the app. Optional: users can enter node pubkeys manually instead.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

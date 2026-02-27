@@ -10,6 +10,11 @@ import java.net.URL
  * Lightning node directory using mempool.space API.
  * Browse and search for Lightning peers to open channels with.
  * No API key required.
+ *
+ * NOTE: This is the only centralized/third-party dependency in the app.
+ * All other features (validation, wallet, payments, price discovery) are
+ * fully sovereign. This is used only for peer discovery convenience --
+ * users can also enter node pubkeys manually without this API.
  */
 object NodeDirectory {
 
