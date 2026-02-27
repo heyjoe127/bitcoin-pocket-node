@@ -100,13 +100,14 @@ class LightningService(private val context: Context) {
             watchtowerBridge = WatchtowerBridge(context)
             try {
                 val prefs = context.getSharedPreferences("watchtower_prefs", MODE_PRIVATE)
-                var sweepAddr = prefs.getString("sweep_address", null)
+                // Key sweep address to this node's identity so a seed change
+                // invalidates the old address automatically
+                val sweepKey = "sweep_address_${nodeId.take(16)}"
+                var sweepAddr = prefs.getString(sweepKey, null)
                 if (sweepAddr == null) {
-                    // Generate once and persist -- reused across restarts so tower
-                    // blobs always sweep to an address we control
                     sweepAddr = ldkNode.onchainPayment().newAddress()
-                    prefs.edit().putString("sweep_address", sweepAddr).apply()
-                    Log.i(TAG, "Generated new watchtower sweep address: $sweepAddr")
+                    prefs.edit().putString(sweepKey, sweepAddr).apply()
+                    Log.i(TAG, "Generated watchtower sweep address: $sweepAddr")
                 } else {
                     Log.i(TAG, "Reusing watchtower sweep address: $sweepAddr")
                 }
