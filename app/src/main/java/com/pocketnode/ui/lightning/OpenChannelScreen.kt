@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.pocketnode.lightning.LightningService
@@ -25,15 +26,19 @@ import kotlinx.coroutines.withContext
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OpenChannelScreen(
-    onNavigateBack: () -> Unit = {}
+    onNavigateBack: () -> Unit = {},
+    onNavigateToPeerBrowser: () -> Unit = {},
+    prefillNodeId: String = "",
+    prefillAddress: String = "",
+    prefillAlias: String = ""
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val lightning = remember { LightningService.getInstance(context) }
     val lightningState by LightningService.stateFlow.collectAsState()
 
-    var nodeId by remember { mutableStateOf("") }
-    var address by remember { mutableStateOf("") }
+    var nodeId by remember { mutableStateOf(prefillNodeId) }
+    var address by remember { mutableStateOf(prefillAddress) }
     var amountSats by remember { mutableStateOf("") }
     var opening by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf<String?>(null) }
@@ -175,20 +180,26 @@ fun OpenChannelScreen(
                 }
             }
 
-            // Well-known nodes suggestion
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Finding peers", style = MaterialTheme.typography.titleSmall)
-                    Spacer(Modifier.height(4.dp))
+            // Peer browser
+            if (prefillAlias.isNotEmpty()) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1B5E20).copy(alpha = 0.2f))
+                ) {
                     Text(
-                        "Browse Lightning nodes at 1ml.com or amboss.space to find well-connected peers to open channels with.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        "Selected: $prefillAlias",
+                        modifier = Modifier.padding(16.dp),
+                        color = Color(0xFF4CAF50),
+                        fontWeight = FontWeight.Bold
                     )
                 }
+            }
+
+            OutlinedButton(
+                onClick = onNavigateToPeerBrowser,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("🔍 Browse Peers")
             }
         }
     }
