@@ -45,6 +45,7 @@ class LightningService(private val context: Context) {
     }
 
     private var node: Node? = null
+    private var lndHubServer: LndHubServer? = null
 
     /**
      * Start the Lightning node, connecting to local bitcoind via RPC.
@@ -89,6 +90,10 @@ class LightningService(private val context: Context) {
             val nodeId = ldkNode.nodeId()
             Log.i(TAG, "Lightning node started. Node ID: $nodeId")
 
+            // Start LNDHub API server for external wallet apps
+            lndHubServer = LndHubServer(context).also { it.start() }
+            Log.i(TAG, "LNDHub server started on localhost:${LndHubServer.PORT}")
+
             updateState()
 
         } catch (e: Exception) {
@@ -105,6 +110,8 @@ class LightningService(private val context: Context) {
      */
     fun stop() {
         try {
+            lndHubServer?.stop()
+            lndHubServer = null
             node?.stop()
             Log.i(TAG, "Lightning node stopped")
         } catch (e: Exception) {

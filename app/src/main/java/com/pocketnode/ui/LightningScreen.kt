@@ -313,6 +313,49 @@ fun LightningScreen(
                         }
                     }
                 }
+
+                // LNDHub connection card
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("Connect External Wallet", fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "Connect BlueWallet or Zeus (LNDHub mode) to use your Lightning node from another app.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                        Spacer(Modifier.height(12.dp))
+
+                        val lndhubUrl = "lndhub://pocketnode:pocketnode@http://127.0.0.1:${com.pocketnode.lightning.LndHubServer.PORT}"
+                        Text("LNDHub URL", style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                        Text(
+                            lndhubUrl,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontFamily = FontFamily.Monospace,
+                            maxLines = 2
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedButton(
+                            onClick = { clipboardManager.setText(AnnotatedString(lndhubUrl)) },
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                        ) {
+                            Icon(Icons.Default.ContentCopy, "Copy", modifier = Modifier.size(14.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Copy LNDHub URL", style = MaterialTheme.typography.labelSmall)
+                        }
+
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "In BlueWallet: Add Wallet → Import Wallet → paste the URL above.\nIn Zeus: Settings → Add node → LNDHub → paste URL.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        )
+                    }
+                }
             }
         }
     }
