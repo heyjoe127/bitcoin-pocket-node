@@ -201,6 +201,36 @@ No one has built an LDK-to-LND watchtower bridge yet. This would be:
 - Potential upstream contribution to ldk-node
 - Strong grant narrative: infrastructure that benefits the entire Lightning Network
 
+## Implementation Status
+
+### Done
+
+- **ldk-node fork** (`FreeOnlineUser/ldk-node`, branch `watchtower-bridge`)
+  - `watchtower.rs` module: `list_monitor_info()` and `export_monitors()`
+  - `watchtower_list_monitors()` and `watchtower_export_monitors()` on `Node`
+  - UniFFI bindings (UDL definitions for Kotlin/Swift/Python)
+  - Compiles clean with and without UniFFI feature
+
+- **ldk-watchtower-client** (`FreeOnlineUser/ldk-watchtower-client`)
+  - Pure Rust crate implementing LND watchtower wire protocol
+  - `wire.rs`: Message types (CreateSession, StateUpdate, replies), encoding/decoding
+  - `blob.rs`: JusticeKit V0 construction, XChaCha20-Poly1305 encryption, hint computation
+  - `noise.rs`: Noise_XK transport (Brontide, same as Lightning P2P)
+  - `client.rs`: Session management, backup sending, connection lifecycle
+  - 6 tests passing (blob encoding, encrypt/decrypt roundtrip, wire messages)
+
+### Remaining
+
+1. **Extract revocation data from LDK monitors**: Deserialize exported monitors, pull counterparty commitment txids and revocation keys/signatures to build `JusticeKitV0`
+2. **Integration test against real LND tower**: Connect to Umbrel's tower, push a test blob
+3. **Phone-side wiring**: After each payment, extract monitor data + push via SSH to home node
+
+## Repositories
+
+- **ldk-node fork**: https://github.com/FreeOnlineUser/ldk-node/tree/watchtower-bridge
+- **Watchtower client**: https://github.com/FreeOnlineUser/ldk-watchtower-client
+- **Bitcoin Pocket Node**: https://github.com/FreeOnlineUser/bitcoin-pocket-node
+
 ## References
 
 - LND watchtower: `lnd/watchtower/` (blob, wtwire, wtclient, wtserver packages)

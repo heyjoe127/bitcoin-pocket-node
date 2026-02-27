@@ -165,7 +165,7 @@ bitcoind ← RPC → ldk-node (in-process)
 - [x] Auto-start Lightning when bitcoind syncs (SharedPreference persistence)
 - [x] Channel status indicators (Active/Ready/Pending) with outbound capacity display
 - [ ] Pruned node recovery: auto-detect missing blocks, temporarily grow prune window, show recovery progress, shrink back when caught up
-- [ ] Watchtower support via ldk-node tower client
+- [ ] Watchtower bridge: LDK-to-LND watchtower protocol (in progress, see docs/LDK-WATCHTOWER-BRIDGE.md)
 - [ ] VLS (Validating Lightning Signer): phone holds signing keys, remote server runs always-online node
 
 **What was built:**
