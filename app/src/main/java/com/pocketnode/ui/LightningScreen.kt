@@ -129,12 +129,42 @@ fun LightningScreen(
                 }
             }
 
+            // Starting indicator
+            if (lightningState.status == LightningService.LightningState.Status.STARTING) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(0xFFFF9800).copy(alpha = 0.1f)
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            strokeWidth = 2.dp,
+                            color = Color(0xFFFF9800)
+                        )
+                        Column {
+                            Text("Starting Lightning Node...", fontWeight = FontWeight.Bold)
+                            Text(
+                                "Connecting to bitcoind, loading wallet, syncing gossip data",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
+                        }
+                    }
+                }
+            }
+
             // Start/Stop button
             if (lightningState.status == LightningService.LightningState.Status.STOPPED ||
                 lightningState.status == LightningService.LightningState.Status.ERROR) {
                 Button(
                     onClick = {
-                        scope.launch {
+                        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
                             lightning.start(rpcUser, rpcPassword)
                         }
                     },
