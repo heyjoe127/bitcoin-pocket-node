@@ -6,6 +6,9 @@ import com.jcraft.jsch.JSch
 import com.jcraft.jsch.Session
 import org.lightningdevkit.ldknode.Node
 import org.lightningdevkit.ldknode.WatchtowerJusticeBlob
+import com.pocketnode.rpc.BitcoinRpcClient
+import kotlinx.coroutines.runBlocking
+import org.json.JSONArray
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import javax.crypto.Cipher
@@ -40,6 +43,14 @@ class WatchtowerBridge(private val context: Context) {
         // Blob type: anchor channels (type 1)
         private const val BLOB_TYPE_ANCHOR: Int = 1
 
+        // Fee rate bounds (sat/kweight)
+        private const val MIN_SWEEP_FEE_RATE: Long = 1000   // LND minimum (~4 sat/vB)
+        private const val DEFAULT_SWEEP_FEE_RATE: Long = 2500 // ~10 sat/vB fallback
+        private const val MAX_SWEEP_FEE_RATE: Long = 250000   // ~1000 sat/vB cap
+
+        // Recreate session if current fee estimate drifts >50% from session rate
+        private const val FEE_DRIFT_THRESHOLD: Double = 0.5
+
         // JusticeKit V0 plaintext size: 274 bytes
         // revocation_pubkey(33) + local_delay_pubkey(33) + csv_delay(4) +
         // sweep_address_len(2) + sweep_address(max ~34) + to_local_sig(64) + to_remote_sig(64)
@@ -50,9 +61,67 @@ class WatchtowerBridge(private val context: Context) {
         private const val ENCRYPTED_BLOB_SIZE = 314
     }
 
+    // Tracks the fee rate used for the current session
+    private var sessionFeeRate: Long = 0
+
+    /**
+     * Estimate sweep fee rate from local bitcoind via estimatesmartfee.
+     * Uses confirmation target of 6 blocks (justice txs have CSV delay, so not urgent).
+     * Returns fee rate in sat/kweight, clamped to [MIN, MAX].
+     */
+    private fun estimateSweepFeeRate(): Long {
+        return try {
+            val prefs = context.getSharedPreferences("bitcoin_prefs", Context.MODE_PRIVATE)
+            val rpcPort = prefs.getInt("rpc_port", 8332)
+            val rpcUser = prefs.getString("rpc_user", "pocketnode") ?: "pocketnode"
+            val rpcPass = prefs.getString("rpc_password", "") ?: ""
+            val rpc = BitcoinRpcClient("127.0.0.1", rpcPort, rpcUser, rpcPass)
+
+            val result = runBlocking {
+                rpc.call("estimatesmartfee", JSONArray().put(6))
+            }
+            val feeRateBtcPerKb = result?.optDouble("feerate", -1.0) ?: -1.0
+
+            if (feeRateBtcPerKb <= 0) {
+                Log.w(TAG, "estimatesmartfee returned no estimate, using default")
+                return DEFAULT_SWEEP_FEE_RATE
+            }
+
+            // Convert BTC/kB to sat/kweight:
+            // BTC/kB * 100_000_000 = sat/kB, then / 4 = sat/kweight
+            val satPerKw = (feeRateBtcPerKb * 100_000_000 / 4).toLong()
+            val clamped = satPerKw.coerceIn(MIN_SWEEP_FEE_RATE, MAX_SWEEP_FEE_RATE)
+
+            Log.i(TAG, "Estimated sweep fee: ${clamped} sat/kw (${clamped * 4 / 1000} sat/vB)")
+            clamped
+        } catch (e: Exception) {
+            Log.w(TAG, "Fee estimation failed: ${e.message}, using default")
+            DEFAULT_SWEEP_FEE_RATE
+        }
+    }
+
+    /**
+     * Check if the current fee environment has drifted enough to warrant
+     * creating a new tower session with an updated fee rate.
+     */
+    private fun shouldRecreateSession(): Boolean {
+        if (sessionFeeRate == 0L) return false // No active session
+        val currentEstimate = estimateSweepFeeRate()
+        val drift = Math.abs(currentEstimate - sessionFeeRate).toDouble() / sessionFeeRate
+        if (drift > FEE_DRIFT_THRESHOLD) {
+            Log.i(TAG, "Fee drift ${(drift * 100).toInt()}% exceeds threshold " +
+                    "(session: $sessionFeeRate, current: $currentEstimate). Recreating session.")
+            return true
+        }
+        return false
+    }
+
     /**
      * Drain all pending justice blobs and push them to the configured LND tower.
      * Call this periodically (e.g. after each payment or channel update).
+     *
+     * Automatically estimates sweep fee rate from local bitcoind and recreates
+     * the tower session if fees have drifted more than 50%.
      *
      * @return number of blobs successfully pushed, or -1 on error
      */
@@ -109,14 +178,20 @@ class WatchtowerBridge(private val context: Context) {
             val clientKey = getOrCreateClientKey()
             val towerPubKeyBytes = hexToBytes(towerPubKey)
 
+            // Estimate fee rate from local bitcoind
+            val sweepFeeRate = estimateSweepFeeRate()
+
             val native = WatchtowerNative.INSTANCE
             val connectResult = native.wtclient_connect(
                 "127.0.0.1:$localPort",
                 towerPubKeyBytes,
                 clientKey,
                 1024, // max updates per session
-                2500  // sweep fee rate (sat/kweight, ~10 sat/vB) - LND min is 1000
+                sweepFeeRate
             )
+
+            // Track the session fee rate for drift detection
+            if (connectResult == 0) sessionFeeRate = sweepFeeRate
 
             if (connectResult != 0) {
                 Log.e(TAG, "Failed to connect to watchtower via Noise_XK")
@@ -124,7 +199,7 @@ class WatchtowerBridge(private val context: Context) {
                 return encryptAndStoreLocally(blobs)
             }
 
-            Log.i(TAG, "Connected to LND tower via Noise_XK")
+            Log.i(TAG, "Connected to LND tower via Noise_XK (fee rate: $sweepFeeRate sat/kw)")
 
             // Push each blob through the native wire protocol
             for (blob in blobs) {
