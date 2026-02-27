@@ -225,6 +225,7 @@ See [Desktop Port Design](docs/DESKTOP-PORT.md) for the full design document.
 - [ ] Detect corrupted block index after long offline period, offer re-bootstrap
 - [ ] Charging-aware sync (configurable)
 - [ ] Doze mode handling
+- [ ] Built-in Tor (Arti): direct .onion connection to home node watchtower, no SSH tunnel or Orbot needed
 - [ ] Tor integration for private peer connections
 - [ ] Non-technical setup documentation for everyday users
 - [ ] Expanded device testing beyond Pixel line
