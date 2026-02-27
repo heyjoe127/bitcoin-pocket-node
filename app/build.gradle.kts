@@ -76,6 +76,9 @@ dependencies {
     // JSON parsing for RPC
     implementation("org.json:json:20231013")
 
+    // Lightning (LDK Node)
+    implementation("org.lightningdevkit:ldk-node-android:0.7.0")
+
     // SSH/SFTP
     implementation("com.jcraft:jsch:0.1.55")
 
