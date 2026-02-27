@@ -22,7 +22,7 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.pocketnode.service.BwtService
+import com.pocketnode.service.ElectrumService
 
 /**
  * Screen for connecting external wallet apps to the local Electrum server (BWT).
@@ -32,8 +32,8 @@ import com.pocketnode.service.BwtService
 @Composable
 fun ConnectWalletScreen(onBack: () -> Unit) {
     val context = LocalContext.current
-    val bwtState by BwtService.stateFlow.collectAsState()
-    val bwtRunning by BwtService.isRunningFlow.collectAsState()
+    val electrumState by ElectrumService.stateFlow.collectAsState()
+    val electrumRunning by ElectrumService.isRunningFlow.collectAsState()
 
     var showAddXpub by remember { mutableStateOf(false) }
     var showAddAddress by remember { mutableStateOf(false) }
@@ -46,12 +46,12 @@ fun ConnectWalletScreen(onBack: () -> Unit) {
     // Load saved config
     LaunchedEffect(Unit) {
         xpubs.clear()
-        xpubs.addAll(BwtService.SavedConfig.getXpubs(context))
+        xpubs.addAll(ElectrumService.SavedConfig.getXpubs(context))
         addresses.clear()
-        addresses.addAll(BwtService.SavedConfig.getAddresses(context))
+        addresses.addAll(ElectrumService.SavedConfig.getAddresses(context))
     }
 
-    val bwtService = remember { BwtService(context) }
+    val electrumService = remember { ElectrumService(context) }
 
     Scaffold(
         topBar = {
@@ -131,9 +131,9 @@ fun ConnectWalletScreen(onBack: () -> Unit) {
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
-                    containerColor = when (bwtState.status) {
-                        BwtService.BwtState.Status.RUNNING -> Color(0xFF1B5E20).copy(alpha = 0.2f)
-                        BwtService.BwtState.Status.ERROR -> MaterialTheme.colorScheme.errorContainer
+                    containerColor = when (electrumState.status) {
+                        ElectrumService.ElectrumState.Status.RUNNING -> Color(0xFF1B5E20).copy(alpha = 0.2f)
+                        ElectrumService.ElectrumState.Status.ERROR -> MaterialTheme.colorScheme.errorContainer
                         else -> MaterialTheme.colorScheme.surfaceVariant
                     }
                 )
@@ -142,22 +142,22 @@ fun ConnectWalletScreen(onBack: () -> Unit) {
                     Text("Electrum Server", fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(8.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        val (statusText, statusColor) = when (bwtState.status) {
-                            BwtService.BwtState.Status.RUNNING -> "Running" to Color(0xFF4CAF50)
-                            BwtService.BwtState.Status.STARTING -> "Starting..." to Color(0xFFFF9800)
-                            BwtService.BwtState.Status.SYNCING -> "Syncing ${(bwtState.syncProgress * 100).toInt()}%" to Color(0xFFFF9800)
-                            BwtService.BwtState.Status.ERROR -> "Error" to MaterialTheme.colorScheme.error
-                            BwtService.BwtState.Status.STOPPED -> "Stopped" to MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        val (statusText, statusColor) = when (electrumState.status) {
+                            ElectrumService.ElectrumState.Status.RUNNING -> "Running" to Color(0xFF4CAF50)
+                            ElectrumService.ElectrumState.Status.STARTING -> "Starting..." to Color(0xFFFF9800)
+                            ElectrumService.ElectrumState.Status.SYNCING -> "Syncing ${(electrumState.syncProgress * 100).toInt()}%" to Color(0xFFFF9800)
+                            ElectrumService.ElectrumState.Status.ERROR -> "Error" to MaterialTheme.colorScheme.error
+                            ElectrumService.ElectrumState.Status.STOPPED -> "Stopped" to MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                         }
                         Text("●", color = statusColor)
                         Spacer(Modifier.width(8.dp))
                         Text(statusText, style = MaterialTheme.typography.bodyMedium)
                     }
 
-                    if (bwtState.status == BwtService.BwtState.Status.RUNNING) {
+                    if (electrumState.status == ElectrumService.ElectrumState.Status.RUNNING) {
                         Spacer(Modifier.height(8.dp))
-                        CopyableValue("Host", BwtService.ELECTRUM_HOST, connClip)
-                        CopyableValue("Port", BwtService.ELECTRUM_PORT.toString(), connClip)
+                        CopyableValue("Host", ElectrumService.ELECTRUM_HOST, connClip)
+                        CopyableValue("Port", ElectrumService.ELECTRUM_PORT.toString(), connClip)
                         Text("TCP (no SSL)", style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
                         Spacer(Modifier.height(8.dp))
@@ -168,7 +168,7 @@ fun ConnectWalletScreen(onBack: () -> Unit) {
                         )
                     }
 
-                    if (bwtState.status == BwtService.BwtState.Status.RUNNING && xpubs.isEmpty() && addresses.isEmpty()) {
+                    if (electrumState.status == ElectrumService.ElectrumState.Status.RUNNING && xpubs.isEmpty() && addresses.isEmpty()) {
                         Spacer(Modifier.height(8.dp))
                         Text(
                             "⚠️ No wallets tracked. Add your xpub below to see balances and transactions.",
@@ -177,8 +177,8 @@ fun ConnectWalletScreen(onBack: () -> Unit) {
                         )
                     }
 
-                    if (bwtState.error != null) {
-                        Text(bwtState.error!!, color = MaterialTheme.colorScheme.error,
+                    if (electrumState.error != null) {
+                        Text(electrumState.error!!, color = MaterialTheme.colorScheme.error,
                             style = MaterialTheme.typography.bodySmall)
                     }
                 }
@@ -186,9 +186,9 @@ fun ConnectWalletScreen(onBack: () -> Unit) {
 
             // Auto-start Electrum server when wallets are configured
             val hasConfig = xpubs.isNotEmpty() || addresses.isNotEmpty()
-            LaunchedEffect(hasConfig, bwtRunning) {
-                if (hasConfig && !bwtRunning) {
-                    bwtService.start()
+            LaunchedEffect(hasConfig, electrumRunning) {
+                if (hasConfig && !electrumRunning) {
+                    electrumService.start()
                 }
             }
 
@@ -251,7 +251,7 @@ fun ConnectWalletScreen(onBack: () -> Unit) {
                                     )
                                 }
                                 IconButton(onClick = {
-                                    BwtService.SavedConfig.removeXpub(context, xpub)
+                                    ElectrumService.SavedConfig.removeXpub(context, xpub)
                                     xpubs.remove(xpub)
                                 }, modifier = Modifier.size(32.dp)) {
                                     Icon(Icons.Outlined.Delete, contentDescription = "Remove",
@@ -286,7 +286,7 @@ fun ConnectWalletScreen(onBack: () -> Unit) {
                                     modifier = Modifier.weight(1f)
                                 )
                                 IconButton(onClick = {
-                                    BwtService.SavedConfig.removeAddress(context, addr)
+                                    ElectrumService.SavedConfig.removeAddress(context, addr)
                                     addresses.remove(addr)
                                 }, modifier = Modifier.size(32.dp)) {
                                     Icon(Icons.Outlined.Delete, contentDescription = "Remove",
@@ -364,7 +364,7 @@ fun ConnectWalletScreen(onBack: () -> Unit) {
                     onClick = {
                         val trimmed = xpubInput.trim()
                         if (trimmed.isNotEmpty()) {
-                            BwtService.SavedConfig.saveXpub(context, trimmed)
+                            ElectrumService.SavedConfig.saveXpub(context, trimmed)
                             xpubs.add(trimmed)
                             xpubInput = ""
                         }
@@ -412,7 +412,7 @@ fun ConnectWalletScreen(onBack: () -> Unit) {
                     onClick = {
                         val trimmed = addressInput.trim()
                         if (trimmed.isNotEmpty()) {
-                            BwtService.SavedConfig.saveAddress(context, trimmed)
+                            ElectrumService.SavedConfig.saveAddress(context, trimmed)
                             addresses.add(trimmed)
                             addressInput = ""
                         }

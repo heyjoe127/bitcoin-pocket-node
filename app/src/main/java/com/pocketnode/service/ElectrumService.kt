@@ -21,15 +21,15 @@ import kotlinx.coroutines.flow.StateFlow
  * Tracks xpubs/descriptors/addresses via a bitcoind descriptor wallet and
  * exposes an Electrum RPC interface on localhost:50001.
  */
-class BwtService(private val context: Context) {
+class ElectrumService(private val context: Context) {
 
     companion object {
-        private const val TAG = "BwtService"
+        private const val TAG = "ElectrumService"
         const val ELECTRUM_HOST = "127.0.0.1"
         const val ELECTRUM_PORT = 50001
 
-        private val _state = MutableStateFlow(BwtState())
-        val stateFlow: StateFlow<BwtState> = _state
+        private val _state = MutableStateFlow(ElectrumState())
+        val stateFlow: StateFlow<ElectrumState> = _state
 
         private val _isRunning = MutableStateFlow(false)
         val isRunningFlow: StateFlow<Boolean> = _isRunning
@@ -39,7 +39,7 @@ class BwtService(private val context: Context) {
         private var scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     }
 
-    data class BwtState(
+    data class ElectrumState(
         val status: Status = Status.STOPPED,
         val electrumAddress: String = "$ELECTRUM_HOST:$ELECTRUM_PORT",
         val error: String? = null,
@@ -62,16 +62,16 @@ class BwtService(private val context: Context) {
 
         if (saveState) {
             context.getSharedPreferences("pocketnode_prefs", Context.MODE_PRIVATE)
-                .edit().putBoolean("bwt_was_running", true).apply()
+                .edit().putBoolean("electrum_was_running", true).apply()
         }
-        _state.value = BwtState(status = BwtState.Status.STARTING)
+        _state.value = ElectrumState(status = ElectrumState.Status.STARTING)
 
         scope.launch {
             try {
                 // Get RPC credentials
                 val creds = ConfigGenerator.readCredentials(context)
                 if (creds == null) {
-                    _state.value = BwtState(status = BwtState.Status.ERROR, error = "No RPC credentials")
+                    _state.value = ElectrumState(status = ElectrumState.Status.ERROR, error = "No RPC credentials")
                     return@launch
                 }
 
@@ -82,7 +82,7 @@ class BwtService(private val context: Context) {
                 val descriptors = prefs.getStringSet("descriptors", emptySet()) ?: emptySet()
 
                 if (xpubSet.isEmpty() && addresses.isEmpty() && descriptors.isEmpty()) {
-                    _state.value = BwtState(status = BwtState.Status.ERROR,
+                    _state.value = ElectrumState(status = ElectrumState.Status.ERROR,
                         error = "No xpubs, descriptors, or addresses configured. Add them in Connect Wallet settings.")
                     return@launch
                 }
@@ -90,8 +90,8 @@ class BwtService(private val context: Context) {
                 val trackedCount = xpubSet.size + descriptors.size + addresses.size
                 Log.i(TAG, "Starting Electrum server with ${xpubSet.size} xpubs, ${descriptors.size} descriptors, ${addresses.size} addresses")
 
-                _state.value = BwtState(
-                    status = BwtState.Status.SYNCING,
+                _state.value = ElectrumState(
+                    status = ElectrumState.Status.SYNCING,
                     trackedAddresses = trackedCount,
                     syncProgress = 0.2f
                 )
@@ -103,21 +103,21 @@ class BwtService(private val context: Context) {
                 val subscriptions = SubscriptionManager(rpc, addressIndex)
 
                 // Ensure tracking wallet exists
-                _state.value = BwtState(
-                    status = BwtState.Status.SYNCING,
+                _state.value = ElectrumState(
+                    status = ElectrumState.Status.SYNCING,
                     trackedAddresses = trackedCount,
                     syncProgress = 0.4f
                 )
 
                 if (!addressIndex.ensureWallet()) {
-                    _state.value = BwtState(status = BwtState.Status.ERROR,
+                    _state.value = ElectrumState(status = ElectrumState.Status.ERROR,
                         error = "Failed to create tracking wallet")
                     return@launch
                 }
 
                 // Import descriptors and addresses
-                _state.value = BwtState(
-                    status = BwtState.Status.SYNCING,
+                _state.value = ElectrumState(
+                    status = ElectrumState.Status.SYNCING,
                     trackedAddresses = trackedCount,
                     syncProgress = 0.6f
                 )
@@ -131,8 +131,8 @@ class BwtService(private val context: Context) {
                     addressIndex.importAddresses(addresses.toList())
                 }
 
-                _state.value = BwtState(
-                    status = BwtState.Status.SYNCING,
+                _state.value = ElectrumState(
+                    status = ElectrumState.Status.SYNCING,
                     trackedAddresses = trackedCount,
                     syncProgress = 0.8f
                 )
@@ -144,8 +144,8 @@ class BwtService(private val context: Context) {
 
                 Log.i(TAG, "Electrum server ready on $ELECTRUM_HOST:$ELECTRUM_PORT")
                 _isRunning.value = true
-                _state.value = BwtState(
-                    status = BwtState.Status.RUNNING,
+                _state.value = ElectrumState(
+                    status = ElectrumState.Status.RUNNING,
                     trackedAddresses = trackedCount,
                     syncProgress = 1f
                 )
@@ -155,7 +155,7 @@ class BwtService(private val context: Context) {
             } catch (e: Exception) {
                 _isRunning.value = false
                 Log.e(TAG, "Electrum server failed: ${e.message}", e)
-                _state.value = BwtState(status = BwtState.Status.ERROR, error = e.message)
+                _state.value = ElectrumState(status = ElectrumState.Status.ERROR, error = e.message)
             }
         }
     }
@@ -163,7 +163,7 @@ class BwtService(private val context: Context) {
     fun stop(saveState: Boolean = true) {
         if (saveState) {
             context.getSharedPreferences("pocketnode_prefs", Context.MODE_PRIVATE)
-                .edit().putBoolean("bwt_was_running", false).apply()
+                .edit().putBoolean("electrum_was_running", false).apply()
         }
         server?.let { s ->
             try {
@@ -175,7 +175,7 @@ class BwtService(private val context: Context) {
         }
         server = null
         _isRunning.value = false
-        _state.value = BwtState(status = BwtState.Status.STOPPED)
+        _state.value = ElectrumState(status = ElectrumState.Status.STOPPED)
         scope.cancel()
         scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     }

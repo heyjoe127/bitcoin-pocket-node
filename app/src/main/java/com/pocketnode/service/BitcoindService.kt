@@ -308,11 +308,11 @@ class BitcoindService : Service() {
      * Starts a coroutine that polls RPC every 30s and updates the
      * foreground notification with live node stats.
      */
-    private var bwtAutoStartedInService = false
+    private var electrumAutoStartedInService = false
 
     private fun startNotificationUpdater(rpc: BitcoinRpcClient) {
         notificationJob?.cancel()
-        bwtAutoStartedInService = false
+        electrumAutoStartedInService = false
         notificationJob = serviceScope.launch {
             while (isActive && _isRunning.value) {
                 try {
@@ -325,13 +325,13 @@ class BitcoindService : Service() {
                         val synced = progress > 0.9999
 
                         // Auto-start BWT when synced (if it was previously running)
-                        if (synced && !bwtAutoStartedInService) {
+                        if (synced && !electrumAutoStartedInService) {
                             val prefs = getSharedPreferences("pocketnode_prefs", MODE_PRIVATE)
-                            if (prefs.getBoolean("bwt_was_running", false)) {
-                                bwtAutoStartedInService = true
+                            if (prefs.getBoolean("electrum_was_running", false)) {
+                                electrumAutoStartedInService = true
                                 // BWT (Bitcoin Wallet Tracker) needs a synced node to index wallet history.
                                 // Re-launch it automatically so the user's wallet is ready without manual action.
-                                val bwt = BwtService(this@BitcoindService)
+                                val bwt = ElectrumService(this@BitcoindService)
                                 bwt.start(saveState = false)
                                 Log.i(TAG, "Auto-started BWT from service (node synced)")
                             }
