@@ -30,7 +30,8 @@ fun LightningScreen(
     onNavigateBack: () -> Unit = {},
     onNavigateToSend: () -> Unit = {},
     onNavigateToReceive: () -> Unit = {},
-    onNavigateToHistory: () -> Unit = {}
+    onNavigateToHistory: () -> Unit = {},
+    onNavigateToOpenChannel: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -221,6 +222,10 @@ fun LightningScreen(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                             )
+                            Spacer(Modifier.height(8.dp))
+                            OutlinedButton(onClick = onNavigateToOpenChannel) {
+                                Text("Open Channel")
+                            }
                         } else {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -266,6 +271,11 @@ fun LightningScreen(
                                     )
                                 }
                                 Spacer(Modifier.height(8.dp))
+                            }
+
+                            Spacer(Modifier.height(4.dp))
+                            OutlinedButton(onClick = onNavigateToOpenChannel) {
+                                Text("Open Another Channel")
                             }
                         }
                     }

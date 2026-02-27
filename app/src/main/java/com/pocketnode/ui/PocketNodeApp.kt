@@ -250,7 +250,8 @@ fun PocketNodeApp(
                     onNavigateBack = { navController.popBackStack() },
                     onNavigateToSend = { navController.navigate("lightning_send") },
                     onNavigateToReceive = { navController.navigate("lightning_receive") },
-                    onNavigateToHistory = { navController.navigate("lightning_history") }
+                    onNavigateToHistory = { navController.navigate("lightning_history") },
+                    onNavigateToOpenChannel = { navController.navigate("lightning_open_channel") }
                 )
             }
             composable("lightning_send") {
@@ -265,6 +266,11 @@ fun PocketNodeApp(
             }
             composable("lightning_history") {
                 com.pocketnode.ui.lightning.PaymentHistoryScreen(
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+            composable("lightning_open_channel") {
+                com.pocketnode.ui.lightning.OpenChannelScreen(
                     onNavigateBack = { navController.popBackStack() }
                 )
             }
