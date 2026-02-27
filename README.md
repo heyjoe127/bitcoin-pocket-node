@@ -13,7 +13,9 @@ Turn any Android phone into a fully-validating Bitcoin full node. No server depe
 - **3 Bitcoin implementations:** Core 28.1, Core 30, Knots 29.3 (with BIP 110 toggle). Switch with one tap, same chainstate
 - Phone stays cool, runs overnight without issues
 - ~26 GB total disk with Lightning (11 GB chainstate + 2 GB pruned blocks + 13 GB block filters), ~13 GB without
-- **Pure Kotlin Electrum server** for BlueWallet connectivity to your own node
+- **Pure Kotlin Electrum server** for BlueWallet on-chain connectivity to your own node
+- **Built-in Lightning wallet** powered by LDK: send, receive, open/close channels, peer browser
+- **LNDHub API** for external Lightning wallets (BlueWallet, Zeus)
 
 ## Screenshots
 
@@ -76,7 +78,8 @@ See [Version Selection Design](docs/VERSION-SELECTION.md) and [BIP 110 Research]
 - **3 Bitcoin implementations** with one-tap switching: Core 28.1, Core 30, Knots 29.3 (BIP 110 toggle)
 - **Two bootstrap paths:** direct chainstate copy (~20 min) or AssumeUTXO (~3 hours)
 - **Pure Kotlin Electrum server** so BlueWallet can query your own node (no native dependencies)
-- **Lightning support** via block filter copy from your home node (Zeus with embedded LND)
+- **Built-in Lightning wallet** powered by LDK (send, receive, channels, peer browser)
+- **LNDHub API** on localhost:3000 for BlueWallet/Zeus connectivity
 - **Home node watchtower** detection and setup for Lightning channel protection
 - **Sovereign price discovery** using UTXOracle (BTC/USD from on-chain data, no exchange APIs)
 - **Mempool viewer** with fee estimates, projected blocks, and transaction search
@@ -121,31 +124,35 @@ Download from `https://utxo.download/utxo-910000.dat` (9 GB). Same `loadtxoutset
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────┐
-│           Android App (Kotlin)              │
-│                                             │
-│  ┌──────────┐ ┌───────────┐ ┌───────────┐  │
-│  │ Chainstate│ │  Network  │ │   Sync    │  │
-│  │ Manager  │ │  Monitor  │ │ Controller│  │
-│  └────┬─────┘ └─────┬─────┘ └─────┬─────┘  │
-│       │             │             │         │
-│  ┌────┴─────────────┴─────────────┴──────┐  │
-│  │  bitcoind (ARM64), user selects:      │  │
-│  │  Core 28.1 | Core 30 | Knots (+BIP110)│  │
-│  │  Foreground service, local RPC        │  │
-│  └──────────────┬────────────────────────┘  │
-│                 │                           │
-│  ┌──────────────┴──────────────────┐        │
-│  │     Electrum server (Kotlin)    │        │
-│  │     Local Electrum protocol     │        │
-│  └──────────────┬──────────────────┘        │
-│                 │                           │
-└─────────────────┼───────────────────────────┘
-                  │
-     ┌────────────┼────────────┐
-     │            │            │
-Bitcoin P2P   BlueWallet   Electrum
- Network      (local)      clients
+┌──────────────────────────────────────────────────┐
+│              Android App (Kotlin)                │
+│                                                  │
+│  ┌──────────┐  ┌───────────┐  ┌───────────┐     │
+│  │Chainstate│  │  Network  │  │   Sync    │     │
+│  │ Manager  │  │  Monitor  │  │ Controller│     │
+│  └────┬─────┘  └─────┬─────┘  └─────┬─────┘     │
+│       │              │              │            │
+│  ┌────┴──────────────┴──────────────┴─────────┐  │
+│  │  bitcoind (ARM64), user selects:           │  │
+│  │  Core 28.1 | Core 30 | Knots (+BIP 110)   │  │
+│  │  Foreground service, local RPC             │  │
+│  └────────────────┬───────────────────────────┘  │
+│                   │ RPC                          │
+│      ┌────────────┼────────────┐                 │
+│      │            │            │                 │
+│  ┌───┴──────┐ ┌───┴──────┐ ┌──┴───────────┐     │
+│  │ Electrum │ │ ldk-node │ │   UTXOracle  │     │
+│  │  :50001  │ │(in-proc) │ │  price feed  │     │
+│  └───┬──────┘ └───┬──────┘ └──────────────┘     │
+│      │            │                              │
+│      │     ┌──────┴───────┐                      │
+│      │     │  LNDHub API  │                      │
+│      │     │   :3000      │                      │
+│      │     └──────┬───────┘                      │
+└──────┼────────────┼──────────────────────────────┘
+       │            │
+  BlueWallet    BlueWallet/Zeus
+  (on-chain)    (Lightning)
 ```
 
 ## Security Model
@@ -175,22 +182,41 @@ You can view the pocketnode credentials and **fully remove access** from the app
 
 ## Lightning Support
 
-The app copies BIP 157/158 block filter indexes (~13 GB) from your home node, enabling Lightning wallet support on the phone.
+Built-in Lightning wallet powered by [LDK](https://lightningdevkit.org/) (ldk-node 0.7.0). Runs in-process, connects to your local bitcoind via RPC. No external apps needed.
 
 ### How It Works
-1. Tap "Add Lightning Support" on the dashboard
-2. Enter your home node SSH credentials
-3. The app detects block filters on your node, stops it briefly, archives filters alongside chainstate, downloads everything, and restarts your home node
-4. Your phone's bitcoind restarts with `blockfilterindex=1` and `peerblockfilters=1`
-5. Install a Lightning wallet (Zeus with embedded LND) and it syncs via Neutrino
+1. Start your Bitcoin node and wait for sync
+2. Open the Lightning wallet from the dashboard
+3. Fund your on-chain wallet (receive bitcoin to the displayed address)
+4. Browse peers (Most Connected, Largest, Lowest Fee, or search) and open a channel
+5. Send and receive Lightning payments
 
-### Current Status: Zeus with Internet Peers
+### Architecture
 
-Zeus's embedded LND uses Neutrino for chain sync. Neutrino requires peers to advertise `NODE_NETWORK` (service bit 0), but our pruned bitcoind only advertises `NODE_NETWORK_LIMITED` (bit 10). Neutrino silently rejects the local node during the P2P handshake, so Zeus syncs via internet peers instead. This works, and Neutrino is privacy-preserving (it doesn't reveal which addresses you're watching), but it means Zeus doesn't use the local bitcoind for P2P. Your local node still handles all on-chain validation, Electrum wallet tracking, mempool, and fee estimation.
+```
+bitcoind ← RPC → ldk-node (in-process)
+                    │
+            ┌───────┴────────┐
+            │                │
+      Built-in UI      LNDHub API (:3000)
+      (send/receive/        │
+       channels)       External wallets
+                       (BlueWallet, Zeus)
+```
 
-### Future: LDK Migration
+**Why LDK?** Earlier versions used Zeus with embedded LND, which required BIP 157/158 block filters and had a NODE_NETWORK service bit limitation with pruned nodes. LDK connects via RPC directly, so pruned nodes work natively. No service bit checks, no cross-app restrictions, no duplicate sync engine.
 
-The planned LDK (Lightning Dev Kit) migration eliminates this limitation entirely. LDK connects to bitcoind via RPC (not P2P Neutrino), so pruned nodes work natively. No service bit checks, no cross-app restrictions, no duplicate sync engine. See [LDK Research](docs/LDK-RESEARCH.md).
+### External Wallet Support
+
+The app runs an LNDHub-compatible API server on localhost:3000. Connect BlueWallet or Zeus in LNDHub mode to use your Lightning node from another app on the same phone.
+
+### Peer Discovery
+
+Built-in peer browser using mempool.space API. Browse nodes by:
+- **Most Connected:** highest channel count
+- **Largest:** biggest total capacity
+- **Lowest Fee:** cheapest routing fees
+- **Search:** find nodes by name or pubkey
 
 ## Target Platform
 
@@ -229,8 +255,16 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 app/src/main/java/com/pocketnode/
 ├── service/
 │   ├── BitcoindService.kt      # Foreground service managing bitcoind
-│   ├── BwtService.kt           # Electrum server lifecycle management
+│   ├── ElectrumService.kt      # Electrum server lifecycle management
 │   └── SyncController.kt       # Network-aware sync pause/resume
+├── lightning/
+│   ├── LightningService.kt     # ldk-node wrapper (start/stop, channels, payments)
+│   └── LndHubServer.kt         # LNDHub-compatible API server on localhost:3000
+├── electrum/
+│   ├── ElectrumServer.kt       # Electrum protocol TCP server
+│   ├── ElectrumMethods.kt      # Electrum RPC method handlers
+│   ├── AddressIndex.kt         # Descriptor wallet + address tracking
+│   └── SubscriptionManager.kt  # Address/header subscription notifications
 ├── network/
 │   └── NetworkMonitor.kt       # WiFi/cellular/VPN detection + data tracking
 ├── snapshot/
@@ -245,15 +279,24 @@ app/src/main/java/com/pocketnode/
 ├── ui/
 │   ├── PocketNodeApp.kt        # Navigation + top-level routing
 │   ├── NodeStatusScreen.kt     # Main dashboard
+│   ├── LightningScreen.kt      # Lightning wallet (balances, channels, fund)
 │   ├── SetupChecklistScreen.kt # Config mode setup wizard
 │   ├── SnapshotSourceScreen.kt # Source picker
 │   ├── ChainstateCopyScreen.kt # Snapshot load progress (4-step flow)
-│   ├── ConnectWalletScreen.kt  # BlueWallet / Electrum / Zeus wallet connection guide
+│   ├── ConnectWalletScreen.kt  # RPC / Electrum / LNDHub connection guide
 │   ├── BlockFilterUpgradeScreen.kt # Lightning block filter management
+│   ├── WatchtowerScreen.kt     # Home node watchtower setup
 │   ├── DataUsageScreen.kt      # Data usage breakdown
 │   ├── NetworkSettingsScreen.kt # Cellular/WiFi budgets
 │   ├── NodeAccessScreen.kt     # View/remove node access
 │   ├── NodeConnectionScreen.kt # Remote node connection setup
+│   ├── InternetDownloadScreen.kt # HTTPS snapshot download
+│   ├── lightning/
+│   │   ├── SendPaymentScreen.kt    # Pay BOLT11 invoices
+│   │   ├── ReceivePaymentScreen.kt # Generate invoices
+│   │   ├── PaymentHistoryScreen.kt # Payment list
+│   │   ├── OpenChannelScreen.kt    # Open channel to peer
+│   │   └── PeerBrowserScreen.kt    # Browse/search Lightning peers
 │   └── components/
 │       ├── NetworkStatusBar.kt      # Sync status banner
 │       └── AdminCredentialsDialog.kt # SSH creds prompt
@@ -261,7 +304,7 @@ app/src/main/java/com/pocketnode/
 │   └── UTXOracle.kt            # Sovereign price discovery from on-chain data
 └── util/
     ├── ConfigGenerator.kt      # Mobile-optimized bitcoin.conf
-    ├── BinaryExtractor.kt      # Version selection, 4 bundled bitcoind binaries
+    ├── BinaryExtractor.kt      # Version selection, 3 bundled bitcoind binaries
     └── SetupChecker.kt         # Auto-detect completed setup steps
 ```
 
@@ -279,32 +322,21 @@ app/src/main/java/com/pocketnode/
 - [LDK Research](docs/LDK-RESEARCH.md)
 - [Watchtower Mesh Design](docs/WATCHTOWER-MESH.md)
 - [Desktop Port Design](docs/DESKTOP-PORT.md)
+- [Power Modes Design](docs/POWER-MODES.md)
 
 ## Roadmap
 
-- **Desktop port:** Same app on Linux, macOS, Windows via Compose Multiplatform. Same UI, same chainstate copy, same version selection. See [design doc](docs/DESKTOP-PORT.md).
-- **Home node watchtower:** Your home node watches your phone's Lightning channels when you're away. Enabled automatically during setup. See [design doc](docs/WATCHTOWER-MESH.md).
-- **Policy settings:** Expose Knots datacarrier flags as toggleable settings.
-- **LDK migration:** Replace Zeus with native in-process Lightning (LDK). Built-in wallet UI, LNDHub API for external wallets, and **cellular Lightning mode**: payments work on mobile data with zero blockchain bandwidth. bitcoind pauses sync, LDK keeps operating via localhost RPC, watchtower monitors channels at home, full sync resumes on WiFi. Only possible because the entire stack runs in one app.
-
-```
-bitcoind ← RPC → ldk-node (in-process)
-                    │
-            ┌───────┴────────┐
-            │                │
-      Built-in UI      LNDHub API (:3000)
-      (send/receive/        │
-       channels)       External wallets
-                       (BlueWallet, Zeus)
-
-  Electrum server (:50001) — on-chain wallets
-```
+- **Cellular Lightning mode:** Lightning payments on mobile data with zero blockchain bandwidth. bitcoind pauses sync, ldk-node keeps operating via localhost RPC, watchtower monitors channels at home, full sync resumes on WiFi
+- **Pruned node recovery:** Auto-detect missing blocks after extended offline, temporarily grow prune window, show recovery progress, shrink back when caught up
+- **Desktop port:** Same app on Linux, macOS, Windows via Compose Multiplatform. See [design doc](docs/DESKTOP-PORT.md)
+- **Policy settings:** Expose Knots datacarrier flags as toggleable settings
+- **Power modes:** Max/Low/Away profiles with burst sync for mobile efficiency. See [design doc](docs/POWER-MODES.md)
 
 ## Tested On
 
 | Device | SoC | OS | Result |
 |--------|-----|----|--------|
-| Pixel 7 Pro | Tensor G2 | GrapheneOS | ✅ Full stack: chainstate copy, Lightning, BIP 110, all features verified |
+| Pixel 9 | Tensor G4 | GrapheneOS | ✅ Full stack: chainstate copy, LDK Lightning, BIP 110, all features verified |
 | Samsung Galaxy Z Fold | Snapdragon | Android | ✅ Dual-pane foldable layout working, IBD syncing |
 | Huawei Mate 20 Lite | Kirin 710 | EMUI | ✅ Clean install, IBD syncing from genesis |
 

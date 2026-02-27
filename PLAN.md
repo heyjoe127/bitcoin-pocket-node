@@ -86,6 +86,14 @@ Pruned Bitcoin Core on the phone with BIP 157/158 block filters. Zeus with embed
 - [x] Live foreground notification (block height, peers, sync %, oracle price)
 - [x] Persistent mempool across restarts (survives nightly reboot)
 - [x] Config migration for existing installs (auto-adds new settings)
+- [x] Pure Kotlin Electrum server (1,129 lines, no native dependencies)
+- [x] BwtService renamed to ElectrumService across entire codebase
+- [x] fdsan fix for GrapheneOS file descriptor sanitizer
+- [x] Unified Knots binary with BIP 110 toggle (3 binaries, ~72 MB APK)
+- [x] First-run setup screen
+- [x] HTTPS download from utxo.download
+- [x] Battery saver banner on dashboard
+- [x] Electrum server retry on boot (waits for bitcoind RPC)
 
 ### Technical Risks (Resolved)
 - [x] **bitcoind ARM64 compilation**: Works with NDK r27 clang wrappers
@@ -132,8 +140,8 @@ See [Watchtower Design](docs/WATCHTOWER-MESH.md) for details.
 - [x] Dashboard navigation button to watchtower screen
 - [x] No remote config modification: user enables watchtower via their node's UI
 
-### Lightning Phase 4: LDK Migration
-Replace Zeus embedded LND with LDK (Lightning Dev Kit): modular Lightning library with native Android bindings. Designed for mobile (constrained storage, intermittent connectivity).
+### Lightning Phase 4: LDK Migration ✅
+Replace Zeus embedded LND with ldk-node (Lightning Dev Kit): modular Lightning library with native Android bindings. Designed for mobile (constrained storage, intermittent connectivity).
 
 This phase solves the NODE_NETWORK roadblock: LDK connects to bitcoind via RPC (not P2P Neutrino), so pruned nodes work natively. No service bit checks, no cross-app localhost issues, no duplicate sync engine. One bitcoind, one Lightning implementation, all in-process.
 
@@ -149,18 +157,30 @@ bitcoind ← RPC → ldk-node (in-process)
                        (BlueWallet, Zeus)
 ```
 
-- [ ] ldk-node integration with bitcoind RPC backend (in-process, no cross-app issues)
-- [ ] Built-in Lightning wallet UI (send, receive, channels, payment history)
-- [ ] LNDHub-compatible localhost API for external wallet apps
+- [x] ldk-node 0.7.0 integration with bitcoind RPC backend (in-process, no cross-app issues)
+- [x] Built-in Lightning wallet UI (send, receive, channels, payment history, peer browser)
+- [x] Close/force-close channel UI with cooperative and emergency options
+- [x] Peer discovery browser with mempool.space API (Most Connected, Largest, Lowest Fee, Search)
+- [x] LNDHub-compatible localhost API (:3000) for external wallet apps (BlueWallet, Zeus)
+- [x] Auto-start Lightning when bitcoind syncs (SharedPreference persistence)
+- [x] Channel status indicators (Active/Ready/Pending) with outbound capacity display
 - [ ] Pruned node recovery: auto-detect missing blocks, temporarily grow prune window, show recovery progress, shrink back when caught up
 - [ ] Watchtower support via ldk-node tower client
 - [ ] VLS (Validating Lightning Signer): phone holds signing keys, remote server runs always-online node
 
+**What was built:**
+- `LightningService.kt`: Singleton wrapping ldk-node. Start/stop, channel management, payments, on-chain wallet, observable StateFlow
+- `LndHubServer.kt`: HTTP server on localhost:3000 implementing LNDHub protocol (auth, balance, invoices, payments, decode, getinfo)
+- `LightningScreen.kt`: Status card, balances (on-chain + Lightning), channel list with tap-to-close, fund wallet
+- `SendPaymentScreen.kt`: Paste BOLT11 invoice, pay
+- `ReceivePaymentScreen.kt`: Enter amount, generate invoice, copy
+- `PaymentHistoryScreen.kt`: Payment list with direction/amount/status
+- `OpenChannelScreen.kt`: Peer node ID, address, amount input with validation
+- `PeerBrowserScreen.kt`: Browse Lightning nodes by connectivity, capacity, fee rate, or search by name/pubkey
+
 **Pruned node compatibility:** ldk-node uses `getblock` via RPC, no service bit checks. Works natively with pruned nodes for normal use. If the phone is offline longer than the prune window (~2 weeks at `prune=2048`), ldk-node can't fetch blocks it missed. Recovery: temporarily increase prune setting, let bitcoind re-download the gap blocks, ldk-node catches up, then shrink prune back to normal. User sees a "Recovering Lightning state..." screen with progress.
 
 **Cellular Lightning mode:** When on cellular/metered network, bitcoind pauses block sync (zero download bandwidth) but stays running for RPC. ldk-node continues operating Lightning normally: payments, channel updates, invoice generation all work over the Lightning peer network. On-chain transactions still broadcast via minimal peer connection. Force-close monitoring handled by home node watchtower. Full block sync resumes automatically on WiFi. Dashboard shows "Lightning active, blockchain paused." Only possible because everything runs in-process via localhost RPC.
-
-**Estimated effort:** 8-14 weeks for built-in wallet + LNDHub API + cellular mode.
 
 ### Desktop Port (Compose Multiplatform)
 Same app, same experience, phone or desktop. Using Jetpack Compose Multiplatform to share UI code between Android and desktop (Linux, macOS, Windows).
