@@ -137,96 +137,58 @@ class WatchtowerBridge(private val context: Context) {
         // Load tower config
         val prefs = context.getSharedPreferences("watchtower_prefs", Context.MODE_PRIVATE)
         val towerPubKey = prefs.getString("tower_pubkey", null)
+        val towerOnion = prefs.getString("tower_onion", null)
+        val towerPort = prefs.getInt("tower_port", 9911)
         val sshHost = prefs.getString("ssh_host", null)
         val sshPort = prefs.getInt("ssh_port", 22)
         val sshUser = prefs.getString("ssh_user", null)
-        val towerPort = prefs.getInt("tower_port", 9911)
 
-        if (towerPubKey == null || sshHost == null || sshUser == null) {
+        if (towerPubKey == null) {
             Log.w(TAG, "Watchtower not configured, skipping push")
             return -1
         }
 
-        var pushed = 0
+        val clientKey = getOrCreateClientKey()
+        val towerPubKeyBytes = hexToBytes(towerPubKey)
+        val sweepFeeRate = estimateSweepFeeRate()
+        val native = WatchtowerNative.INSTANCE
+
+        // Try Tor first (direct .onion, no SSH needed), then fall back to SSH tunnel
+        val connected = if (towerOnion != null && towerOnion.endsWith(".onion")) {
+            connectViaTor(native, towerOnion, towerPort, towerPubKeyBytes, clientKey, sweepFeeRate)
+        } else {
+            false
+        }
+
+        // Fall back to SSH tunnel if Tor failed or no onion address
         var sshSession: Session? = null
         var localPort = -1
+        val sshConnected = if (!connected && sshHost != null && sshUser != null) {
+            try {
+                val result = connectViaSsh(native, sshHost, sshPort, sshUser, towerOnion ?: "127.0.0.1",
+                    towerPort, towerPubKeyBytes, clientKey, sweepFeeRate, prefs)
+                sshSession = result.first
+                localPort = result.second
+                result.third
+            } catch (e: Exception) {
+                Log.e(TAG, "SSH tunnel failed: ${e.message}")
+                false
+            }
+        } else {
+            false
+        }
 
+        if (!connected && !sshConnected) {
+            Log.w(TAG, "Cannot reach watchtower (Tor and SSH both failed), storing locally")
+            return encryptAndStoreLocally(blobs)
+        }
+
+        if (connected || sshConnected) sessionFeeRate = sweepFeeRate
+
+        // Push blobs
+        var pushed = 0
         try {
-            // SSH tunnel to Umbrel, forward local port to tower's onion port
-            val jsch = JSch()
-            val keyFile = java.io.File(context.filesDir, "ssh_key")
-            if (keyFile.exists()) {
-                jsch.addIdentity(keyFile.absolutePath)
-            }
-
-            sshSession = jsch.getSession(sshUser, sshHost, sshPort)
-            sshSession.setConfig("StrictHostKeyChecking", "no")
-
-            val sshPassword = prefs.getString("ssh_password", null)
-            if (sshPassword != null) {
-                sshSession.setPassword(sshPassword)
-            }
-
-            sshSession.connect(15000)
-
-            // Forward local port to tower (onion address resolves on Umbrel via Tor)
-            val towerOnion = prefs.getString("tower_onion", "127.0.0.1")!!
-            localPort = sshSession.setPortForwardingL(0, towerOnion, towerPort)
-            Log.i(TAG, "SSH tunnel established, local port $localPort -> $towerOnion:$towerPort")
-
-            // Connect native watchtower client through the tunnel
-            val clientKey = getOrCreateClientKey()
-            val towerPubKeyBytes = hexToBytes(towerPubKey)
-
-            // Estimate fee rate from local bitcoind
-            val sweepFeeRate = estimateSweepFeeRate()
-
-            val native = WatchtowerNative.INSTANCE
-            val connectResult = native.wtclient_connect(
-                "127.0.0.1:$localPort",
-                towerPubKeyBytes,
-                clientKey,
-                1024, // max updates per session
-                sweepFeeRate
-            )
-
-            // Track the session fee rate for drift detection
-            if (connectResult == 0) sessionFeeRate = sweepFeeRate
-
-            if (connectResult != 0) {
-                Log.e(TAG, "Failed to connect to watchtower via Noise_XK")
-                // Fall back to local storage
-                return encryptAndStoreLocally(blobs)
-            }
-
-            Log.i(TAG, "Connected to LND tower via Noise_XK (fee rate: $sweepFeeRate sat/kw)")
-
-            // Push each blob through the native wire protocol
-            for (blob in blobs) {
-                val result = native.wtclient_send_backup(
-                    blob.breachTxid,
-                    blob.revocationPubkey,
-                    blob.localDelayPubkey,
-                    blob.csvDelay.toInt(),
-                    blob.sweepAddress,
-                    blob.sweepAddress.size,
-                    blob.toLocalSig,
-                    blob.toRemotePubkey,
-                    blob.toRemoteSig
-                )
-                if (result == 0) {
-                    pushed++
-                    Log.d(TAG, "Pushed blob to tower (${pushed}/${blobs.size})")
-                } else {
-                    Log.w(TAG, "Tower rejected blob, storing locally")
-                    val encrypted = encryptJusticeBlob(blob)
-                    if (encrypted != null) storeEncryptedBlob(blob.breachTxid, encrypted)
-                }
-            }
-
-            val remaining = native.wtclient_remaining_updates()
-            Log.i(TAG, "Pushed $pushed blob(s) to tower ($remaining slots remaining)")
-
+            pushed = pushBlobs(native, blobs)
             native.wtclient_disconnect()
         } catch (e: Exception) {
             Log.e(TAG, "Watchtower push failed: ${e.message}, storing locally")
@@ -238,6 +200,118 @@ class WatchtowerBridge(private val context: Context) {
             } catch (_: Exception) {}
         }
 
+        return pushed
+    }
+
+    /**
+     * Connect to tower via embedded Tor (direct .onion, no SSH tunnel).
+     */
+    private fun connectViaTor(
+        native: WatchtowerNative,
+        onionHost: String,
+        port: Int,
+        towerPubKey: ByteArray,
+        clientKey: ByteArray,
+        sweepFeeRate: Long
+    ): Boolean {
+        Log.i(TAG, "Attempting Tor connection to $onionHost:$port")
+        val torStateDir = java.io.File(context.filesDir, "tor_state").apply { mkdirs() }.absolutePath
+        val torCacheDir = java.io.File(context.cacheDir, "tor_cache").apply { mkdirs() }.absolutePath
+
+        val result = native.wtclient_connect_tor(
+            "$onionHost:$port",
+            towerPubKey,
+            clientKey,
+            1024,
+            sweepFeeRate,
+            torStateDir,
+            torCacheDir
+        )
+
+        if (result == 0) {
+            Log.i(TAG, "Connected to LND tower via Tor (fee rate: $sweepFeeRate sat/kw)")
+            return true
+        }
+        Log.w(TAG, "Tor connection failed, will try SSH fallback")
+        return false
+    }
+
+    /**
+     * Connect to tower via SSH tunnel (existing approach).
+     * Returns (sshSession, localPort, connected).
+     */
+    private fun connectViaSsh(
+        native: WatchtowerNative,
+        sshHost: String,
+        sshPort: Int,
+        sshUser: String,
+        towerOnion: String,
+        towerPort: Int,
+        towerPubKey: ByteArray,
+        clientKey: ByteArray,
+        sweepFeeRate: Long,
+        prefs: android.content.SharedPreferences
+    ): Triple<Session, Int, Boolean> {
+        val jsch = JSch()
+        val keyFile = java.io.File(context.filesDir, "ssh_key")
+        if (keyFile.exists()) {
+            jsch.addIdentity(keyFile.absolutePath)
+        }
+
+        val sshSession = jsch.getSession(sshUser, sshHost, sshPort)
+        sshSession.setConfig("StrictHostKeyChecking", "no")
+        val sshPassword = prefs.getString("ssh_password", null)
+        if (sshPassword != null) {
+            sshSession.setPassword(sshPassword)
+        }
+        sshSession.connect(15000)
+
+        val localPort = sshSession.setPortForwardingL(0, towerOnion, towerPort)
+        Log.i(TAG, "SSH tunnel established, local port $localPort -> $towerOnion:$towerPort")
+
+        val connectResult = native.wtclient_connect(
+            "127.0.0.1:$localPort",
+            towerPubKey,
+            clientKey,
+            1024,
+            sweepFeeRate
+        )
+
+        if (connectResult == 0) {
+            Log.i(TAG, "Connected to LND tower via SSH tunnel (fee rate: $sweepFeeRate sat/kw)")
+        }
+
+        return Triple(sshSession, localPort, connectResult == 0)
+    }
+
+    /**
+     * Push all blobs to the connected tower. Returns number pushed.
+     */
+    private fun pushBlobs(native: WatchtowerNative, blobs: List<WatchtowerJusticeBlob>): Int {
+        var pushed = 0
+        for (blob in blobs) {
+            val result = native.wtclient_send_backup(
+                blob.breachTxid,
+                blob.revocationPubkey,
+                blob.localDelayPubkey,
+                blob.csvDelay.toInt(),
+                blob.sweepAddress,
+                blob.sweepAddress.size,
+                blob.toLocalSig,
+                blob.toRemotePubkey,
+                blob.toRemoteSig
+            )
+            if (result == 0) {
+                pushed++
+                Log.d(TAG, "Pushed blob to tower (${pushed}/${blobs.size})")
+            } else {
+                Log.w(TAG, "Tower rejected blob, storing locally")
+                val encrypted = encryptJusticeBlob(blob)
+                if (encrypted != null) storeEncryptedBlob(blob.breachTxid, encrypted)
+            }
+        }
+        val remaining = native.wtclient_remaining_updates()
+        Log.i(TAG, "Pushed $pushed blob(s) to tower ($remaining slots remaining)")
         return pushed
     }
 

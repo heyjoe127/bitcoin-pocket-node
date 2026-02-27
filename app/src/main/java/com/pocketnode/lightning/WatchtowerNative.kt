@@ -56,6 +56,29 @@ interface WatchtowerNative : Library {
     /** Get remaining update slots. Returns count or -1 if not connected. */
     fun wtclient_remaining_updates(): Int
 
+    /**
+     * Connect to an LND watchtower via embedded Tor (.onion address).
+     * No SSH tunnel needed -- connects directly through the Tor network.
+     *
+     * @param onionAddress Tower .onion:port address
+     * @param towerPubkey 33-byte compressed secp256k1 public key
+     * @param clientKey 32-byte private key for this client
+     * @param maxUpdates Maximum updates per session
+     * @param sweepFeeRate Fee rate in sat/kweight for justice txs
+     * @param stateDir Directory for Tor consensus cache (persistent)
+     * @param cacheDir Directory for Tor temp cache
+     * @return 0 on success, -1 on error
+     */
+    fun wtclient_connect_tor(
+        onionAddress: String,
+        towerPubkey: ByteArray,
+        clientKey: ByteArray,
+        maxUpdates: Short,
+        sweepFeeRate: Long,
+        stateDir: String,
+        cacheDir: String
+    ): Int
+
     companion object {
         val INSTANCE: WatchtowerNative by lazy {
             Native.load("ldk_watchtower_client", WatchtowerNative::class.java)
