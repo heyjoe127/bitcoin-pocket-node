@@ -131,11 +131,50 @@ class LightningService(private val context: Context) {
 
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start Lightning node", e)
+
+            // Auto-recover from bad seed: restore most recent backup
+            if (e.message?.contains("WalletSetupFailed") == true ||
+                e.message?.contains("wallet") == true) {
+                val recovered = tryRestoreSeedBackup()
+                if (recovered) {
+                    _state.value = _state.value.copy(
+                        status = LightningState.Status.ERROR,
+                        error = "Wallet seed restored from backup. Please try starting again."
+                    )
+                    return
+                }
+            }
+
             _state.value = _state.value.copy(
                 status = LightningState.Status.ERROR,
                 error = e.message ?: "Unknown error"
             )
         }
+    }
+
+    /**
+     * Try to restore the most recent seed backup that differs from the current seed.
+     * Returns true if a backup was restored.
+     */
+    private fun tryRestoreSeedBackup(): Boolean {
+        val storageDir = File(context.filesDir, STORAGE_DIR)
+        val seedFile = File(storageDir, "keys_seed")
+        val currentSeed = if (seedFile.exists()) seedFile.readBytes() else return false
+
+        // Find backups, sorted newest first
+        val backups = storageDir.listFiles()?.filter {
+            it.name.startsWith("keys_seed.bak.")
+        }?.sortedByDescending { it.lastModified() } ?: return false
+
+        for (backup in backups) {
+            val backupSeed = backup.readBytes()
+            if (backupSeed.size == 64 && !backupSeed.contentEquals(currentSeed)) {
+                seedFile.writeBytes(backupSeed)
+                Log.i(TAG, "Auto-restored seed from ${backup.name}")
+                return true
+            }
+        }
+        return false
     }
 
     /**
