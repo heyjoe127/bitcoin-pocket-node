@@ -87,7 +87,7 @@ See [Version Selection Design](docs/VERSION-SELECTION.md) and [BIP 110 Research]
 - **Snapshot validation** checks block hash before loading, auto-redownloads if wrong
 - **Non-blocking snapshot load** with progress tracking
 - **Network-aware sync** that auto-pauses on cellular and resumes on WiFi
-- **VPN support:** WireGuard/VPN connections treated as WiFi
+- **VPN-aware networking:** Detects actual connection type behind VPN (cellular vs WiFi)
 - **Data budgets** for WiFi and cellular
 - **Battery saver** pauses sync when unplugged below 50%
 - **Auto-start on boot**
