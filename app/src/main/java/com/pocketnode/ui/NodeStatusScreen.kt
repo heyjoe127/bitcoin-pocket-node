@@ -510,7 +510,7 @@ fun NodeStatusScreen(
                                             "⚡ Lightning Starting..."
                                         com.pocketnode.lightning.LightningService.LightningState.Status.ERROR ->
                                             "⚡ Lightning Error"
-                                        else -> "⚡ Lightning Wallet"
+                                        else -> "⚡ Lightning Node"
                                     },
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Medium
