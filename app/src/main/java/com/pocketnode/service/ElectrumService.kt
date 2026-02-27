@@ -109,7 +109,17 @@ class ElectrumService(private val context: Context) {
                     syncProgress = 0.4f
                 )
 
-                if (!addressIndex.ensureWallet()) {
+                // Retry wallet creation — bitcoind may still be warming up at boot
+                var walletReady = false
+                for (attempt in 1..10) {
+                    if (addressIndex.ensureWallet()) {
+                        walletReady = true
+                        break
+                    }
+                    Log.i(TAG, "Waiting for bitcoind RPC (attempt $attempt/10)...")
+                    kotlinx.coroutines.delay(3000)
+                }
+                if (!walletReady) {
                     _state.value = ElectrumState(status = ElectrumState.Status.ERROR,
                         error = "Failed to create tracking wallet")
                     return@launch
