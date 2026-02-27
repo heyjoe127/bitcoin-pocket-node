@@ -378,9 +378,19 @@ class LightningService(private val context: Context) {
      */
     fun getSeedWords(): List<String>? {
         val seedFile = File(context.filesDir, "$STORAGE_DIR/keys_seed")
+        Log.d(TAG, "getSeedWords: checking ${seedFile.absolutePath}, exists=${seedFile.exists()}")
         if (!seedFile.exists()) return null
-        val entropy = seedFile.readBytes()
-        if (entropy.size != 32) return null
+        val rawBytes = seedFile.readBytes()
+        Log.d(TAG, "getSeedWords: read ${rawBytes.size} bytes")
+        // ldk-node stores 64-byte seed; use first 32 bytes as entropy for BIP39
+        val entropy = when (rawBytes.size) {
+            32 -> rawBytes
+            64 -> rawBytes.sliceArray(0 until 32)
+            else -> {
+                Log.e(TAG, "Unexpected seed size: ${rawBytes.size}")
+                return null
+            }
+        }
         return try {
             Bip39.entropyToMnemonic(entropy, context)
         } catch (e: Exception) {
@@ -408,8 +418,15 @@ class LightningService(private val context: Context) {
             throw IllegalStateException("Cannot restore while Lightning node is running. Stop it first.")
         }
 
-        // Validate and convert
-        val entropy = Bip39.mnemonicToEntropy(words, context)
+        // Validate and convert (returns 32 bytes)
+        val entropy32 = Bip39.mnemonicToEntropy(words, context)
+
+        // ldk-node expects a 64-byte keys_seed file.
+        // First 32 bytes = primary entropy (from mnemonic)
+        // Second 32 bytes = derived via SHA256 for additional key material
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+        val secondary = digest.digest(entropy32)
+        val seed64 = entropy32 + secondary
 
         // Write seed file
         val storageDir = File(context.filesDir, STORAGE_DIR)
@@ -423,7 +440,7 @@ class LightningService(private val context: Context) {
             Log.i(TAG, "Backed up existing seed to ${backup.name}")
         }
 
-        seedFile.writeBytes(entropy)
+        seedFile.writeBytes(seed64)
         Log.i(TAG, "Wallet seed restored from mnemonic (${words.size} words)")
 
         // Clear cached sweep address since node identity will change

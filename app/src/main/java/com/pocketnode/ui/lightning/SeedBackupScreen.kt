@@ -109,7 +109,7 @@ fun SeedBackupScreen(
                         )
                     } else if (!showSeed) {
                         Text(
-                            "Tap below to reveal your 24 seed words. Make sure no one is watching your screen.",
+                            "Tap below to reveal your seed words. Make sure no one is watching your screen.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -124,6 +124,15 @@ fun SeedBackupScreen(
                             )
                         ) {
                             Text("Show Seed Words")
+                        }
+                    } else if (seedWords == null) {
+                        Text(
+                            "Could not read seed file. The wallet seed may not exist yet, or the file is corrupted.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        OutlinedButton(onClick = { showSeed = false }) {
+                            Text("Back")
                         }
                     } else {
                         // Display seed words in numbered grid
