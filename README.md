@@ -78,9 +78,9 @@ See [Version Selection Design](docs/VERSION-SELECTION.md) and [BIP 110 Research]
 - **3 Bitcoin implementations** with one-tap switching: Core 28.1, Core 30, Knots 29.3 (BIP 110 toggle)
 - **Two bootstrap paths:** direct chainstate copy (~20 min) or AssumeUTXO (~3 hours)
 - **Pure Kotlin Electrum server** so BlueWallet can query your own node (no native dependencies)
-- **Built-in Lightning wallet** powered by LDK (send, receive, channels, peer browser)
-- **LNDHub API** on localhost:3000 for BlueWallet/Zeus connectivity
-- **Home node watchtower** detection and setup for Lightning channel protection
+- **Built-in Lightning node** powered by LDK (send, receive, channels, peer browser, seed backup/restore)
+- **LNDHub API** on localhost:3000 for external wallet connectivity (BlueWallet, Zeus)
+- **Home node watchtower** with automatic channel protection via LDK-to-LND bridge
 - **Sovereign price discovery** using UTXOracle (BTC/USD from on-chain data, no exchange APIs)
 - **Mempool viewer** with fee estimates, projected blocks, and transaction search
 - **Wallet setup guide** for BlueWallet connection
@@ -279,7 +279,7 @@ app/src/main/java/com/pocketnode/
 ├── ui/
 │   ├── PocketNodeApp.kt        # Navigation + top-level routing
 │   ├── NodeStatusScreen.kt     # Main dashboard
-│   ├── LightningScreen.kt      # Lightning wallet (balances, channels, fund)
+│   ├── LightningScreen.kt      # Lightning node (balances, channels, watchtower status)
 │   ├── SetupChecklistScreen.kt # Config mode setup wizard
 │   ├── SnapshotSourceScreen.kt # Source picker
 │   ├── ChainstateCopyScreen.kt # Snapshot load progress (4-step flow)
@@ -296,10 +296,17 @@ app/src/main/java/com/pocketnode/
 │   │   ├── ReceivePaymentScreen.kt # Generate invoices
 │   │   ├── PaymentHistoryScreen.kt # Payment list
 │   │   ├── OpenChannelScreen.kt    # Open channel to peer
-│   │   └── PeerBrowserScreen.kt    # Browse/search Lightning peers
+│   │   ├── PeerBrowserScreen.kt    # Browse/search Lightning peers
+│   │   └── SeedBackupScreen.kt    # BIP39 seed view and restore
 │   └── components/
 │       ├── NetworkStatusBar.kt      # Sync status banner
 │       └── AdminCredentialsDialog.kt # SSH creds prompt
+├── lightning/
+│   ├── LightningService.kt     # ldk-node singleton wrapper
+│   ├── LndHubServer.kt         # LNDHub API server (:3000)
+│   ├── WatchtowerBridge.kt     # LDK-to-LND watchtower push via SSH + Brontide
+│   ├── WatchtowerNative.kt     # JNA bindings to native Rust watchtower client
+│   └── Bip39.kt                # Pure Kotlin BIP39 (mnemonic ↔ entropy)
 ├── oracle/
 │   └── UTXOracle.kt            # Sovereign price discovery from on-chain data
 └── util/

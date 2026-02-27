@@ -164,7 +164,7 @@ bitcoind ← RPC → ldk-node (in-process)
 - [x] LNDHub-compatible localhost API (:3000) for external wallet apps (BlueWallet, Zeus)
 - [x] Auto-start Lightning when bitcoind syncs (SharedPreference persistence)
 - [x] Channel status indicators (Active/Ready/Pending) with outbound capacity display
-- [ ] **Seed backup & restore**: BIP39 mnemonic display (view seed words), restore from existing mnemonic. Users must be able to back up and recover their Lightning wallet
+- [x] **Seed backup & restore**: BIP39 mnemonic display (view 24 words), restore from existing mnemonic with smart backup matching
 - [ ] Pruned node recovery: auto-detect missing blocks, temporarily grow prune window, show recovery progress, shrink back when caught up
 - [x] Watchtower bridge: LDK-to-LND watchtower protocol (see docs/LDK-WATCHTOWER-BRIDGE.md)
 - [ ] VLS (Validating Lightning Signer): phone holds signing keys, remote server runs always-online node
@@ -178,6 +178,10 @@ bitcoind ← RPC → ldk-node (in-process)
 - `PaymentHistoryScreen.kt`: Payment list with direction/amount/status
 - `OpenChannelScreen.kt`: Peer node ID, address, amount input with validation
 - `PeerBrowserScreen.kt`: Browse Lightning nodes by connectivity, capacity, fee rate, or search by name/pubkey
+- `SeedBackupScreen.kt`: View 24-word BIP39 mnemonic, restore from seed with smart backup matching
+- `Bip39.kt`: Pure Kotlin BIP39 implementation (entropy to mnemonic, mnemonic to entropy)
+- `WatchtowerBridge.kt`: Drains justice blobs from ldk-node, encrypts, SSH tunnels to home node, pushes via Brontide
+- `WatchtowerNative.kt`: JNA bindings to native Rust watchtower client (libldk_watchtower_client.so)
 
 **Pruned node compatibility:** ldk-node uses `getblock` via RPC, no service bit checks. Works natively with pruned nodes for normal use. If the phone is offline longer than the prune window (~2 weeks at `prune=2048`), ldk-node can't fetch blocks it missed. Recovery: temporarily increase prune setting, let bitcoind re-download the gap blocks, ldk-node catches up, then shrink prune back to normal. User sees a "Recovering Lightning state..." screen with progress.
 
