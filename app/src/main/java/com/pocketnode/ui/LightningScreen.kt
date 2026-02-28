@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.pocketnode.lightning.LightningService
+import com.pocketnode.snapshot.BlockFilterManager
 import kotlinx.coroutines.launch
 
 /**
@@ -534,6 +535,85 @@ fun LightningScreen(
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
                 ) {
                     Text("Stop Lightning Node")
+                }
+            }
+
+            // Lightning info & management — always visible at bottom
+            run {
+                val filterDir = java.io.File(context.filesDir, "bitcoin/indexes/blockfilter/basic")
+                val hasFilters = filterDir.exists() && (filterDir.listFiles()?.size ?: 0) > 1
+
+                if (hasFilters) {
+                    val manager = remember { BlockFilterManager(context) }
+                    val localSize = remember { manager.localSizeBytes() }
+                    val sizeGb = localSize / (1024.0 * 1024 * 1024)
+
+                    Divider(
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
+                        modifier = Modifier.padding(vertical = 4.dp)
+                    )
+
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text("Block Filters", fontWeight = FontWeight.Bold)
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                "BIP 157/158 filters installed. Lightning chain validation runs against your own full node.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "Storage: ${"%.1f".format(sizeGb)} GB",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                            )
+                        }
+                    }
+
+                    var showRemoveConfirm by remember { mutableStateOf(false) }
+
+                    OutlinedButton(
+                        onClick = { showRemoveConfirm = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error
+                        )
+                    ) {
+                        Text("Remove Lightning Support")
+                    }
+
+                    if (showRemoveConfirm) {
+                        AlertDialog(
+                            onDismissRequest = { showRemoveConfirm = false },
+                            title = { Text("Remove Lightning Support?") },
+                            text = {
+                                Text("This will delete ${"%.1f".format(sizeGb)} GB of block filter data. Lightning will stop working and your channels may need to be closed.")
+                            },
+                            confirmButton = {
+                                TextButton(onClick = {
+                                    showRemoveConfirm = false
+                                    scope.launch {
+                                        lightning.stop()
+                                        manager.removeLocal(context)
+                                        onNavigateBack()
+                                    }
+                                }) {
+                                    Text("Remove", color = MaterialTheme.colorScheme.error)
+                                }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { showRemoveConfirm = false }) {
+                                    Text("Cancel")
+                                }
+                            }
+                        )
+                    }
                 }
             }
         }
