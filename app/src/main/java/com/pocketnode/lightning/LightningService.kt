@@ -403,7 +403,7 @@ class LightningService(private val context: Context) {
             Result.success(offer.toString())
         } catch (e: Exception) {
             Log.e(TAG, "Failed to create offer", e)
-            val msg = if (e.message?.contains("OfferCreationFailed") == true)
+            val msg = if (e.javaClass.simpleName.contains("OfferCreationFailed") == true)
                 "BOLT12 offers are linked to channels. A channel is required to create an offer."
             else e.message ?: "Failed to create offer"
             Result.failure(Exception(msg))
@@ -423,7 +423,7 @@ class LightningService(private val context: Context) {
             Result.success(offer.toString())
         } catch (e: Exception) {
             Log.e(TAG, "Failed to create variable offer", e)
-            val msg = if (e.message?.contains("OfferCreationFailed") == true)
+            val msg = if (e.javaClass.simpleName.contains("OfferCreationFailed") == true)
                 "BOLT12 offers are linked to channels. A channel is required to create an offer."
             else e.message ?: "Failed to create offer"
             Result.failure(Exception(msg))
