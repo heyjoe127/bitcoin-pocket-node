@@ -230,6 +230,7 @@ See [Desktop Port Design](docs/DESKTOP-PORT.md) for the full design document.
 - [ ] Detect corrupted block index after long offline period, offer re-bootstrap
 - [ ] Charging-aware sync (configurable)
 - [ ] Doze mode handling
+- [ ] Sync staleness nudge: gentle notification when node hasn't synced in a while. Watchtower active: 48h threshold. No watchtower: 12h threshold. Low pressure, just "Connect to WiFi when convenient to stay current."
 - [x] Built-in Tor (Arti): direct .onion connection to home node watchtower, no SSH tunnel or Orbot needed
 - [ ] Tor for Rapid Gossip Sync: route RGS fetch through Arti to hide Lightning usage from ISP
 - [ ] Tor for LDK peer connections: connect to .onion Lightning peers
