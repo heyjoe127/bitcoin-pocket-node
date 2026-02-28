@@ -179,15 +179,8 @@ class LightningService(private val context: Context) {
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start Lightning node", e)
 
-            // Auto-recover from pruned blocks: detect the error and re-download
-            val errorMsg = e.message ?: "Unknown error"
-            if (isPrunedBlockError(errorMsg)) {
-                Log.i(TAG, "Detected pruned block error, starting recovery...")
-                recoverPrunedBlocks(rpcUser, rpcPassword, rpcPort)
-                return@withContext
-            }
-
             starting = false
+            val errorMsg = e.message ?: "Unknown error"
 
             // Auto-recover from bad seed: restore most recent backup
             if (errorMsg.contains("WalletSetupFailed") ||
@@ -235,17 +228,6 @@ class LightningService(private val context: Context) {
     }
 
     // === Prune Recovery ===
-
-    /**
-     * Detect if a startup error is due to pruned blocks that ldk-node needs.
-     * Bitcoind returns "Block not available (pruned data)" when asked for a pruned block.
-     */
-    private fun isPrunedBlockError(error: String): Boolean {
-        val lower = error.lowercase()
-        return lower.contains("pruned") ||
-               lower.contains("block not available") ||
-               lower.contains("block not found")
-    }
 
     /**
      * Recover pruned blocks by invalidating the chain at the prune height and
