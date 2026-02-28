@@ -423,36 +423,31 @@ fun NodeStatusScreen(
                     .verticalScroll(dashboardScrollState),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Lightning node card — shown at top when Lightning ready
+                // Lightning node button — shown at top when filters installed
                 run {
                     val filterDir = java.io.File(LocalContext.current.filesDir, "bitcoin/indexes/blockfilter/basic")
                     val hasFilters = filterDir.exists() && (filterDir.listFiles()?.size ?: 0) > 1
                     if (hasFilters) {
                         val lightningState by com.pocketnode.lightning.LightningService.stateFlow.collectAsState()
-                        Card(
+                        Button(
                             onClick = onNavigateToLightning,
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant
-                            )
+                            modifier = Modifier.fillMaxWidth().height(48.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800))
                         ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Text(
-                                    when (lightningState.status) {
-                                        com.pocketnode.lightning.LightningService.LightningState.Status.RUNNING ->
-                                            if (lightningState.channelCount > 0)
-                                                "⚡ Lightning (${lightningState.channelCount} channel${if (lightningState.channelCount != 1) "s" else ""})"
-                                            else "⚡ Lightning Node"
-                                        com.pocketnode.lightning.LightningService.LightningState.Status.STARTING ->
-                                            "⚡ Lightning Starting..."
-                                        com.pocketnode.lightning.LightningService.LightningState.Status.ERROR ->
-                                            "⚡ Lightning Error"
-                                        else -> "⚡ Lightning Node"
-                                    },
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
+                            Text(
+                                when (lightningState.status) {
+                                    com.pocketnode.lightning.LightningService.LightningState.Status.RUNNING ->
+                                        if (lightningState.channelCount > 0)
+                                            "⚡ Lightning Node (${lightningState.channelCount} channel${if (lightningState.channelCount != 1) "s" else ""})"
+                                        else "⚡ Lightning Node"
+                                    com.pocketnode.lightning.LightningService.LightningState.Status.STARTING ->
+                                        "⚡ Lightning Starting..."
+                                    com.pocketnode.lightning.LightningService.LightningState.Status.ERROR ->
+                                        "⚡ Lightning Error"
+                                    else -> "⚡ Lightning Node"
+                                },
+                                fontWeight = FontWeight.Bold
+                            )
                         }
                     }
                 }
@@ -1330,20 +1325,19 @@ private fun ActionButtons(
             ) { Text("Connect", maxLines = 1, style = MaterialTheme.typography.labelSmall) }
         }
 
-        // Lightning support button
-        // Check filter status, no caching, always reads filesystem
+        // Add Lightning Support — only shown when filters NOT installed but donor configured
         val filterDir = LocalContext.current.filesDir.resolve("bitcoin/indexes/blockfilter/basic")
         val hasFilters = filterDir.exists() && (filterDir.listFiles()?.size ?: 0) > 1
         val hasDonor = LocalContext.current.getSharedPreferences("setup_prefs", android.content.Context.MODE_PRIVATE)
             .getString("sftp_host", "")?.isNotEmpty() == true
-        if (hasFilters || hasDonor) {
+        if (!hasFilters && hasDonor) {
             OutlinedButton(
                 onClick = onNavigateToBlockFilter,
                 modifier = Modifier.fillMaxWidth(),
                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)
             ) {
                 Text(
-                    if (hasFilters) "⚡ Lightning Ready" else "⚡ Add Lightning Support",
+                    "⚡ Add Lightning Support",
                     style = MaterialTheme.typography.labelSmall
                 )
             }
