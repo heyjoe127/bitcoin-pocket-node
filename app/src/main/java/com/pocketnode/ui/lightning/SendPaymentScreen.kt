@@ -111,8 +111,11 @@ fun SendPaymentScreen(
 
                     Spacer(Modifier.height(8.dp))
 
-                    // Paste and Scan buttons
+                    // Scan and Paste buttons
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = onNavigateToScanner) {
+                            Text("📷 Scan QR")
+                        }
                         OutlinedButton(
                             onClick = {
                                 clipboardManager.getText()?.text?.let {
@@ -123,9 +126,6 @@ fun SendPaymentScreen(
                             }
                         ) {
                             Text("📋 Paste")
-                        }
-                        OutlinedButton(onClick = onNavigateToScanner) {
-                            Text("📷 Scan QR")
                         }
                     }
                 }
