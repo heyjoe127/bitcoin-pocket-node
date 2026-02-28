@@ -465,9 +465,9 @@
 
 <section class="hero">
   <div class="container">
-    <div class="hero-badge">✅ Proven on Pixel, Samsung, Huawei</div>
+    <div class="hero-badge">v0.10-alpha — BOLT12, QR Codes, Lightning Wallet</div>
     <h1>Bitcoin node in your<br><span class="highlight">pocket</span> in 20 minutes</h1>
-    <p class="subtitle">Turn any Android phone into a fully-validating Bitcoin full node. Sovereign validation, built-in Electrum server, Lightning support. No server dependency.</p>
+    <p class="subtitle">Turn any Android phone into a fully-validating Bitcoin full node with a built-in Lightning wallet. Send and receive payments validated entirely by your own node. No third parties.</p>
     <div class="hero-buttons">
       <a href="https://github.com/FreeOnlineUser/bitcoin-pocket-node/releases/latest" class="btn btn-primary">⬇ Download APK</a>
       <a href="https://github.com/FreeOnlineUser/bitcoin-pocket-node" class="btn btn-outline">View Source</a>
@@ -491,7 +491,7 @@
       <div class="stat-label">Bitcoin implementations</div>
     </div>
     <div class="stat">
-      <div class="stat-value">76 MB</div>
+      <div class="stat-value">80 MB</div>
       <div class="stat-label">APK size</div>
     </div>
   </div>
@@ -530,9 +530,14 @@
         <p>UTXOracle derives BTC/USD from on-chain transaction patterns. Zero external APIs. Updates with each block.</p>
       </div>
       <div class="feature-card">
+        <div class="feature-icon">⚡</div>
+        <h3>Lightning Wallet (LDK)</h3>
+        <p>Built-in Lightning wallet powered by LDK. Send, receive, open channels, payment history. BOLT11 invoices and BOLT12 reusable offers. QR code scanning and display.</p>
+      </div>
+      <div class="feature-card">
         <div class="feature-icon">🛡️</div>
-        <h3>Home Node Watchtower</h3>
-        <p>Your home node watches your Lightning channels when the phone is offline. Auto-detected during setup.</p>
+        <h3>Watchtower + Tor</h3>
+        <p>Your home node watches your Lightning channels when the phone is offline. Built-in Tor (Arti) for direct .onion connections. No external apps needed.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon">📊</div>
@@ -554,11 +559,6 @@
         <h3>GrapheneOS Native</h3>
         <p>W^X compliant, no root needed. Tested on Pixel, Samsung, Huawei. Android 7+.</p>
       </div>
-      <div class="feature-card">
-        <div class="feature-icon">🌐</div>
-        <h3>Lightning Support</h3>
-        <p>BIP 157/158 block filters from your home node. Zeus with embedded LND. Native LDK integration coming.</p>
-      </div>
     </div>
   </div>
 </section>
@@ -571,7 +571,7 @@
         <div class="step-num">1</div>
         <div>
           <div class="step-title">Install the app</div>
-          <div class="step-desc">Download the APK (76 MB, 3 bundled bitcoind binaries). No Google Play needed.</div>
+          <div class="step-desc">Download the APK (80 MB, 3 bitcoind binaries + LDK Lightning + Tor). No Google Play needed.</div>
         </div>
       </div>
       <div class="step">
@@ -605,14 +605,14 @@
 <section class="architecture" id="architecture">
   <div class="container">
     <h2>Architecture</h2>
-    <p class="section-sub">Everything in one app, all localhost. Coming soon: native Lightning with cellular mode.</p>
-    <div class="arch-diagram"><span class="orange">bitcoind</span> <span class="dim">← RPC →</span> <span class="orange">ldk-node</span> <span class="dim">(in-process, coming soon)</span>
+    <p class="section-sub">Everything in one app, all localhost. Full Lightning wallet with LDK.</p>
+    <div class="arch-diagram"><span class="orange">bitcoind</span> <span class="dim">← RPC →</span> <span class="orange">ldk-node</span> <span class="dim">(in-process Lightning)</span>
                     <span class="dim">│</span>
             <span class="dim">┌───────┴────────┐</span>
             <span class="dim">│                │</span>
       <span class="green">Built-in UI</span>      <span class="blue">LNDHub API</span> <span class="dim">(:3000)</span>
       <span class="dim">(send/receive/</span>        <span class="dim">│</span>
-       <span class="dim">channels)</span>       <span class="blue">External wallets</span>
+       <span class="dim">BOLT11+12)</span>      <span class="blue">External wallets</span>
                        <span class="dim">(BlueWallet, Zeus)</span>
 
   <span class="green">Electrum server</span> <span class="dim">(:50001) — on-chain wallets</span>
