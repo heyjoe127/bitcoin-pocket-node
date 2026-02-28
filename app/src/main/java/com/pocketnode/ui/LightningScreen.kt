@@ -183,6 +183,7 @@ fun LightningScreen(
             // Start/Stop button
             if (effectiveState.status == LightningService.LightningState.Status.STOPPED ||
                 effectiveState.status == LightningService.LightningState.Status.ERROR) {
+                val isError = effectiveState.status == LightningService.LightningState.Status.ERROR
                 Button(
                     onClick = {
                         scope.launch(kotlinx.coroutines.Dispatchers.IO) {
@@ -190,6 +191,7 @@ fun LightningScreen(
                         }
                     },
                     modifier = Modifier.fillMaxWidth().height(48.dp),
+                    enabled = isError, // greyed out while waiting, enabled on error for retry
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800))
                 ) {
                     Text("⚡ Start Lightning Node")
