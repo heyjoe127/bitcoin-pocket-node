@@ -49,9 +49,7 @@ fun LightningScreen(
     var effectiveState by remember { mutableStateOf(LightningService.stateFlow.value) }
     LaunchedEffect(Unit) {
         while (true) {
-            // Always read current StateFlow value
             effectiveState = LightningService.stateFlow.value
-            // If node is running but state is stale, force an update
             if (lightning.isRunning() && effectiveState.status != LightningService.LightningState.Status.RUNNING) {
                 lightning.updateState()
                 effectiveState = LightningService.stateFlow.value
