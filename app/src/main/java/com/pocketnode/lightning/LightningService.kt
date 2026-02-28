@@ -52,17 +52,17 @@ class LightningService(private val context: Context) {
     /**
      * Start the Lightning node, connecting to local bitcoind via RPC.
      */
+    @Volatile private var starting = false
+
+    @Synchronized
     fun start(rpcUser: String, rpcPassword: String, rpcPort: Int = 8332) {
-        if (node != null) {
-            Log.w(TAG, "Lightning node already running")
+        if (node != null || starting) {
+            Log.w(TAG, "Lightning node already running or starting")
             return
         }
+        starting = true
 
         _state.value = _state.value.copy(status = LightningState.Status.STARTING, error = null)
-
-        // Pause so UI can render the "Starting" state before heavy init.
-        // The screen polls every 1s, so we need at least that long.
-        try { Thread.sleep(1500) } catch (_: InterruptedException) {}
 
         try {
             val storageDir = File(context.filesDir, STORAGE_DIR)
@@ -131,9 +131,11 @@ class LightningService(private val context: Context) {
             context.getSharedPreferences("pocketnode_prefs", Context.MODE_PRIVATE)
                 .edit().putBoolean("lightning_was_running", true).apply()
 
+            starting = false
             updateState()
 
         } catch (e: Exception) {
+            starting = false
             Log.e(TAG, "Failed to start Lightning node", e)
 
             // Auto-recover from bad seed: restore most recent backup

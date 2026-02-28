@@ -348,17 +348,7 @@ fun NodeStatusScreen(
                             bwt.start(saveState = false) // don't re-save, already true
                             android.util.Log.i("NodeStatusScreen", "Auto-started Electrum server (was previously running)")
                         }
-                        // Auto-start Lightning when node syncs (if it was running before)
-                        if (prefs.getBoolean("lightning_was_running", false)) {
-                            val rpcUser = prefs.getString("rpc_user", "pocketnode") ?: "pocketnode"
-                            val rpcPass = prefs.getString("rpc_password", "") ?: ""
-                            if (rpcPass.isNotEmpty()) {
-                                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                                    com.pocketnode.lightning.LightningService.getInstance(context).start(rpcUser, rpcPass)
-                                }
-                                android.util.Log.i("NodeStatusScreen", "Auto-started Lightning (was previously running)")
-                            }
-                        }
+                        // Lightning auto-start handled by BitcoindService to avoid duplicate starts
                     }
                     nodeStatus = newStatus
                 }
