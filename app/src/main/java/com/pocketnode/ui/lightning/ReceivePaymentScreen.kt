@@ -205,7 +205,7 @@ fun ReceivePaymentScreen(
                         )
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            if (useOffer) "Share this offer. It can be paid multiple times and never expires."
+                            if (useOffer) "Share this offer. It can be paid multiple times and never expires. Tied to your current channels -- regenerate if channels change."
                             else "Share this invoice with the sender. It expires in 1 hour.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
