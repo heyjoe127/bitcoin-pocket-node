@@ -45,6 +45,14 @@ fun LightningScreen(
 
     val lightning = remember { LightningService.getInstance(context) }
 
+    // Periodic state refresh — keeps balances/channels current and catches startup transitions
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(2000)
+            lightning.updateState()
+        }
+    }
+
     // RPC credentials from existing config
     val rpcPrefs = remember { context.getSharedPreferences("pocketnode_prefs", android.content.Context.MODE_PRIVATE) }
     val rpcUser = remember { rpcPrefs.getString("rpc_user", "pocketnode") ?: "pocketnode" }

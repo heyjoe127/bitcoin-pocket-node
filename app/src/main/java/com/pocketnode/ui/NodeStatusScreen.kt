@@ -353,7 +353,9 @@ fun NodeStatusScreen(
                             val rpcUser = prefs.getString("rpc_user", "pocketnode") ?: "pocketnode"
                             val rpcPass = prefs.getString("rpc_password", "") ?: ""
                             if (rpcPass.isNotEmpty()) {
-                                com.pocketnode.lightning.LightningService.getInstance(context).start(rpcUser, rpcPass)
+                                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                                    com.pocketnode.lightning.LightningService.getInstance(context).start(rpcUser, rpcPass)
+                                }
                                 android.util.Log.i("NodeStatusScreen", "Auto-started Lightning (was previously running)")
                             }
                         }
