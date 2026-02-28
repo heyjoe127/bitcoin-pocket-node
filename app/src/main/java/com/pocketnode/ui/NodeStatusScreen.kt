@@ -1325,12 +1325,10 @@ private fun ActionButtons(
             ) { Text("Connect", maxLines = 1, style = MaterialTheme.typography.labelSmall) }
         }
 
-        // Add Lightning Support — only shown when filters NOT installed but donor configured
+        // Add Lightning Support — shown when filters NOT yet installed
         val filterDir = LocalContext.current.filesDir.resolve("bitcoin/indexes/blockfilter/basic")
         val hasFilters = filterDir.exists() && (filterDir.listFiles()?.size ?: 0) > 1
-        val hasDonor = LocalContext.current.getSharedPreferences("setup_prefs", android.content.Context.MODE_PRIVATE)
-            .getString("sftp_host", "")?.isNotEmpty() == true
-        if (!hasFilters && hasDonor) {
+        if (!hasFilters) {
             OutlinedButton(
                 onClick = onNavigateToBlockFilter,
                 modifier = Modifier.fillMaxWidth(),
