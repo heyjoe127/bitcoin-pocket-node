@@ -45,22 +45,32 @@ fun LightningScreen(
 
     val lightning = remember { LightningService.getInstance(context) }
 
-    // Force-sync UI with actual node state every 1.5s.
-    // Catches cases where Lightning started on a background thread
-    // and the StateFlow emission was missed by Compose.
-    var refreshTick by remember { mutableStateOf(0) }
+    // Poll node state every 1s to catch background start/stop transitions.
+    // StateFlow.collectAsState should handle this, but raw Thread starts
+    // can race the Compose subscription. This reconciles actual node state.
+    var isNodeRunning by remember { mutableStateOf(lightning.isRunning()) }
     LaunchedEffect(Unit) {
         while (true) {
-            kotlinx.coroutines.delay(1500)
-            if (lightning.isRunning()) {
+            kotlinx.coroutines.delay(1000)
+            val running = lightning.isRunning()
+            if (running != isNodeRunning) {
+                isNodeRunning = running
+            }
+            if (running) {
                 lightning.updateState()
             }
-            refreshTick++ // force recomposition even if StateFlow didn't trigger
         }
     }
-    // Read refreshTick to ensure the LaunchedEffect triggers recomposition
-    @Suppress("UNUSED_EXPRESSION")
-    refreshTick
+
+    // Derive effective status: if node is actually running but StateFlow
+    // hasn't caught up yet, override to RUNNING and trigger an update
+    val effectiveState = if (isNodeRunning && lightningState.status == LightningService.LightningState.Status.STOPPED) {
+        // StateFlow is stale — node started on background thread
+        LaunchedEffect(Unit) { lightning.updateState() }
+        lightningState.copy(status = LightningService.LightningState.Status.STARTING)
+    } else {
+        lightningState
+    }
 
     // RPC credentials from existing config
     val rpcPrefs = remember { context.getSharedPreferences("pocketnode_prefs", android.content.Context.MODE_PRIVATE) }
@@ -88,8 +98,8 @@ fun LightningScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // Node status banner — shown when not running
-            if (lightningState.status != LightningService.LightningState.Status.RUNNING) {
-                val (bannerText, bannerDesc, bannerColor) = when (lightningState.status) {
+            if (effectiveState.status != LightningService.LightningState.Status.RUNNING) {
+                val (bannerText, bannerDesc, bannerColor) = when (effectiveState.status) {
                     LightningService.LightningState.Status.STARTING -> Triple(
                         "⏳ Node Starting...",
                         "Connecting to bitcoind and syncing",
@@ -97,7 +107,7 @@ fun LightningScreen(
                     )
                     LightningService.LightningState.Status.ERROR -> Triple(
                         "⚠️ Node Error",
-                        lightningState.error ?: "Lightning node encountered an error",
+                        effectiveState.error ?: "Lightning node encountered an error",
                         MaterialTheme.colorScheme.error
                     )
                     else -> Triple(
@@ -117,7 +127,7 @@ fun LightningScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        if (lightningState.status == LightningService.LightningState.Status.STARTING) {
+                        if (effectiveState.status == LightningService.LightningState.Status.STARTING) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(20.dp),
                                 strokeWidth = 2.dp,
@@ -148,7 +158,7 @@ fun LightningScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text("LDK Node", fontWeight = FontWeight.Bold)
-                        val (statusText, statusColor) = when (lightningState.status) {
+                        val (statusText, statusColor) = when (effectiveState.status) {
                             LightningService.LightningState.Status.RUNNING -> "Running" to Color(0xFF4CAF50)
                             LightningService.LightningState.Status.STARTING -> "Starting..." to Color(0xFFFF9800)
                             LightningService.LightningState.Status.ERROR -> "Error" to MaterialTheme.colorScheme.error
@@ -161,18 +171,18 @@ fun LightningScreen(
                         }
                     }
 
-                    if (lightningState.nodeId != null) {
+                    if (effectiveState.nodeId != null) {
                         Spacer(Modifier.height(8.dp))
                         Text("Node ID", style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                lightningState.nodeId!!.take(16) + "..." + lightningState.nodeId!!.takeLast(8),
+                                effectiveState.nodeId!!.take(16) + "..." + effectiveState.nodeId!!.takeLast(8),
                                 style = MaterialTheme.typography.bodySmall,
                                 fontFamily = FontFamily.Monospace
                             )
                             IconButton(
-                                onClick = { clipboardManager.setText(AnnotatedString(lightningState.nodeId!!)) },
+                                onClick = { clipboardManager.setText(AnnotatedString(effectiveState.nodeId!!)) },
                                 modifier = Modifier.size(24.dp)
                             ) {
                                 Icon(Icons.Default.ContentCopy, "Copy", modifier = Modifier.size(14.dp))
@@ -180,9 +190,9 @@ fun LightningScreen(
                         }
                     }
 
-                    if (lightningState.error != null) {
+                    if (effectiveState.error != null) {
                         Spacer(Modifier.height(8.dp))
-                        Text(lightningState.error!!, color = MaterialTheme.colorScheme.error,
+                        Text(effectiveState.error!!, color = MaterialTheme.colorScheme.error,
                             style = MaterialTheme.typography.bodySmall)
                     }
 
@@ -196,8 +206,8 @@ fun LightningScreen(
             }
 
             // Start/Stop button
-            if (lightningState.status == LightningService.LightningState.Status.STOPPED ||
-                lightningState.status == LightningService.LightningState.Status.ERROR) {
+            if (effectiveState.status == LightningService.LightningState.Status.STOPPED ||
+                effectiveState.status == LightningService.LightningState.Status.ERROR) {
                 Button(
                     onClick = {
                         scope.launch(kotlinx.coroutines.Dispatchers.IO) {
@@ -220,7 +230,7 @@ fun LightningScreen(
             }
 
             // Action buttons — shown when running
-            if (lightningState.status == LightningService.LightningState.Status.RUNNING) {
+            if (effectiveState.status == LightningService.LightningState.Status.RUNNING) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -249,7 +259,7 @@ fun LightningScreen(
             }
 
             // Balances card — shown when running
-            if (lightningState.status == LightningService.LightningState.Status.RUNNING) {
+            if (effectiveState.status == LightningService.LightningState.Status.RUNNING) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
@@ -265,13 +275,13 @@ fun LightningScreen(
                             Column {
                                 Text("On-chain", style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
-                                Text("${"%,d".format(lightningState.onchainBalanceSats)} sats",
+                                Text("${"%,d".format(effectiveState.onchainBalanceSats)} sats",
                                     fontWeight = FontWeight.Bold)
                             }
                             Column(horizontalAlignment = Alignment.End) {
                                 Text("Lightning", style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
-                                Text("${"%,d".format(lightningState.lightningBalanceSats)} sats",
+                                Text("${"%,d".format(effectiveState.lightningBalanceSats)} sats",
                                     fontWeight = FontWeight.Bold)
                             }
                         }
@@ -287,7 +297,7 @@ fun LightningScreen(
                         Text("Channels", fontWeight = FontWeight.Bold)
                         Spacer(Modifier.height(8.dp))
 
-                        if (lightningState.channelCount == 0) {
+                        if (effectiveState.channelCount == 0) {
                             Text(
                                 "No channels yet. Open a channel to start using Lightning.",
                                 style = MaterialTheme.typography.bodySmall,
@@ -305,25 +315,25 @@ fun LightningScreen(
                                 Column {
                                     Text("Active", style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
-                                    Text("${lightningState.channelCount}", fontWeight = FontWeight.Bold)
+                                    Text("${effectiveState.channelCount}", fontWeight = FontWeight.Bold)
                                 }
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Text("Capacity", style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
-                                    Text("${"%,d".format(lightningState.totalCapacitySats)} sats",
+                                    Text("${"%,d".format(effectiveState.totalCapacitySats)} sats",
                                         fontWeight = FontWeight.Bold)
                                 }
                                 Column(horizontalAlignment = Alignment.End) {
                                     Text("Inbound", style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
-                                    Text("${"%,d".format(lightningState.totalInboundSats)} sats",
+                                    Text("${"%,d".format(effectiveState.totalInboundSats)} sats",
                                         fontWeight = FontWeight.Bold)
                                 }
                             }
 
                             // Channel list — tap to close
                             Spacer(Modifier.height(12.dp))
-                            val channels = remember(lightningState) { lightning.listChannels() }
+                            val channels = remember(effectiveState) { lightning.listChannels() }
                             var selectedChannel by remember { mutableStateOf<org.lightningdevkit.ldknode.ChannelDetails?>(null) }
                             channels.forEach { ch ->
                                 Divider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
