@@ -388,6 +388,61 @@ class LightningService(private val context: Context) {
         }
     }
 
+    /**
+     * Create a reusable BOLT 12 offer with a fixed amount.
+     */
+    fun createOffer(amountMsat: Long, description: String): Result<String> {
+        val n = node ?: return Result.failure(Exception("Node not running"))
+        return try {
+            val offer = n.bolt12Payment().receive(
+                amountMsat.toULong(),
+                description,
+                null, // no expiry
+                null  // no quantity
+            )
+            Result.success(offer.toString())
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to create offer", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Create a reusable BOLT 12 offer with variable amount (payer chooses).
+     */
+    fun createVariableOffer(description: String): Result<String> {
+        val n = node ?: return Result.failure(Exception("Node not running"))
+        return try {
+            val offer = n.bolt12Payment().receiveVariableAmount(
+                description,
+                null // no expiry
+            )
+            Result.success(offer.toString())
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to create variable offer", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Pay a BOLT 12 offer.
+     */
+    fun payOffer(offerStr: String, amountMsat: Long? = null): Result<String> {
+        val n = node ?: return Result.failure(Exception("Node not running"))
+        return try {
+            val offer = Offer.fromStr(offerStr)
+            val paymentId = if (amountMsat != null) {
+                n.bolt12Payment().sendUsingAmount(offer, amountMsat.toULong(), null, null, null)
+            } else {
+                n.bolt12Payment().send(offer, null, null, null)
+            }
+            Result.success(paymentId.toString())
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to pay offer", e)
+            Result.failure(e)
+        }
+    }
+
     fun listPayments(): List<PaymentDetails> {
         return node?.listPayments() ?: emptyList()
     }

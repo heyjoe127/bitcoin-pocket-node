@@ -20,8 +20,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+
 /**
- * Send a Lightning payment by pasting or scanning a BOLT11 invoice.
+ * Send a Lightning payment by pasting a BOLT11 invoice or BOLT12 offer.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -34,9 +37,15 @@ fun SendPaymentScreen(
     val lightning = remember { LightningService.getInstance(context) }
 
     var invoiceInput by remember { mutableStateOf("") }
+    var offerAmountSats by remember { mutableStateOf("") }
     var sending by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+
+    // Detect input type
+    val cleanInput = invoiceInput.removePrefix("lightning:").removePrefix("LIGHTNING:").trim()
+    val isOffer = cleanInput.startsWith("lno1", ignoreCase = true)
+    val isInvoice = cleanInput.startsWith("lnbc", ignoreCase = true)
 
     Scaffold(
         topBar = {
@@ -64,10 +73,10 @@ fun SendPaymentScreen(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Lightning Invoice", style = MaterialTheme.typography.titleMedium)
+                    Text("Lightning Payment", style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "Paste a BOLT11 invoice to pay.",
+                        "Paste a BOLT11 invoice or BOLT12 offer.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
@@ -80,7 +89,7 @@ fun SendPaymentScreen(
                             error = null
                             result = null
                         },
-                        label = { Text("BOLT11 Invoice") },
+                        label = { Text(if (isOffer) "BOLT12 Offer" else "Invoice or Offer") },
                         modifier = Modifier.fillMaxWidth(),
                         minLines = 3,
                         maxLines = 6,
@@ -105,24 +114,46 @@ fun SendPaymentScreen(
                 }
             }
 
-            // Invoice details (decoded preview)
-            if (invoiceInput.startsWith("lnbc", ignoreCase = true) ||
-                invoiceInput.startsWith("lightning:", ignoreCase = true)) {
+            // Input preview
+            if (isInvoice || isOffer) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Invoice Preview", style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            if (isOffer) "BOLT12 Offer" else "BOLT11 Invoice",
+                            style = MaterialTheme.typography.titleSmall
+                        )
                         Spacer(Modifier.height(4.dp))
                         Text(
-                            invoiceInput.take(40) + "...",
+                            cleanInput.take(40) + "...",
                             style = MaterialTheme.typography.bodySmall,
                             fontFamily = FontFamily.Monospace,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                         )
+                        if (isOffer) {
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "Reusable payment request. You may need to specify an amount.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                            )
+                        }
                     }
                 }
+            }
+
+            // Amount input for BOLT12 offers (may be variable amount)
+            if (isOffer) {
+                OutlinedTextField(
+                    value = offerAmountSats,
+                    onValueChange = { offerAmountSats = it.filter { c -> c.isDigit() } },
+                    label = { Text("Amount (sats) — leave empty if offer has fixed amount") },
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true
+                )
             }
 
             // Pay button
@@ -136,14 +167,16 @@ fun SendPaymentScreen(
                     error = null
                     result = null
                     scope.launch {
-                        val cleanInvoice = invoiceInput
-                            .removePrefix("lightning:")
-                            .removePrefix("LIGHTNING:")
-                            .trim()
-                        withContext(Dispatchers.IO) {
-                            lightning.payInvoice(cleanInvoice)
-                        }.onSuccess {
-                            result = "Payment sent! ID: ${it.take(16)}..."
+                        val payResult = withContext(Dispatchers.IO) {
+                            if (isOffer) {
+                                val amountMsat = offerAmountSats.toLongOrNull()?.let { it * 1000 }
+                                lightning.payOffer(cleanInput, amountMsat)
+                            } else {
+                                lightning.payInvoice(cleanInput)
+                            }
+                        }
+                        payResult.onSuccess {
+                            result = "Payment sent!"
                             sending = false
                         }.onFailure {
                             error = it.message ?: "Payment failed"
@@ -164,7 +197,7 @@ fun SendPaymentScreen(
                     Spacer(Modifier.width(8.dp))
                     Text("Sending...")
                 } else {
-                    Text("⚡ Pay Invoice")
+                    Text(if (isOffer) "⚡ Pay Offer" else "⚡ Pay Invoice")
                 }
             }
 

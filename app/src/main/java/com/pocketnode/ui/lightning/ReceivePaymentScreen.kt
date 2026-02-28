@@ -16,6 +16,7 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.pocketnode.lightning.LightningService
@@ -24,7 +25,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * Generate a BOLT11 invoice to receive a Lightning payment.
+ * Generate a BOLT11 invoice or BOLT12 offer to receive Lightning payments.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -36,10 +37,11 @@ fun ReceivePaymentScreen(
     val clipboardManager = LocalClipboardManager.current
     val lightning = remember { LightningService.getInstance(context) }
 
+    var useOffer by remember { mutableStateOf(false) }
     var amountSats by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var generating by remember { mutableStateOf(false) }
-    var invoice by remember { mutableStateOf<String?>(null) }
+    var output by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var copied by remember { mutableStateOf(false) }
 
@@ -63,74 +65,118 @@ fun ReceivePaymentScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Amount input
+            // Invoice / Offer toggle
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Create Invoice", style = MaterialTheme.typography.titleMedium)
-                    Spacer(Modifier.height(12.dp))
-
-                    OutlinedTextField(
-                        value = amountSats,
-                        onValueChange = {
-                            amountSats = it.filter { c -> c.isDigit() }
-                            invoice = null
-                            error = null
-                            copied = false
-                        },
-                        label = { Text("Amount (sats)") },
+                    Row(
                         modifier = Modifier.fillMaxWidth(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true
-                    )
-
-                    Spacer(Modifier.height(8.dp))
-
-                    OutlinedTextField(
-                        value = description,
-                        onValueChange = {
-                            description = it
-                            invoice = null
-                            error = null
-                            copied = false
-                        },
-                        label = { Text("Description (optional)") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                if (useOffer) "BOLT12 Offer" else "BOLT11 Invoice",
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                if (useOffer) "Reusable, no expiry. Payers need BOLT12 support."
+                                else "One-time invoice. Works with all Lightning wallets.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
+                        }
+                        Switch(
+                            checked = useOffer,
+                            onCheckedChange = {
+                                useOffer = it
+                                output = null
+                                error = null
+                                copied = false
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedTrackColor = Color(0xFFFF9800)
+                            )
+                        )
+                    }
                 }
             }
+
+            // Amount input
+            OutlinedTextField(
+                value = amountSats,
+                onValueChange = {
+                    amountSats = it.filter { c -> c.isDigit() }
+                    output = null
+                    error = null
+                    copied = false
+                },
+                label = {
+                    Text(if (useOffer) "Amount (sats) — optional for offers" else "Amount (sats)")
+                },
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true
+            )
+
+            // Description input
+            OutlinedTextField(
+                value = description,
+                onValueChange = {
+                    description = it
+                    output = null
+                    error = null
+                    copied = false
+                },
+                label = { Text("Description (optional)") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
 
             // Generate button
             Button(
                 onClick = {
-                    val sats = amountSats.toLongOrNull()
-                    if (sats == null || sats <= 0) {
-                        error = "Enter a valid amount in sats"
-                        return@Button
+                    if (!useOffer) {
+                        val sats = amountSats.toLongOrNull()
+                        if (sats == null || sats <= 0) {
+                            error = "Enter a valid amount in sats"
+                            return@Button
+                        }
                     }
                     generating = true
                     error = null
-                    invoice = null
+                    output = null
                     scope.launch {
-                        withContext(Dispatchers.IO) {
-                            lightning.createInvoice(
-                                amountMsat = sats * 1000, // sats to msats
-                                description = description.ifBlank { "Bitcoin Pocket Node" }
-                            )
-                        }.onSuccess {
-                            invoice = it
+                        val result = withContext(Dispatchers.IO) {
+                            if (useOffer) {
+                                val sats = amountSats.toLongOrNull()
+                                if (sats != null && sats > 0) {
+                                    lightning.createOffer(sats * 1000, description.ifBlank { "Bitcoin Pocket Node" })
+                                } else {
+                                    lightning.createVariableOffer(description.ifBlank { "Bitcoin Pocket Node" })
+                                }
+                            } else {
+                                val sats = amountSats.toLongOrNull() ?: 0L
+                                lightning.createInvoice(
+                                    amountMsat = sats * 1000,
+                                    description = description.ifBlank { "Bitcoin Pocket Node" }
+                                )
+                            }
+                        }
+                        result.onSuccess {
+                            output = it
                             generating = false
                         }.onFailure {
-                            error = it.message ?: "Failed to create invoice"
+                            error = it.message ?: "Failed to generate"
                             generating = false
                         }
                     }
                 },
                 modifier = Modifier.fillMaxWidth().height(48.dp),
-                enabled = !generating && amountSats.isNotBlank(),
+                enabled = !generating && (useOffer || amountSats.isNotBlank()),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800))
             ) {
                 if (generating) {
@@ -142,29 +188,32 @@ fun ReceivePaymentScreen(
                     Spacer(Modifier.width(8.dp))
                     Text("Generating...")
                 } else {
-                    Text("⚡ Generate Invoice")
+                    Text(if (useOffer) "⚡ Generate Offer" else "⚡ Generate Invoice")
                 }
             }
 
-            // Invoice display
-            if (invoice != null) {
+            // Output display
+            if (output != null) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Invoice", style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            if (useOffer) "Offer" else "Invoice",
+                            style = MaterialTheme.typography.titleSmall
+                        )
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            "Share this invoice with the sender. It expires in 1 hour.",
+                            if (useOffer) "Share this offer. It can be paid multiple times and never expires."
+                            else "Share this invoice with the sender. It expires in 1 hour.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                         )
                         Spacer(Modifier.height(12.dp))
 
-                        // Invoice text (truncated display, full copy)
                         Text(
-                            invoice!!,
+                            output!!,
                             style = MaterialTheme.typography.bodySmall,
                             fontFamily = FontFamily.Monospace,
                             maxLines = 6
@@ -174,7 +223,7 @@ fun ReceivePaymentScreen(
 
                         Button(
                             onClick = {
-                                clipboardManager.setText(AnnotatedString(invoice!!))
+                                clipboardManager.setText(AnnotatedString(output!!))
                                 copied = true
                             },
                             modifier = Modifier.fillMaxWidth(),
@@ -184,7 +233,7 @@ fun ReceivePaymentScreen(
                         ) {
                             Icon(Icons.Default.ContentCopy, "Copy", modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text(if (copied) "Copied!" else "Copy Invoice")
+                            Text(if (copied) "Copied!" else if (useOffer) "Copy Offer" else "Copy Invoice")
                         }
                     }
                 }
