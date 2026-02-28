@@ -226,6 +226,7 @@ See [Desktop Port Design](docs/DESKTOP-PORT.md) for the full design document.
 **Estimated effort:** 2-3 weeks for a working desktop build with dashboard + chainstate copy + version selection.
 
 ### Nice to Haves
+- [ ] Demo mode: interactive walkthrough of all features with simulated data (no chainstate needed)
 - [ ] Detect corrupted block index after long offline period, offer re-bootstrap
 - [ ] Charging-aware sync (configurable)
 - [ ] Doze mode handling
