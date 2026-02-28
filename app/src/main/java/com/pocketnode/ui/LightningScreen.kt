@@ -45,13 +45,22 @@ fun LightningScreen(
 
     val lightning = remember { LightningService.getInstance(context) }
 
-    // Periodic state refresh — keeps balances/channels current and catches startup transitions
+    // Force-sync UI with actual node state every 1.5s.
+    // Catches cases where Lightning started on a background thread
+    // and the StateFlow emission was missed by Compose.
+    var refreshTick by remember { mutableStateOf(0) }
     LaunchedEffect(Unit) {
         while (true) {
-            kotlinx.coroutines.delay(2000)
-            lightning.updateState()
+            kotlinx.coroutines.delay(1500)
+            if (lightning.isRunning()) {
+                lightning.updateState()
+            }
+            refreshTick++ // force recomposition even if StateFlow didn't trigger
         }
     }
+    // Read refreshTick to ensure the LaunchedEffect triggers recomposition
+    @Suppress("UNUSED_EXPRESSION")
+    refreshTick
 
     // RPC credentials from existing config
     val rpcPrefs = remember { context.getSharedPreferences("pocketnode_prefs", android.content.Context.MODE_PRIVATE) }
