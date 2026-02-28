@@ -431,6 +431,38 @@ fun NodeStatusScreen(
                     .verticalScroll(dashboardScrollState),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
+                // Lightning node card — shown at top when Lightning ready
+                run {
+                    val filterDir = java.io.File(LocalContext.current.filesDir, "bitcoin/indexes/blockfilter/basic")
+                    val hasFilters = filterDir.exists() && (filterDir.listFiles()?.size ?: 0) > 1
+                    if (hasFilters) {
+                        val lightningState by com.pocketnode.lightning.LightningService.stateFlow.collectAsState()
+                        Card(
+                            onClick = onNavigateToLightning,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                            )
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(
+                                    when (lightningState.status) {
+                                        com.pocketnode.lightning.LightningService.LightningState.Status.RUNNING ->
+                                            "⚡ Lightning (${lightningState.channelCount} channels)"
+                                        com.pocketnode.lightning.LightningService.LightningState.Status.STARTING ->
+                                            "⚡ Lightning Starting..."
+                                        com.pocketnode.lightning.LightningService.LightningState.Status.ERROR ->
+                                            "⚡ Lightning Error"
+                                        else -> "⚡ Lightning Node"
+                                    },
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
+                }
+
                 // Status indicator
                 StatusHeader(nodeStatus = nodeStatus, chain = chain, detail = startupDetail, miniLog = miniLog)
 
@@ -486,38 +518,6 @@ fun NodeStatusScreen(
                         oraclePrice = oraclePrice,
                         onExpanded = null
                     )
-                }
-
-                // Lightning wallet card — shown when Lightning ready
-                run {
-                    val filterDir = java.io.File(LocalContext.current.filesDir, "bitcoin/indexes/blockfilter/basic")
-                    val hasFilters = filterDir.exists() && (filterDir.listFiles()?.size ?: 0) > 1
-                    if (hasFilters) {
-                        val lightningState by com.pocketnode.lightning.LightningService.stateFlow.collectAsState()
-                        Card(
-                            onClick = onNavigateToLightning,
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant
-                            )
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Text(
-                                    when (lightningState.status) {
-                                        com.pocketnode.lightning.LightningService.LightningState.Status.RUNNING ->
-                                            "⚡ Lightning (${lightningState.channelCount} channels)"
-                                        com.pocketnode.lightning.LightningService.LightningState.Status.STARTING ->
-                                            "⚡ Lightning Starting..."
-                                        com.pocketnode.lightning.LightningService.LightningState.Status.ERROR ->
-                                            "⚡ Lightning Error"
-                                        else -> "⚡ Lightning Node"
-                                    },
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
-                        }
-                    }
                 }
 
                 // About card
