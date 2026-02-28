@@ -383,8 +383,8 @@ class BitcoindService : Service() {
                 } catch (e: Exception) {
                     Log.d(TAG, "Notification updater: ${e.message}")
                 }
-                // 30s balances freshness with RPC overhead; faster polling wastes CPU on a phone
-                delay(30_000)
+                // Poll faster while waiting for sync, then relax to 30s once synced
+                delay(if (electrumAutoStartedInService) 30_000 else 5_000)
             }
         }
     }
