@@ -43,18 +43,19 @@ fun LightningScreen(
     val clipboardManager = LocalClipboardManager.current
     val lightning = remember { LightningService.getInstance(context) }
 
-    // Direct polling approach: read state every second.
-    // StateFlow.collectAsState() was unreliable when node starts on a raw Thread,
-    // so we poll explicitly and use local mutableState for guaranteed recomposition.
-    var effectiveState by remember { mutableStateOf(LightningService.stateFlow.value) }
+    // Primary: collect StateFlow reactively
+    val effectiveState by LightningService.stateFlow.collectAsState()
+
+    // Reconciler: if the node is actually running but state says otherwise,
+    // force an update immediately. Polls every 500ms to catch background starts.
     LaunchedEffect(Unit) {
         while (true) {
-            effectiveState = LightningService.stateFlow.value
-            if (lightning.isRunning() && effectiveState.status != LightningService.LightningState.Status.RUNNING) {
-                lightning.updateState()
-                effectiveState = LightningService.stateFlow.value
+            kotlinx.coroutines.delay(500)
+            val running = lightning.isRunning()
+            val stale = LightningService.stateFlow.value.status != LightningService.LightningState.Status.RUNNING
+            if (running && stale) {
+                lightning.updateState() // emits to StateFlow → collectAsState recomposes
             }
-            kotlinx.coroutines.delay(1000)
         }
     }
 
