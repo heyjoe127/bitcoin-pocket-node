@@ -448,7 +448,9 @@ fun NodeStatusScreen(
                                 Text(
                                     when (lightningState.status) {
                                         com.pocketnode.lightning.LightningService.LightningState.Status.RUNNING ->
-                                            "⚡ Lightning (${lightningState.channelCount} channels)"
+                                            if (lightningState.channelCount > 0)
+                                                "⚡ Lightning (${lightningState.channelCount} channel${if (lightningState.channelCount != 1) "s" else ""})"
+                                            else "⚡ Lightning Node"
                                         com.pocketnode.lightning.LightningService.LightningState.Status.STARTING ->
                                             "⚡ Lightning Starting..."
                                         com.pocketnode.lightning.LightningService.LightningState.Status.ERROR ->
