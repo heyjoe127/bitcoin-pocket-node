@@ -7,6 +7,10 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import com.pocketnode.network.NetworkMonitor
+import com.pocketnode.network.NetworkState
+import com.pocketnode.rpc.BitcoinRpcClient
+import org.json.JSONArray
 import org.lightningdevkit.ldknode.*
 import java.io.File
 
@@ -41,9 +45,13 @@ class LightningService(private val context: Context) {
         val channelCount: Int = 0,
         val totalCapacitySats: Long = 0,
         val totalInboundSats: Long = 0,
-        val error: String? = null
+        val error: String? = null,
+        // Prune recovery progress
+        val recoveryBlocksNeeded: Int = 0,
+        val recoveryBlocksDone: Int = 0,
+        val recoveryWaitingForWifi: Boolean = false
     ) {
-        enum class Status { STOPPED, STARTING, RUNNING, ERROR }
+        enum class Status { STOPPED, STARTING, RUNNING, ERROR, RECOVERING }
     }
 
     private var node: Node? = null
@@ -78,7 +86,7 @@ class LightningService(private val context: Context) {
         }
     }
 
-    private suspend fun startInternal(rpcUser: String, rpcPassword: String, rpcPort: Int) = withContext(Dispatchers.IO) {
+    private suspend fun startInternal(rpcUser: String, rpcPassword: String, rpcPort: Int): Unit = withContext(Dispatchers.IO) {
 
         try {
             val storageDir = File(context.filesDir, STORAGE_DIR)
@@ -151,12 +159,21 @@ class LightningService(private val context: Context) {
             updateState()
 
         } catch (e: Exception) {
-            starting = false
             Log.e(TAG, "Failed to start Lightning node", e)
 
+            // Auto-recover from pruned blocks: detect the error and re-download
+            val errorMsg = e.message ?: "Unknown error"
+            if (isPrunedBlockError(errorMsg)) {
+                Log.i(TAG, "Detected pruned block error, starting recovery...")
+                recoverPrunedBlocks(rpcUser, rpcPassword, rpcPort)
+                return@withContext
+            }
+
+            starting = false
+
             // Auto-recover from bad seed: restore most recent backup
-            if (e.message?.contains("WalletSetupFailed") == true ||
-                e.message?.contains("wallet") == true) {
+            if (errorMsg.contains("WalletSetupFailed") ||
+                errorMsg.contains("wallet")) {
                 val recovered = tryRestoreSeedBackup()
                 if (recovered) {
                     _state.value = _state.value.copy(
@@ -169,7 +186,7 @@ class LightningService(private val context: Context) {
 
             _state.value = _state.value.copy(
                 status = LightningState.Status.ERROR,
-                error = e.message ?: "Unknown error"
+                error = errorMsg
             )
         }
     }
@@ -197,6 +214,181 @@ class LightningService(private val context: Context) {
             }
         }
         return false
+    }
+
+    // === Prune Recovery ===
+
+    /**
+     * Detect if a startup error is due to pruned blocks that ldk-node needs.
+     * Bitcoind returns "Block not available (pruned data)" when asked for a pruned block.
+     */
+    private fun isPrunedBlockError(error: String): Boolean {
+        val lower = error.lowercase()
+        return lower.contains("pruned") ||
+               lower.contains("block not available") ||
+               lower.contains("block not found")
+    }
+
+    /**
+     * Recover pruned blocks by invalidating the chain at the prune height and
+     * letting bitcoind re-download from peers. Requires WiFi (blocks are large).
+     *
+     * Flow:
+     * 1. Check we're on WiFi (wait if not)
+     * 2. Get pruneheight from getblockchaininfo
+     * 3. invalidateblock at pruneheight to force re-download
+     * 4. reconsiderblock to resume validation
+     * 5. Poll until blocks are re-downloaded
+     * 6. Retry Lightning start
+     */
+    private suspend fun recoverPrunedBlocks(
+        rpcUser: String, rpcPassword: String, rpcPort: Int
+    ) = withContext(Dispatchers.IO) {
+        val rpc = BitcoinRpcClient(rpcUser, rpcPassword, port = rpcPort)
+
+        // Get current prune height and chain tip
+        val chainInfo = rpc.getBlockchainInfo() ?: run {
+            Log.e(TAG, "Prune recovery: can't reach bitcoind")
+            _state.value = _state.value.copy(
+                status = LightningState.Status.ERROR,
+                error = "Cannot reach bitcoind for block recovery"
+            )
+            return@withContext
+        }
+
+        val pruneHeight = chainInfo.optLong("pruneheight", 0)
+        val currentHeight = chainInfo.optLong("blocks", 0)
+        if (pruneHeight <= 0 || currentHeight <= 0) {
+            Log.e(TAG, "Prune recovery: invalid chain info (prune=$pruneHeight, height=$currentHeight)")
+            _state.value = _state.value.copy(
+                status = LightningState.Status.ERROR,
+                error = "Could not determine pruned block range"
+            )
+            return@withContext
+        }
+
+        // Estimate blocks to recover (pruneheight is the lowest block still on disk,
+        // so blocks below it are gone -- but we need at most a few hundred recent ones)
+        val blocksNeeded = (currentHeight - pruneHeight).toInt().coerceAtLeast(1)
+        Log.i(TAG, "Prune recovery: need to re-download ~$blocksNeeded blocks (prune height: $pruneHeight, tip: $currentHeight)")
+
+        // Wait for WiFi if on cellular
+        val networkMonitor = NetworkMonitor(context)
+        if (networkMonitor.networkState.value != NetworkState.WIFI) {
+            Log.i(TAG, "Prune recovery: waiting for WiFi...")
+            _state.value = _state.value.copy(
+                status = LightningState.Status.RECOVERING,
+                recoveryBlocksNeeded = blocksNeeded,
+                recoveryBlocksDone = 0,
+                recoveryWaitingForWifi = true,
+                error = null
+            )
+
+            // Poll for WiFi every 5 seconds
+            while (networkMonitor.networkState.value != NetworkState.WIFI) {
+                delay(5000)
+                // Check if user stopped Lightning while we're waiting
+                if (!starting) {
+                    Log.i(TAG, "Prune recovery: cancelled while waiting for WiFi")
+                    return@withContext
+                }
+            }
+            Log.i(TAG, "Prune recovery: WiFi connected, starting recovery")
+        }
+
+        _state.value = _state.value.copy(
+            status = LightningState.Status.RECOVERING,
+            recoveryBlocksNeeded = blocksNeeded,
+            recoveryBlocksDone = 0,
+            recoveryWaitingForWifi = false,
+            error = null
+        )
+
+        try {
+            // Step 1: Get the block hash at prune height
+            val hashResult = rpc.call("getblockhash", JSONArray().apply { put(pruneHeight) })
+            val pruneHash = hashResult?.optString("value") ?: run {
+                Log.e(TAG, "Prune recovery: can't get block hash at height $pruneHeight")
+                _state.value = _state.value.copy(
+                    status = LightningState.Status.ERROR,
+                    error = "Could not get block hash for recovery"
+                )
+                return@withContext
+            }
+
+            // Step 2: Invalidate the block to force re-download
+            Log.i(TAG, "Prune recovery: invalidating block $pruneHash at height $pruneHeight")
+            rpc.call("invalidateblock", JSONArray().apply { put(pruneHash) })
+
+            // Step 3: Reconsider it immediately -- bitcoind will re-download from peers
+            Log.i(TAG, "Prune recovery: reconsidering block to trigger re-download")
+            rpc.call("reconsiderblock", JSONArray().apply { put(pruneHash) })
+
+            // Step 4: Poll until chain catches up
+            var lastHeight = 0L
+            var stallCount = 0
+            while (true) {
+                delay(2000) // poll every 2 seconds
+
+                if (!starting) {
+                    Log.i(TAG, "Prune recovery: cancelled during re-download")
+                    return@withContext
+                }
+
+                val info = rpc.getBlockchainInfo() ?: continue
+                val height = info.optLong("blocks", 0)
+                val headers = info.optLong("headers", 0)
+
+                if (height >= currentHeight) {
+                    // Caught up -- recovery complete
+                    val done = (height - pruneHeight).toInt().coerceAtLeast(0)
+                    _state.value = _state.value.copy(
+                        recoveryBlocksDone = done.coerceAtMost(blocksNeeded)
+                    )
+                    Log.i(TAG, "Prune recovery: complete! Chain at $height")
+                    break
+                }
+
+                val done = (height - pruneHeight).toInt().coerceAtLeast(0)
+                _state.value = _state.value.copy(
+                    recoveryBlocksDone = done.coerceAtMost(blocksNeeded)
+                )
+
+                // Stall detection
+                if (height == lastHeight) {
+                    stallCount++
+                    if (stallCount > 30) { // 60 seconds with no progress
+                        Log.w(TAG, "Prune recovery: stalled at $height for 60s")
+                        _state.value = _state.value.copy(
+                            status = LightningState.Status.ERROR,
+                            error = "Block recovery stalled at $height. Try again on a faster connection."
+                        )
+                        return@withContext
+                    }
+                } else {
+                    stallCount = 0
+                }
+                lastHeight = height
+            }
+
+            // Step 5: Retry Lightning start
+            Log.i(TAG, "Prune recovery: retrying Lightning start...")
+            _state.value = _state.value.copy(
+                status = LightningState.Status.STARTING,
+                recoveryBlocksNeeded = 0,
+                recoveryBlocksDone = 0,
+                error = null
+            )
+            delay(100) // yield frame for UI
+            startInternal(rpcUser, rpcPassword, rpcPort)
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Prune recovery failed", e)
+            _state.value = _state.value.copy(
+                status = LightningState.Status.ERROR,
+                error = "Block recovery failed: ${e.message}"
+            )
+        }
     }
 
     /**
