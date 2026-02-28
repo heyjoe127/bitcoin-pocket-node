@@ -3,6 +3,7 @@ package com.pocketnode.lightning
 import android.content.Context
 import android.content.Context.MODE_PRIVATE
 import android.util.Log
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -48,21 +49,36 @@ class LightningService(private val context: Context) {
     private var node: Node? = null
     private var watchtowerBridge: WatchtowerBridge? = null
     private var lndHubServer: LndHubServer? = null
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     /**
      * Start the Lightning node, connecting to local bitcoind via RPC.
+     * Sets STARTING on Main thread and yields a frame so Compose renders it,
+     * then performs heavy init on IO dispatcher.
      */
     @Volatile private var starting = false
 
-    @Synchronized
     fun start(rpcUser: String, rpcPassword: String, rpcPort: Int = 8332) {
-        if (node != null || starting) {
-            Log.w(TAG, "Lightning node already running or starting")
-            return
+        synchronized(this) {
+            if (node != null || starting) {
+                Log.w(TAG, "Lightning node already running or starting")
+                return
+            }
+            starting = true
         }
-        starting = true
 
-        _state.value = _state.value.copy(status = LightningState.Status.STARTING, error = null)
+        scope.launch {
+            // Set STARTING on Main thread where Compose collects
+            _state.value = _state.value.copy(status = LightningState.Status.STARTING, error = null)
+            // Yield to let Compose render the Starting state
+            delay(100)
+
+            // Heavy init on IO thread
+            startInternal(rpcUser, rpcPassword, rpcPort)
+        }
+    }
+
+    private suspend fun startInternal(rpcUser: String, rpcPassword: String, rpcPort: Int) = withContext(Dispatchers.IO) {
 
         try {
             val storageDir = File(context.filesDir, STORAGE_DIR)
@@ -147,7 +163,7 @@ class LightningService(private val context: Context) {
                         status = LightningState.Status.ERROR,
                         error = "Wallet seed restored from backup. Please try starting again."
                     )
-                    return
+                    return@withContext
                 }
             }
 
