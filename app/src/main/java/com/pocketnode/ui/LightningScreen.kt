@@ -87,6 +87,55 @@ fun LightningScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // Node status banner — shown when not running
+            if (lightningState.status != LightningService.LightningState.Status.RUNNING) {
+                val (bannerText, bannerDesc, bannerColor) = when (lightningState.status) {
+                    LightningService.LightningState.Status.STARTING -> Triple(
+                        "⏳ Node Starting...",
+                        "Connecting to bitcoind and syncing",
+                        Color(0xFFFF9800)
+                    )
+                    LightningService.LightningState.Status.ERROR -> Triple(
+                        "⚠️ Node Error",
+                        lightningState.error ?: "Lightning node encountered an error",
+                        MaterialTheme.colorScheme.error
+                    )
+                    else -> Triple(
+                        "Lightning Node Off",
+                        "Start the node to access your wallet",
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                    )
+                }
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = bannerColor.copy(alpha = 0.12f)
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        if (lightningState.status == LightningService.LightningState.Status.STARTING) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                                color = bannerColor
+                            )
+                        }
+                        Column {
+                            Text(bannerText, fontWeight = FontWeight.Bold, color = bannerColor)
+                            Text(
+                                bannerDesc,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
+                        }
+                    }
+                }
+            }
+
             // Status card
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -143,36 +192,6 @@ fun LightningScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
                     )
-                }
-            }
-
-            // Starting indicator
-            if (lightningState.status == LightningService.LightningState.Status.STARTING) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = Color(0xFFFF9800).copy(alpha = 0.1f)
-                    )
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(24.dp),
-                            strokeWidth = 2.dp,
-                            color = Color(0xFFFF9800)
-                        )
-                        Column {
-                            Text("Starting Lightning Node...", fontWeight = FontWeight.Bold)
-                            Text(
-                                "Connecting to bitcoind, loading wallet, syncing gossip data",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                            )
-                        }
-                    }
                 }
             }
 
