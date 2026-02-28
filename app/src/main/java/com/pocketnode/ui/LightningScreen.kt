@@ -41,35 +41,23 @@ fun LightningScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val clipboardManager = LocalClipboardManager.current
-    val lightningState by LightningService.stateFlow.collectAsState()
-
     val lightning = remember { LightningService.getInstance(context) }
 
-    // Poll node state every 1s to catch background start/stop transitions.
-    // StateFlow.collectAsState should handle this, but raw Thread starts
-    // can race the Compose subscription. This reconciles actual node state.
-    var isNodeRunning by remember { mutableStateOf(lightning.isRunning()) }
+    // Direct polling approach: read state every second.
+    // StateFlow.collectAsState() was unreliable when node starts on a raw Thread,
+    // so we poll explicitly and use local mutableState for guaranteed recomposition.
+    var effectiveState by remember { mutableStateOf(LightningService.stateFlow.value) }
     LaunchedEffect(Unit) {
         while (true) {
-            kotlinx.coroutines.delay(1000)
-            val running = lightning.isRunning()
-            if (running != isNodeRunning) {
-                isNodeRunning = running
-            }
-            if (running) {
+            // Always read current StateFlow value
+            effectiveState = LightningService.stateFlow.value
+            // If node is running but state is stale, force an update
+            if (lightning.isRunning() && effectiveState.status != LightningService.LightningState.Status.RUNNING) {
                 lightning.updateState()
+                effectiveState = LightningService.stateFlow.value
             }
+            kotlinx.coroutines.delay(1000)
         }
-    }
-
-    // Derive effective status: if node is actually running but StateFlow
-    // hasn't caught up yet, override to RUNNING and trigger an update
-    val effectiveState = if (isNodeRunning && lightningState.status == LightningService.LightningState.Status.STOPPED) {
-        // StateFlow is stale — node started on background thread
-        LaunchedEffect(Unit) { lightning.updateState() }
-        lightningState.copy(status = LightningService.LightningState.Status.STARTING)
-    } else {
-        lightningState
     }
 
     // RPC credentials from existing config
