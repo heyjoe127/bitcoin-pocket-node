@@ -29,7 +29,9 @@ import androidx.compose.ui.text.input.KeyboardType
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SendPaymentScreen(
-    onNavigateBack: () -> Unit = {}
+    onNavigateBack: () -> Unit = {},
+    onNavigateToScanner: () -> Unit = {},
+    scannedQr: String? = null
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -37,6 +39,13 @@ fun SendPaymentScreen(
     val lightning = remember { LightningService.getInstance(context) }
 
     var invoiceInput by remember { mutableStateOf("") }
+
+    // Apply scanned QR result when it arrives
+    LaunchedEffect(scannedQr) {
+        if (scannedQr != null) {
+            invoiceInput = scannedQr
+        }
+    }
     var offerAmountSats by remember { mutableStateOf("") }
     var sending by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf<String?>(null) }
@@ -99,17 +108,22 @@ fun SendPaymentScreen(
 
                     Spacer(Modifier.height(8.dp))
 
-                    // Paste from clipboard button
-                    OutlinedButton(
-                        onClick = {
-                            clipboardManager.getText()?.text?.let {
-                                invoiceInput = it.trim()
-                                error = null
-                                result = null
+                    // Paste and Scan buttons
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            onClick = {
+                                clipboardManager.getText()?.text?.let {
+                                    invoiceInput = it.trim()
+                                    error = null
+                                    result = null
+                                }
                             }
+                        ) {
+                            Text("📋 Paste")
                         }
-                    ) {
-                        Text("Paste from clipboard")
+                        OutlinedButton(onClick = onNavigateToScanner) {
+                            Text("📷 Scan QR")
+                        }
                     }
                 }
             }

@@ -212,11 +212,21 @@ fun ReceivePaymentScreen(
                         )
                         Spacer(Modifier.height(12.dp))
 
+                        // QR code
+                        Box(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            QrCodeImage(data = output!!)
+                        }
+
+                        Spacer(Modifier.height(12.dp))
+
                         Text(
                             output!!,
                             style = MaterialTheme.typography.bodySmall,
                             fontFamily = FontFamily.Monospace,
-                            maxLines = 6
+                            maxLines = 4
                         )
 
                         Spacer(Modifier.height(12.dp))

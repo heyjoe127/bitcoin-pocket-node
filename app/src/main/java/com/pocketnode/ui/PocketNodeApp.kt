@@ -262,8 +262,27 @@ fun PocketNodeApp(
                     onBack = { navController.popBackStack() }
                 )
             }
-            composable("lightning_send") {
+            composable("lightning_send") { backStackEntry ->
+                val scannedResult = backStackEntry.savedStateHandle
+                    .get<String>("scanned_qr")
+                // Clear after reading so it doesn't persist on recomposition
+                LaunchedEffect(scannedResult) {
+                    if (scannedResult != null) {
+                        backStackEntry.savedStateHandle.remove<String>("scanned_qr")
+                    }
+                }
                 com.pocketnode.ui.lightning.SendPaymentScreen(
+                    onNavigateBack = { navController.popBackStack() },
+                    onNavigateToScanner = { navController.navigate("qr_scanner") },
+                    scannedQr = scannedResult
+                )
+            }
+            composable("qr_scanner") {
+                com.pocketnode.ui.lightning.QrScannerScreen(
+                    onResult = { result ->
+                        navController.previousBackStackEntry?.savedStateHandle?.set("scanned_qr", result)
+                        navController.popBackStack()
+                    },
                     onNavigateBack = { navController.popBackStack() }
                 )
             }

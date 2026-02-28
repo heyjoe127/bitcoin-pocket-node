@@ -81,6 +81,13 @@ dependencies {
     implementation("net.java.dev.jna:jna:5.12.0@aar")
     implementation("org.slf4j:slf4j-api:1.7.30")
 
+    // QR code generation (ZXing) and camera scanning (CameraX)
+    implementation("com.google.zxing:core:3.5.3")
+    implementation("androidx.camera:camera-core:1.3.1")
+    implementation("androidx.camera:camera-camera2:1.3.1")
+    implementation("androidx.camera:camera-lifecycle:1.3.1")
+    implementation("androidx.camera:camera-view:1.3.1")
+
     // SSH/SFTP
     implementation("com.jcraft:jsch:0.1.55")
 
