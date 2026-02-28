@@ -103,6 +103,47 @@ fun SnapshotSourceScreen(
                 subtitle = "Import a snapshot from Downloads, USB, or SD card.",
                 onClick = { showComingSoon = true }
             )
+
+            Spacer(Modifier.height(16.dp))
+
+            Text(
+                "What You Get",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    FeaturePreviewItem("⛓", "Full Bitcoin Node",
+                        "Validate every transaction yourself. No trusted third parties.")
+                    FeaturePreviewItem("⚡", "Lightning Wallet",
+                        "Send and receive Lightning payments. Built-in wallet powered by LDK.")
+                    FeaturePreviewItem("\uD83D\uDEE1\uFE0F", "Watchtower via Tor",
+                        "Your home node watches your channels automatically. Direct .onion connection.")
+                    FeaturePreviewItem("\uD83D\uDCB0", "Sovereign Price Discovery",
+                        "BTC/USD price derived from on-chain data. No exchange APIs.")
+                    FeaturePreviewItem("\uD83D\uDCCA", "Mempool Viewer",
+                        "Fee estimates, projected blocks, transaction search. All from your own node.")
+                    FeaturePreviewItem("\uD83D\uDD17", "External Wallet Support",
+                        "Connect BlueWallet or Zeus to your phone's Electrum and Lightning servers.")
+                }
+            }
+
+            Text(
+                "Everything runs locally on your phone. The only external service used is mempool.space for Lightning peer discovery (optional).",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                modifier = Modifier.padding(horizontal = 4.dp)
+            )
         }
     }
 
@@ -119,6 +160,22 @@ fun SnapshotSourceScreen(
     }
 
     // Node IP dialog removed — now uses dedicated NodeConnectionScreen
+}
+
+@Composable
+private fun FeaturePreviewItem(emoji: String, title: String, description: String) {
+    Row {
+        Text(emoji, style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.width(12.dp))
+        Column {
+            Text(title, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
+            Text(
+                description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+            )
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
