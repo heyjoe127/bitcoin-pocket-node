@@ -84,111 +84,99 @@ fun LightningScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Node status banner — shown when not running
+            // Status banner — shown when not running
             if (effectiveState.status != LightningService.LightningState.Status.RUNNING) {
-                val (bannerText, bannerDesc, bannerColor) = when (effectiveState.status) {
-                    LightningService.LightningState.Status.STARTING -> Triple(
-                        "⏳ Node Starting...",
-                        "Connecting to bitcoind and syncing",
-                        Color(0xFFFF9800)
-                    )
-                    LightningService.LightningState.Status.ERROR -> Triple(
-                        "⚠️ Node Error",
-                        effectiveState.error ?: "Lightning node encountered an error",
-                        MaterialTheme.colorScheme.error
-                    )
-                    else -> Triple(
-                        "Lightning Node Off",
-                        "Start the node to access your wallet",
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                    )
+                val isStarting = effectiveState.status == LightningService.LightningState.Status.STARTING
+                val isError = effectiveState.status == LightningService.LightningState.Status.ERROR
+                val bannerColor = when {
+                    isStarting -> Color(0xFFFF9800)
+                    isError -> MaterialTheme.colorScheme.error
+                    else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                 }
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = bannerColor.copy(alpha = 0.12f)
-                    )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        if (effectiveState.status == LightningService.LightningState.Status.STARTING) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp),
-                                strokeWidth = 2.dp,
-                                color = bannerColor
-                            )
-                        }
-                        Column {
-                            Text(bannerText, fontWeight = FontWeight.Bold, color = bannerColor)
-                            Text(
-                                bannerDesc,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                            )
-                        }
+                    if (!isError) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = bannerColor
+                        )
+                    }
+                    Column {
+                        Text(
+                            when {
+                                isStarting -> "⏳ Starting Lightning..."
+                                isError -> "⚠️ Node Error"
+                                else -> "⏳ Waiting for node..."
+                            },
+                            fontWeight = FontWeight.Bold,
+                            color = bannerColor,
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                        Text(
+                            when {
+                                isStarting -> "Connecting to bitcoind and syncing"
+                                isError -> effectiveState.error ?: "Lightning node encountered an error"
+                                else -> "Lightning will start when bitcoind is synced"
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        )
                     }
                 }
             }
 
-            // Status card
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("LDK Node", fontWeight = FontWeight.Bold)
-                        val (statusText, statusColor) = when (effectiveState.status) {
-                            LightningService.LightningState.Status.RUNNING -> "Running" to Color(0xFF4CAF50)
-                            LightningService.LightningState.Status.STARTING -> "Starting..." to Color(0xFFFF9800)
-                            LightningService.LightningState.Status.ERROR -> "Error" to MaterialTheme.colorScheme.error
-                            LightningService.LightningState.Status.STOPPED -> "Stopped" to MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                        }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("●", color = statusColor)
-                            Spacer(Modifier.width(4.dp))
-                            Text(statusText, style = MaterialTheme.typography.bodyMedium)
-                        }
-                    }
-
-                    if (effectiveState.nodeId != null) {
-                        Spacer(Modifier.height(8.dp))
-                        Text("Node ID", style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                effectiveState.nodeId!!.take(16) + "..." + effectiveState.nodeId!!.takeLast(8),
-                                style = MaterialTheme.typography.bodySmall,
-                                fontFamily = FontFamily.Monospace
-                            )
-                            IconButton(
-                                onClick = { clipboardManager.setText(AnnotatedString(effectiveState.nodeId!!)) },
-                                modifier = Modifier.size(24.dp)
-                            ) {
-                                Icon(Icons.Default.ContentCopy, "Copy", modifier = Modifier.size(14.dp))
+            // Status card — only shown when running (banner covers non-running states)
+            if (effectiveState.status == LightningService.LightningState.Status.RUNNING) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("LDK Node", fontWeight = FontWeight.Bold)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("●", color = Color(0xFF4CAF50))
+                                Spacer(Modifier.width(4.dp))
+                                Text("Running", style = MaterialTheme.typography.bodyMedium)
                             }
                         }
-                    }
 
-                    if (effectiveState.error != null) {
+                        if (effectiveState.nodeId != null) {
+                            Spacer(Modifier.height(8.dp))
+                            Text("Node ID", style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    effectiveState.nodeId!!.take(16) + "..." + effectiveState.nodeId!!.takeLast(8),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                                IconButton(
+                                    onClick = { clipboardManager.setText(AnnotatedString(effectiveState.nodeId!!)) },
+                                    modifier = Modifier.size(24.dp)
+                                ) {
+                                    Icon(Icons.Default.ContentCopy, "Copy", modifier = Modifier.size(14.dp))
+                                }
+                            }
+                        }
+
                         Spacer(Modifier.height(8.dp))
-                        Text(effectiveState.error!!, color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodySmall)
+                        Text(
+                            "Powered by LDK (Lightning Dev Kit)",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                        )
                     }
-
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        "Powered by LDK (Lightning Dev Kit)",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
-                    )
                 }
             }
 
