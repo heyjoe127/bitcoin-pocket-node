@@ -335,6 +335,21 @@ class BitcoindService : Service() {
                                 bwt.start(saveState = false)
                                 Log.i(TAG, "Auto-started BWT from service (node synced)")
                             }
+                            // Auto-start Lightning when synced (if it was previously running)
+                            if (prefs.getBoolean("lightning_was_running", false)) {
+                                val rpcUser = prefs.getString("rpc_user", "pocketnode") ?: "pocketnode"
+                                val rpcPass = prefs.getString("rpc_password", "") ?: ""
+                                if (rpcPass.isNotEmpty()) {
+                                    Thread {
+                                        try {
+                                            com.pocketnode.lightning.LightningService.getInstance(this@BitcoindService).start(rpcUser, rpcPass)
+                                            Log.i(TAG, "Auto-started Lightning from service (node synced)")
+                                        } catch (e: Exception) {
+                                            Log.e(TAG, "Failed to auto-start Lightning: ${e.message}")
+                                        }
+                                    }.start()
+                                }
+                            }
                         }
 
                         // Read cached oracle price
