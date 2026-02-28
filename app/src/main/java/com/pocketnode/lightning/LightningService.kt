@@ -89,6 +89,24 @@ class LightningService(private val context: Context) {
     private suspend fun startInternal(rpcUser: String, rpcPassword: String, rpcPort: Int): Unit = withContext(Dispatchers.IO) {
 
         try {
+            // Check for pruned blocks that LDK will need.
+            // ldk-node retries internally on pruned block errors (never throws),
+            // so we must detect and recover before starting the node.
+            val lastLdkHeight = context.getSharedPreferences("pocketnode_prefs", MODE_PRIVATE)
+                .getLong("last_ldk_sync_height", 0)
+            if (lastLdkHeight > 0) {
+                val rpc = BitcoinRpcClient(rpcUser, rpcPassword, port = rpcPort)
+                val chainInfo = rpc.getBlockchainInfo()
+                if (chainInfo != null && !chainInfo.has("_rpc_error")) {
+                    val pruneHeight = chainInfo.optLong("pruneheight", 0)
+                    if (pruneHeight > lastLdkHeight) {
+                        Log.w(TAG, "Pruned blocks detected: LDK last synced at $lastLdkHeight but prune height is $pruneHeight")
+                        recoverPrunedBlocks(rpcUser, rpcPassword, rpcPort)
+                        return@withContext
+                    }
+                }
+            }
+
             val storageDir = File(context.filesDir, STORAGE_DIR)
             if (!storageDir.exists()) storageDir.mkdirs()
 
@@ -419,6 +437,16 @@ class LightningService(private val context: Context) {
         try {
             val channels = n.listChannels()
             val balances = n.listBalances()
+
+            // Track LDK's chain tip for prune recovery detection on next startup
+            try {
+                val bestBlock = n.status().currentBestBlock
+                val height = bestBlock.height.toLong()
+                if (height > 0) {
+                    context.getSharedPreferences("pocketnode_prefs", MODE_PRIVATE)
+                        .edit().putLong("last_ldk_sync_height", height).apply()
+                }
+            } catch (_: Exception) { /* non-critical */ }
 
             _state.value = LightningState(
                 status = LightningState.Status.RUNNING,

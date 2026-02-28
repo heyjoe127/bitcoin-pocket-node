@@ -85,8 +85,9 @@ fun LightningScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Status banner — shown when not running
-            if (effectiveState.status != LightningService.LightningState.Status.RUNNING) {
+            // Status banner — shown for starting, recovering, and error states (not stopped or running)
+            if (effectiveState.status != LightningService.LightningState.Status.RUNNING &&
+                effectiveState.status != LightningService.LightningState.Status.STOPPED) {
                 val isStarting = effectiveState.status == LightningService.LightningState.Status.STARTING
                 val isError = effectiveState.status == LightningService.LightningState.Status.ERROR
                 val isRecovering = effectiveState.status == LightningService.LightningState.Status.RECOVERING
@@ -215,7 +216,7 @@ fun LightningScreen(
                         }
                     },
                     modifier = Modifier.fillMaxWidth().height(48.dp),
-                    enabled = isError, // greyed out while waiting, enabled on error for retry
+                    enabled = true, // always tappable when shown (STOPPED or ERROR)
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800))
                 ) {
                     Text("⚡ Start Lightning Node")
