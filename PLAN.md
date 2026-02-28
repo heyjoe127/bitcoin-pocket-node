@@ -231,7 +231,11 @@ See [Desktop Port Design](docs/DESKTOP-PORT.md) for the full design document.
 - [ ] Charging-aware sync (configurable)
 - [ ] Doze mode handling
 - [x] Built-in Tor (Arti): direct .onion connection to home node watchtower, no SSH tunnel or Orbot needed
-- [ ] Tor integration for private peer connections
+- [ ] Tor for Rapid Gossip Sync: route RGS fetch through Arti to hide Lightning usage from ISP
+- [ ] Tor for LDK peer connections: connect to .onion Lightning peers
+- [ ] Tor for mempool.space API: private peer browsing
+- [ ] Tor for HTTPS chainstate download: setup privacy
+- [ ] Tor for bitcoind: full network privacy via SOCKS proxy (affects sync speed)
 - [ ] Non-technical setup documentation for everyday users
 - [ ] Expanded device testing beyond Pixel line
 - [ ] Block visualization: animated graphic showing stub creation → pruning → backfill
