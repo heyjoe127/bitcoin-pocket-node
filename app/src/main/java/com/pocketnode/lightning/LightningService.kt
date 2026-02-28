@@ -404,7 +404,7 @@ class LightningService(private val context: Context) {
         } catch (e: Exception) {
             Log.e(TAG, "Failed to create offer", e)
             val msg = if (e.message?.contains("OfferCreationFailed") == true)
-                "Open a channel first. BOLT12 offers need at least one channel for routing."
+                "BOLT12 offers are linked to channels. A channel is required to create an offer."
             else e.message ?: "Failed to create offer"
             Result.failure(Exception(msg))
         }
@@ -424,7 +424,7 @@ class LightningService(private val context: Context) {
         } catch (e: Exception) {
             Log.e(TAG, "Failed to create variable offer", e)
             val msg = if (e.message?.contains("OfferCreationFailed") == true)
-                "Open a channel first. BOLT12 offers need at least one channel for routing."
+                "BOLT12 offers are linked to channels. A channel is required to create an offer."
             else e.message ?: "Failed to create offer"
             Result.failure(Exception(msg))
         }
