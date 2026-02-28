@@ -60,8 +60,9 @@ class LightningService(private val context: Context) {
 
         _state.value = _state.value.copy(status = LightningState.Status.STARTING, error = null)
 
-        // Brief pause so UI can render the "Starting" state before we proceed
-        try { Thread.sleep(300) } catch (_: InterruptedException) {}
+        // Pause so UI can render the "Starting" state before heavy init.
+        // The screen polls every 1s, so we need at least that long.
+        try { Thread.sleep(1500) } catch (_: InterruptedException) {}
 
         try {
             val storageDir = File(context.filesDir, STORAGE_DIR)
