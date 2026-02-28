@@ -145,8 +145,11 @@ fun OracleCard(
     }
 
     // Initial run when node is synced — restore from cache if available, else full scan
+    // Use hasInitialized flag to only run once (avoids blank/reload on recomposition)
+    var hasInitialized by remember { mutableStateOf(false) }
     LaunchedEffect(isNodeSynced) {
-        if (!isNodeSynced || isRunning) return@LaunchedEffect
+        if (!isNodeSynced || isRunning || hasInitialized) return@LaunchedEffect
+        hasInitialized = true
 
         val creds = ConfigGenerator.readCredentials(context) ?: return@LaunchedEffect
         val rpc = BitcoinRpcClient(creds.first, creds.second)
