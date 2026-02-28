@@ -14,8 +14,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.pocketnode.lightning.LightningService
+import org.lightningdevkit.ldknode.Bolt11Invoice
+import org.lightningdevkit.ldknode.Bolt11InvoiceDescription
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -128,7 +131,7 @@ fun SendPaymentScreen(
                 }
             }
 
-            // Input preview
+            // Input preview with decoded details
             if (isInvoice || isOffer) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -139,14 +142,66 @@ fun SendPaymentScreen(
                             if (isOffer) "BOLT12 Offer" else "BOLT11 Invoice",
                             style = MaterialTheme.typography.titleSmall
                         )
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            cleanInput.take(40) + "...",
-                            style = MaterialTheme.typography.bodySmall,
-                            fontFamily = FontFamily.Monospace,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                        )
+
+                        if (isInvoice) {
+                            // Decode BOLT11 invoice to show amount and description
+                            val decoded = remember(cleanInput) {
+                                try { Bolt11Invoice.fromStr(cleanInput) } catch (_: Exception) { null }
+                            }
+                            if (decoded != null) {
+                                Spacer(Modifier.height(8.dp))
+                                val amountMsat = decoded.amountMilliSatoshis()
+                                if (amountMsat != null) {
+                                    val amountSats = amountMsat.toLong() / 1000
+                                    Text(
+                                        "${"%,d".format(amountSats)} sats",
+                                        style = MaterialTheme.typography.titleLarge,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFFFF9800)
+                                    )
+                                } else {
+                                    Text("Amount: not specified", style = MaterialTheme.typography.bodyMedium)
+                                }
+                                val desc = decoded.invoiceDescription()
+                                val descText = when (desc) {
+                                    is Bolt11InvoiceDescription.Direct -> desc.description
+                                    is Bolt11InvoiceDescription.Hash -> "Payment"
+                                }
+                                if (descText.isNotBlank()) {
+                                    Spacer(Modifier.height(4.dp))
+                                    Text(
+                                        descText,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                    )
+                                }
+                                if (decoded.isExpired()) {
+                                    Spacer(Modifier.height(4.dp))
+                                    Text(
+                                        "⚠️ This invoice has expired",
+                                        color = MaterialTheme.colorScheme.error,
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                }
+                            } else {
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    cleanInput.take(40) + "...",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontFamily = FontFamily.Monospace,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                )
+                            }
+                        }
+
                         if (isOffer) {
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                cleanInput.take(40) + "...",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontFamily = FontFamily.Monospace,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
                             Spacer(Modifier.height(4.dp))
                             Text(
                                 "Reusable payment request. You may need to specify an amount.",
