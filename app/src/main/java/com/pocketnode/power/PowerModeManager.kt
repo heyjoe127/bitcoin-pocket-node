@@ -56,7 +56,7 @@ class PowerModeManager(private val context: Context) {
     enum class Mode(val label: String, val emoji: String, val notificationLabel: String) {
         MAX("Max", "⚡", "Max Data"),
         LOW("Low", "🔋", "Low Data"),
-        AWAY("Saver", "🚶", "Data Saver");
+        AWAY("Away", "🚶", "Away Mode");
 
         companion object {
             fun fromString(s: String): Mode = try { valueOf(s) } catch (_: Exception) { LOW }
