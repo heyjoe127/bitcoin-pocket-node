@@ -165,6 +165,7 @@ class BitcoindService : Service() {
                             val pmm = PowerModeManager(this@BitcoindService)
                             pmm.setRpc(testRpc)
                             pmm.setMode(PowerModeManager.modeFlow.value, serviceScope)
+                            pmm.startAutoIfEnabled(monitor.networkState, bm.state, serviceScope)
                             powerModeManager = pmm
                             _activePowerModeManager.value = pmm
                             Log.i(TAG, "Attached to existing bitcoind, network control started")
@@ -248,6 +249,7 @@ class BitcoindService : Service() {
                 val pmm = PowerModeManager(this@BitcoindService)
                 pmm.setRpc(rpc)
                 pmm.setMode(PowerModeManager.modeFlow.value, serviceScope)
+                pmm.startAutoIfEnabled(monitor.networkState, bm.state, serviceScope)
                 powerModeManager = pmm
                 _activePowerModeManager.value = pmm
                 Log.i(TAG, "Network-aware sync control started")

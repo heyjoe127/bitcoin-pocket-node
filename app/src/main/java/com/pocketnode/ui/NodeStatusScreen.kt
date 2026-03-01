@@ -433,6 +433,10 @@ fun NodeStatusScreen(
                 val currentPowerMode by PowerModeManager.modeFlow.collectAsState()
                 val pmm by BitcoindService.activePowerModeManagerFlow.collectAsState()
                 val coroutineScope = rememberCoroutineScope()
+                val autoEnabled by PowerModeManager.autoEnabledFlow.collectAsState()
+                val networkMonitor by BitcoindService.activeNetworkMonitorFlow.collectAsState()
+                val batteryMon by BitcoindService.activeBatteryMonitorFlow.collectAsState()
+
                 PowerModeSelector(
                     currentMode = currentPowerMode,
                     onModeSelected = { mode ->
@@ -444,6 +448,30 @@ fun NodeStatusScreen(
                             }
                     }
                 )
+
+                // Auto power mode toggle
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        "Auto-adjust power mode",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Switch(
+                        checked = autoEnabled,
+                        onCheckedChange = { enabled ->
+                            val nm = networkMonitor
+                            val bm = batteryMon
+                            if (pmm != null && nm != null && bm != null) {
+                                pmm!!.setAutoEnabled(enabled, nm.networkState, bm.state, coroutineScope)
+                            }
+                        },
+                        colors = SwitchDefaults.colors(checkedTrackColor = Color(0xFFFF9800))
+                    )
+                }
 
                 // Lightning node button — shown at top when filters installed
                 run {

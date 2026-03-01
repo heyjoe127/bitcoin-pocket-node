@@ -3,10 +3,13 @@ package com.pocketnode.power
 import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
+import com.pocketnode.network.NetworkState
 import com.pocketnode.rpc.BitcoinRpcClient
+import com.pocketnode.service.BatteryMonitor
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import org.json.JSONArray
 
 /**
@@ -33,8 +36,14 @@ class PowerModeManager(private val context: Context) {
         private const val LOW_PEERS = 4
         private const val AWAY_PEERS = 2
 
+        private const val PREF_KEY_AUTO_POWER = "power_mode_auto"
+
         private val _modeFlow = MutableStateFlow(Mode.LOW)
         val modeFlow: StateFlow<Mode> = _modeFlow
+
+        /** True when auto-detection is active (user toggle) */
+        private val _autoEnabled = MutableStateFlow(false)
+        val autoEnabledFlow: StateFlow<Boolean> = _autoEnabled
 
         private val _burstStateFlow = MutableStateFlow(BurstState.IDLE)
         val burstStateFlow: StateFlow<BurstState> = _burstStateFlow
@@ -61,11 +70,14 @@ class PowerModeManager(private val context: Context) {
     }
 
     private var burstJob: Job? = null
+    private var autoDetectJob: Job? = null
     private var rpc: BitcoinRpcClient? = null
+    private var activeScope: CoroutineScope? = null
     private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     init {
         _modeFlow.value = Mode.fromString(prefs.getString(PREF_KEY_POWER_MODE, "LOW") ?: "LOW")
+        _autoEnabled.value = prefs.getBoolean(PREF_KEY_AUTO_POWER, false)
     }
 
     /** Set the RPC client once bitcoind is running */
@@ -88,6 +100,65 @@ class PowerModeManager(private val context: Context) {
 
         scope.launch(Dispatchers.IO) {
             applyMode(mode)
+        }
+    }
+
+    /** Enable or disable auto power mode detection */
+    fun setAutoEnabled(enabled: Boolean, networkStateFlow: StateFlow<NetworkState>,
+                       batteryStateFlow: StateFlow<BatteryMonitor.BatteryState>,
+                       scope: CoroutineScope) {
+        _autoEnabled.value = enabled
+        prefs.edit().putBoolean(PREF_KEY_AUTO_POWER, enabled).apply()
+        Log.i(TAG, "Auto power mode: $enabled")
+
+        autoDetectJob?.cancel()
+        if (enabled) {
+            startAutoDetection(networkStateFlow, batteryStateFlow, scope)
+        }
+    }
+
+    /**
+     * Monitors network and battery state, automatically switching power mode:
+     * - WiFi + Charging -> Max
+     * - WiFi + Battery -> Low
+     * - Cellular + Charging -> Low
+     * - Cellular + Battery -> Away
+     * - Battery below 20% -> Away
+     */
+    private fun startAutoDetection(networkStateFlow: StateFlow<NetworkState>,
+                                   batteryStateFlow: StateFlow<BatteryMonitor.BatteryState>,
+                                   scope: CoroutineScope) {
+        autoDetectJob = scope.launch {
+            combine(networkStateFlow, batteryStateFlow) { network, battery ->
+                suggestMode(network, battery)
+            }.collect { suggested ->
+                val current = _modeFlow.value
+                if (suggested != current) {
+                    Log.i(TAG, "Auto-switching: $current -> $suggested")
+                    setMode(suggested, scope)
+                }
+            }
+        }
+    }
+
+    private fun suggestMode(network: NetworkState, battery: BatteryMonitor.BatteryState): Mode {
+        // Low battery always goes to Away
+        if (battery.level < 20 && !battery.isCharging) return Mode.AWAY
+
+        return when (network) {
+            NetworkState.WIFI -> if (battery.isCharging) Mode.MAX else Mode.LOW
+            NetworkState.CELLULAR -> if (battery.isCharging) Mode.LOW else Mode.AWAY
+            NetworkState.OFFLINE -> Mode.AWAY
+        }
+    }
+
+    /** Start auto-detection if enabled (call after setRpc with available flows) */
+    fun startAutoIfEnabled(networkStateFlow: StateFlow<NetworkState>,
+                           batteryStateFlow: StateFlow<BatteryMonitor.BatteryState>,
+                           scope: CoroutineScope) {
+        activeScope = scope
+        if (_autoEnabled.value) {
+            startAutoDetection(networkStateFlow, batteryStateFlow, scope)
         }
     }
 
@@ -193,6 +264,8 @@ class PowerModeManager(private val context: Context) {
     fun stop() {
         burstJob?.cancel()
         burstJob = null
+        autoDetectJob?.cancel()
+        autoDetectJob = null
         _burstStateFlow.value = BurstState.IDLE
         _nextBurstFlow.value = 0L
     }
