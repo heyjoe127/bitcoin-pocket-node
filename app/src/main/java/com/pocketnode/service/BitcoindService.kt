@@ -377,10 +377,14 @@ class BitcoindService : Service() {
 
                         val batterySaving = _batterySaverActive.value
                         val currentMode = PowerModeManager.modeFlow.value
+                        val modeLabel = when (currentMode) {
+                            PowerModeManager.Mode.MAX -> "⚡ Max"
+                            PowerModeManager.Mode.LOW -> "🔋 Low"
+                            PowerModeManager.Mode.AWAY -> "🚶 Away"
+                        }
                         val title = when {
                             batterySaving -> "₿ Battery Saver"
-                            currentMode == PowerModeManager.Mode.AWAY -> "₿ Away Mode"
-                            synced -> "₿ Synced"
+                            synced -> "₿ $modeLabel"
                             else -> "₿ Syncing"
                         }
 
