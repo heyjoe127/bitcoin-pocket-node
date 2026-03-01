@@ -13,6 +13,7 @@ import com.pocketnode.MainActivity
 import com.pocketnode.R
 import com.pocketnode.network.NetworkMonitor
 import com.pocketnode.rpc.BitcoinRpcClient
+import com.pocketnode.power.PowerModeManager
 import com.pocketnode.util.BinaryExtractor
 import com.pocketnode.util.ConfigGenerator
 import kotlinx.coroutines.*
@@ -63,6 +64,9 @@ class BitcoindService : Service() {
         const val PREF_KEY_BATTERY_SAVER = "battery_saver_enabled"
         const val BATTERY_THRESHOLD = 50
 
+        private val _activePowerModeManager = MutableStateFlow<PowerModeManager?>(null)
+        val activePowerModeManagerFlow: StateFlow<PowerModeManager?> = _activePowerModeManager
+
         /** Whether bitcoind is currently running — observed by dashboard on launch */
         private val _isRunning = MutableStateFlow(false)
         val isRunningFlow: StateFlow<Boolean> = _isRunning
@@ -71,6 +75,7 @@ class BitcoindService : Service() {
     private var bitcoindProcess: Process? = null
     private var notificationJob: Job? = null
     private var batterySaverJob: Job? = null
+    private var powerModeManager: PowerModeManager? = null
     private var _batterySaverActive = _batterySaverActiveGlobal
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
@@ -99,6 +104,8 @@ class BitcoindService : Service() {
         _isRunning.value = false
         notificationJob?.cancel()
         batterySaverJob?.cancel()
+        powerModeManager?.stop()
+        _activePowerModeManager.value = null
         syncController?.stop()
         networkMonitor?.stop()
         batteryMonitor?.stop()
@@ -155,6 +162,11 @@ class BitcoindService : Service() {
                             activeBatteryMonitor = bm
                             startNotificationUpdater(testRpc)
                             startBatterySaver(testRpc)
+                            val pmm = PowerModeManager(this@BitcoindService)
+                            pmm.setRpc(testRpc)
+                            pmm.setMode(PowerModeManager.modeFlow.value, serviceScope)
+                            powerModeManager = pmm
+                            _activePowerModeManager.value = pmm
                             Log.i(TAG, "Attached to existing bitcoind, network control started")
 
                             // Stay alive — poll until bitcoind stops responding
@@ -233,6 +245,11 @@ class BitcoindService : Service() {
                 activeBatteryMonitor = bm
                 startNotificationUpdater(rpc)
                 startBatterySaver(rpc)
+                val pmm = PowerModeManager(this@BitcoindService)
+                pmm.setRpc(rpc)
+                pmm.setMode(PowerModeManager.modeFlow.value, serviceScope)
+                powerModeManager = pmm
+                _activePowerModeManager.value = pmm
                 Log.i(TAG, "Network-aware sync control started")
             }
 
@@ -357,8 +374,10 @@ class BitcoindService : Service() {
                         val oraclePrice = oraclePrefs.getInt("price", -1)
 
                         val batterySaving = _batterySaverActive.value
+                        val currentMode = PowerModeManager.modeFlow.value
                         val title = when {
                             batterySaving -> "₿ Battery Saver"
+                            currentMode == PowerModeManager.Mode.AWAY -> "₿ Away Mode"
                             synced -> "₿ Synced"
                             else -> "₿ Syncing"
                         }
@@ -376,6 +395,13 @@ class BitcoindService : Service() {
                         if (batterySaving) {
                             val batt = batteryMonitor?.state?.value
                             sb.append(" · 🔋${batt?.level ?: "?"}%")
+                        }
+                        if (currentMode == PowerModeManager.Mode.AWAY) {
+                            val nextBurst = PowerModeManager.nextBurstFlow.value
+                            if (nextBurst > 0) {
+                                val mins = ((nextBurst - System.currentTimeMillis()) / 60_000).coerceAtLeast(0)
+                                sb.append(" · next sync ${mins}min")
+                            }
                         }
 
                         updateNotification(title, sb.toString())

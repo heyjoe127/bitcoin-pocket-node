@@ -35,6 +35,7 @@ import com.pocketnode.network.NetworkMonitor
 import com.pocketnode.network.NetworkState
 import com.pocketnode.rpc.BitcoinRpcClient
 import androidx.compose.foundation.background
+import com.pocketnode.power.PowerModeManager
 import com.pocketnode.service.BatteryMonitor
 import com.pocketnode.service.BitcoindService
 import com.pocketnode.service.SyncController
@@ -416,6 +417,11 @@ fun NodeStatusScreen(
                 }
             }
 
+            // Burst sync banner (Away mode)
+            val burstState by PowerModeManager.burstStateFlow.collectAsState()
+            val nextBurst by PowerModeManager.nextBurstFlow.collectAsState()
+            BurstSyncBanner(burstState = burstState, nextBurstMs = nextBurst)
+
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -423,6 +429,22 @@ fun NodeStatusScreen(
                     .verticalScroll(dashboardScrollState),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
+                // Power mode selector
+                val currentPowerMode by PowerModeManager.modeFlow.collectAsState()
+                val pmm by BitcoindService.activePowerModeManagerFlow.collectAsState()
+                val coroutineScope = rememberCoroutineScope()
+                PowerModeSelector(
+                    currentMode = currentPowerMode,
+                    onModeSelected = { mode ->
+                        pmm?.setMode(mode, coroutineScope)
+                            ?: run {
+                                // If manager not ready yet, just save preference
+                                val prefs = context.getSharedPreferences("pocketnode_prefs", android.content.Context.MODE_PRIVATE)
+                                prefs.edit().putString("power_mode", mode.name).apply()
+                            }
+                    }
+                )
+
                 // Lightning node button — shown at top when filters installed
                 run {
                     val filterDir = java.io.File(LocalContext.current.filesDir, "bitcoin/indexes/blockfilter/basic")

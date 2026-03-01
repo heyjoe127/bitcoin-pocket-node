@@ -1,0 +1,209 @@
+package com.pocketnode.power
+
+import android.content.Context
+import android.content.SharedPreferences
+import android.util.Log
+import com.pocketnode.rpc.BitcoinRpcClient
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import org.json.JSONArray
+
+/**
+ * Manages node power modes: Max, Low, Away.
+ *
+ * Max: full peers, full dbcache, continuous sync
+ * Low: reduced peers, normal sync, default for daily carry
+ * Away: periodic burst sync with long idle periods, minimal resource use
+ */
+class PowerModeManager(private val context: Context) {
+
+    companion object {
+        private const val TAG = "PowerModeManager"
+        private const val PREFS_NAME = "pocketnode_prefs"
+        private const val PREF_KEY_POWER_MODE = "power_mode"
+
+        // Burst sync intervals
+        private const val LOW_BURST_INTERVAL_MS = 15 * 60 * 1000L   // 15 min
+        private const val AWAY_BURST_INTERVAL_MS = 60 * 60 * 1000L  // 60 min
+        private const val BURST_SYNC_TIMEOUT_MS = 120 * 1000L       // 2 min max per burst
+
+        // Peer counts during burst
+        private const val MAX_PEERS = 8
+        private const val LOW_PEERS = 4
+        private const val AWAY_PEERS = 2
+
+        private val _modeFlow = MutableStateFlow(Mode.LOW)
+        val modeFlow: StateFlow<Mode> = _modeFlow
+
+        private val _burstStateFlow = MutableStateFlow(BurstState.IDLE)
+        val burstStateFlow: StateFlow<BurstState> = _burstStateFlow
+
+        private val _nextBurstFlow = MutableStateFlow(0L)
+        /** Epoch millis of next scheduled burst (0 = not scheduled) */
+        val nextBurstFlow: StateFlow<Long> = _nextBurstFlow
+    }
+
+    enum class Mode(val label: String, val emoji: String) {
+        MAX("Max", "⚡"),
+        LOW("Low", "🔋"),
+        AWAY("Away", "🚶");
+
+        companion object {
+            fun fromString(s: String): Mode = try { valueOf(s) } catch (_: Exception) { LOW }
+        }
+    }
+
+    enum class BurstState {
+        IDLE,       // Between bursts (network may be off)
+        SYNCING,    // Burst active, syncing blocks
+        WAITING     // Waiting for next burst
+    }
+
+    private var burstJob: Job? = null
+    private var rpc: BitcoinRpcClient? = null
+    private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+    init {
+        _modeFlow.value = Mode.fromString(prefs.getString(PREF_KEY_POWER_MODE, "LOW") ?: "LOW")
+    }
+
+    /** Set the RPC client once bitcoind is running */
+    fun setRpc(client: BitcoinRpcClient) {
+        rpc = client
+    }
+
+    /** Switch power mode. Applies immediately. */
+    fun setMode(mode: Mode, scope: CoroutineScope) {
+        val previous = _modeFlow.value
+        _modeFlow.value = mode
+        prefs.edit().putString(PREF_KEY_POWER_MODE, mode.name).apply()
+        Log.i(TAG, "Power mode: $previous -> $mode")
+
+        // Cancel existing burst cycle
+        burstJob?.cancel()
+        burstJob = null
+        _burstStateFlow.value = BurstState.IDLE
+        _nextBurstFlow.value = 0L
+
+        scope.launch(Dispatchers.IO) {
+            applyMode(mode)
+        }
+    }
+
+    /** Apply mode settings to bitcoind via RPC */
+    private suspend fun applyMode(mode: Mode) {
+        val client = rpc ?: return
+
+        when (mode) {
+            Mode.MAX -> {
+                // Full power: network on, no burst cycling
+                setNetworkActive(client, true)
+                _burstStateFlow.value = BurstState.IDLE
+                _nextBurstFlow.value = 0L
+            }
+            Mode.LOW -> {
+                // Network stays on but we could reduce peers in future
+                // For now: continuous sync with network on
+                setNetworkActive(client, true)
+                _burstStateFlow.value = BurstState.IDLE
+                _nextBurstFlow.value = 0L
+            }
+            Mode.AWAY -> {
+                // Start burst sync cycle: sync now, then sleep
+                startBurstCycle(AWAY_BURST_INTERVAL_MS)
+            }
+        }
+    }
+
+    /** Start the burst sync cycle for Away mode */
+    private fun startBurstCycle(intervalMs: Long) {
+        burstJob?.cancel()
+        burstJob = CoroutineScope(Dispatchers.IO).launch {
+            while (isActive) {
+                // Burst: turn network on, sync, turn off
+                doBurst()
+
+                // Schedule next burst
+                val nextBurst = System.currentTimeMillis() + intervalMs
+                _nextBurstFlow.value = nextBurst
+                _burstStateFlow.value = BurstState.WAITING
+
+                delay(intervalMs)
+            }
+        }
+    }
+
+    /** Execute one sync burst: enable network, wait for sync, disable network */
+    private suspend fun doBurst() {
+        val client = rpc ?: return
+        _burstStateFlow.value = BurstState.SYNCING
+        Log.i(TAG, "Burst sync starting")
+
+        try {
+            // Enable network
+            setNetworkActive(client, true)
+
+            // Wait for sync or timeout
+            val startTime = System.currentTimeMillis()
+            var synced = false
+            while (System.currentTimeMillis() - startTime < BURST_SYNC_TIMEOUT_MS) {
+                try {
+                    val info = client.getBlockchainInfo()
+                    val progress = info?.optDouble("verificationprogress", 0.0) ?: 0.0
+                    val headers = info?.optInt("headers", 0) ?: 0
+                    val blocks = info?.optInt("blocks", 0) ?: 0
+                    if (progress > 0.9999 && headers > 0 && blocks >= headers) {
+                        synced = true
+                        break
+                    }
+                } catch (_: Exception) {}
+                delay(5_000)
+            }
+
+            Log.i(TAG, "Burst sync ${if (synced) "complete" else "timed out"}")
+
+            // Disable network until next burst
+            setNetworkActive(client, false)
+        } catch (e: Exception) {
+            Log.e(TAG, "Burst sync error: ${e.message}")
+            // Leave network off on error, next burst will retry
+            try { setNetworkActive(client, false) } catch (_: Exception) {}
+        }
+
+        _burstStateFlow.value = BurstState.IDLE
+    }
+
+    /** Trigger an immediate burst sync (e.g. when user opens the app in Away mode) */
+    fun triggerBurst(scope: CoroutineScope) {
+        if (_modeFlow.value != Mode.AWAY) return
+        if (_burstStateFlow.value == BurstState.SYNCING) return
+
+        burstJob?.cancel()
+        burstJob = null
+
+        scope.launch(Dispatchers.IO) {
+            doBurst()
+            // Resume normal cycle after manual burst
+            startBurstCycle(AWAY_BURST_INTERVAL_MS)
+        }
+    }
+
+    /** Clean up when service stops */
+    fun stop() {
+        burstJob?.cancel()
+        burstJob = null
+        _burstStateFlow.value = BurstState.IDLE
+        _nextBurstFlow.value = 0L
+    }
+
+    private suspend fun setNetworkActive(client: BitcoinRpcClient, active: Boolean) {
+        try {
+            val params = JSONArray().apply { put(active) }
+            client.call("setnetworkactive", params)
+            Log.d(TAG, "setnetworkactive($active)")
+        } catch (e: Exception) {
+            Log.e(TAG, "setnetworkactive failed: ${e.message}")
+        }
+    }
+}
