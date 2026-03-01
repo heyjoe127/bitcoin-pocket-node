@@ -53,10 +53,10 @@ class PowerModeManager(private val context: Context) {
         val nextBurstFlow: StateFlow<Long> = _nextBurstFlow
     }
 
-    enum class Mode(val label: String, val emoji: String) {
-        MAX("Max", "⚡"),
-        LOW("Low", "🔋"),
-        AWAY("Away", "🚶");
+    enum class Mode(val label: String, val emoji: String, val notificationLabel: String) {
+        MAX("Max", "⚡", "Max Data"),
+        LOW("Low", "🔋", "Low Data"),
+        AWAY("Saver", "🚶", "Data Saver");
 
         companion object {
             fun fromString(s: String): Mode = try { valueOf(s) } catch (_: Exception) { LOW }
