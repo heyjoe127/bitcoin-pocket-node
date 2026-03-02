@@ -41,6 +41,12 @@ Turn any Android phone into a fully-validating Bitcoin full node. No server depe
 |:---:|:---:|:---:|
 | ![Dashboard with Lightning Ready](docs/images/05-lightning-dashboard.jpg) | ![All three wallet services](docs/images/06-connect-wallet.jpg) | ![Choose Bitcoin implementation](docs/images/11-version-picker.png) |
 
+**Lightning Wallet**
+
+| Dashboard | Lightning wallet | Watchtower + Seed | Peer browser |
+|:---:|:---:|:---:|:---:|
+| ![Dashboard with power modes](docs/images/dashboard-home.png) | ![Lightning send/receive](docs/images/lightning-wallet.png) | ![Watchtower active](docs/images/lightning-watchtower.png) | ![Browse Lightning peers](docs/images/peer-browser.png) |
+
 ## How It Works
 
 Two bootstrap paths. Choose speed or trustlessness:
