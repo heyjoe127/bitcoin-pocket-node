@@ -366,7 +366,6 @@ app/src/main/java/com/pocketnode/
 - 16KB page alignment warning on GrapheneOS (cosmetic only)
 - `getblockchaininfo` reports background validation progress, not snapshot chain tip (AssumeUTXO path only)
 - ARM64 Android emulator cannot run on x86 Mac, all testing requires real device
-- Direct chainstate copy: pruning ~5000 stub files takes ~15 minutes on first startup (optimizable)
 
 ## License
 
