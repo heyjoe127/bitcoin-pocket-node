@@ -20,6 +20,7 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -206,10 +207,14 @@ fun SeedBackupScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    var showCreateConfirm by remember { mutableStateOf(false) }
+
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
                         Button(
                             onClick = {
-                                // Auto-stop Lightning if running
                                 if (lightningService.isRunning()) {
                                     lightningService.stop()
                                 }
@@ -217,31 +222,54 @@ fun SeedBackupScreen(
                                 restoreError = null
                                 restoreSuccess = false
                                 showRestoreDialog = true
-                            }
+                            },
+                            modifier = Modifier.weight(1f).height(48.dp)
                         ) {
-                            Text("Restore from Backup")
+                            Text("Restore", maxLines = 1)
                         }
 
-                        var showCreateConfirm by remember { mutableStateOf(false) }
-                        OutlinedButton(
-                            onClick = { showCreateConfirm = true }
+                        Button(
+                            onClick = { showCreateConfirm = true },
+                            modifier = Modifier.weight(1f).height(48.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.secondary
+                            )
                         ) {
-                            Text("Create New")
+                            Text("Create New", maxLines = 1)
                         }
+                    }
 
-                        if (showCreateConfirm) {
-                            AlertDialog(
-                                onDismissRequest = { showCreateConfirm = false },
-                                title = { Text("Create New Wallet?") },
-                                text = {
+                    if (showCreateConfirm) {
+                        AlertDialog(
+                            onDismissRequest = { showCreateConfirm = false },
+                            title = {
+                                Text("⚠️ Create New Wallet?", color = Color(0xFFD32F2F))
+                            },
+                            text = {
+                                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .background(Color(0xFFD32F2F), RoundedCornerShape(8.dp))
+                                            .padding(12.dp)
+                                    ) {
+                                        Text(
+                                            "This will permanently delete your current wallet. All channels will be lost. Make sure you have backed up your seed words first.",
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold,
+                                            style = MaterialTheme.typography.bodyMedium
+                                        )
+                                    }
                                     Text(
-                                        "This will generate a new wallet seed using your device's secure random number generator (256-bit entropy). " +
-                                        "Any existing wallet data will be cleared.\n\n" +
-                                        "Start Lightning after creating to generate the seed, then back up your 24 words immediately."
+                                        "A new seed will be generated using your device's secure random number generator (256-bit entropy). " +
+                                        "Lightning will restart with the new wallet.",
+                                        style = MaterialTheme.typography.bodySmall
                                     )
-                                },
-                                confirmButton = {
-                                    Button(onClick = {
+                                }
+                            },
+                            confirmButton = {
+                                Button(
+                                    onClick = {
                                         // Stop Lightning if running
                                         if (lightningService.isRunning()) {
                                             lightningService.stop()
@@ -256,17 +284,29 @@ fun SeedBackupScreen(
                                         showCreateConfirm = false
                                         restoreSuccess = false
                                         createSuccess = true
-                                    }) {
-                                        Text("Create")
-                                    }
-                                },
-                                dismissButton = {
-                                    OutlinedButton(onClick = { showCreateConfirm = false }) {
-                                        Text("Cancel")
-                                    }
+                                        // Restart Lightning to generate new seed
+                                        val prefs = context.getSharedPreferences("pocketnode_prefs", android.content.Context.MODE_PRIVATE)
+                                        val rpcUser = prefs.getString("rpc_user", "pocketnode") ?: "pocketnode"
+                                        val rpcPass = prefs.getString("rpc_password", "") ?: ""
+                                        if (rpcPass.isNotEmpty()) {
+                                            Thread {
+                                                try {
+                                                    lightningService.start(rpcUser, rpcPass)
+                                                } catch (_: Exception) {}
+                                            }.start()
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F))
+                                ) {
+                                    Text("Delete and Create New")
                                 }
-                            )
-                        }
+                            },
+                            dismissButton = {
+                                OutlinedButton(onClick = { showCreateConfirm = false }) {
+                                    Text("Cancel")
+                                }
+                            }
+                        )
                     }
 
                     if (restoreSuccess) {
