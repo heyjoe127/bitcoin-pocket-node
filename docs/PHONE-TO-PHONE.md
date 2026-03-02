@@ -114,16 +114,16 @@ Realistic scenario at a Bitcoin meetup:
 
 The HTTP server can handle multiple simultaneous downloads. Bandwidth splits between receivers, so two downloads take ~40 minutes instead of 20. This is fine for a meetup setting.
 
-The sender's screen shows active connections and progress so they know when it's safe to leave:
+The sender's screen shows anonymous transfer progress so they know when it's safe to leave:
 
 ```
 📡 Sharing Node
-├── Alice's Pixel - 67% (chainstate + filters)
-├── Bob's Samsung - 12% (chainstate)  
-└── 2 active transfers
+├── Transfer 1 - 67%
+├── Transfer 2 - 12%
+└── 2 active
 ```
 
-The sender might need to leave the meetup. The progress display lets them see at a glance if anyone is mid-download. Once all transfers complete (or if no one is connected), they can safely toggle off sharing and go. If a transfer is interrupted, the receiver can resume from another sender or switch to the internet download path.
+No device names, no identifiers. The sender just sees how many transfers are active and how far along they are. Once all complete (or no one is connected), they can safely toggle off and leave. If a transfer is interrupted, the receiver can resume from another sender or switch to the internet download path.
 
 ## APK Distribution
 
