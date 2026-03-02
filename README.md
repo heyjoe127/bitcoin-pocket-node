@@ -14,8 +14,10 @@ Turn any Android phone into a fully-validating Bitcoin full node. No server depe
 - Phone stays cool, runs overnight without issues
 - ~26 GB total disk with Lightning (11 GB chainstate + 2 GB pruned blocks + 13 GB block filters), ~13 GB without
 - **Pure Kotlin Electrum server** for BlueWallet on-chain connectivity to your own node
-- **Built-in Lightning wallet** powered by LDK: send, receive, open/close channels, peer browser
+- **Built-in Lightning wallet** powered by LDK: send, receive, BOLT12 offers, open/close channels, peer browser, QR codes
 - **LNDHub API** for external Lightning wallets (BlueWallet, Zeus)
+- **Proactive prune recovery** re-downloads missed blocks on startup when node was offline
+- **Embedded Tor** for direct .onion watchtower connections (no Orbot, no SSH tunnel needed)
 
 ## Screenshots
 
@@ -80,7 +82,9 @@ See [Version Selection Design](docs/VERSION-SELECTION.md) and [BIP 110 Research]
 - **Pure Kotlin Electrum server** so BlueWallet can query your own node (no native dependencies)
 - **Built-in Lightning node** powered by LDK (send, receive, channels, peer browser, seed backup/restore)
 - **LNDHub API** on localhost:3000 for external wallet connectivity (BlueWallet, Zeus)
-- **Home node watchtower** with automatic channel protection via LDK-to-LND bridge (Tor or SSH)
+- **Home node watchtower** with automatic channel protection via LDK-to-LND bridge (direct Tor .onion or SSH fallback)
+- **BOLT12 support:** send to offers, create reusable offers, variable-amount offers
+- **QR codes:** generate on receive, scan with camera on send (CameraX + ZXing, no Google Play)
 - **Sovereign price discovery** using UTXOracle (BTC/USD from on-chain data, no exchange APIs)
 - **Mempool viewer** with fee estimates, projected blocks, and transaction search
 - **Wallet setup guide** for BlueWallet connection
@@ -89,6 +93,8 @@ See [Version Selection Design](docs/VERSION-SELECTION.md) and [BIP 110 Research]
 - **Network-aware sync** that auto-pauses on cellular and resumes on WiFi
 - **VPN-aware networking:** Detects actual connection type behind VPN (cellular vs WiFi)
 - **Data budgets** for WiFi and cellular
+- **Power modes:** Max Data, Low Data, Away Mode with burst sync for mobile efficiency
+- **Auto power mode:** detects WiFi/cellular and charging state, adjusts automatically
 - **Battery saver** pauses sync when unplugged below 50%
 - **Auto-start on boot**
 - **Secure node pairing** with restricted SFTP account (no access to your bitcoin data)
@@ -265,6 +271,8 @@ app/src/main/java/com/pocketnode/
 │   ├── ElectrumMethods.kt      # Electrum RPC method handlers
 │   ├── AddressIndex.kt         # Descriptor wallet + address tracking
 │   └── SubscriptionManager.kt  # Address/header subscription notifications
+├── power/
+│   └── PowerModeManager.kt     # Max/Low/Away power modes with burst sync
 ├── network/
 │   └── NetworkMonitor.kt       # WiFi/cellular/VPN detection + data tracking
 ├── snapshot/
@@ -297,7 +305,10 @@ app/src/main/java/com/pocketnode/
 │   │   ├── PaymentHistoryScreen.kt # Payment list
 │   │   ├── OpenChannelScreen.kt    # Open channel to peer
 │   │   ├── PeerBrowserScreen.kt    # Browse/search Lightning peers
-│   │   └── SeedBackupScreen.kt    # BIP39 seed view and restore
+│   │   ├── SeedBackupScreen.kt    # BIP39 seed view and restore
+│   │   ├── QrCode.kt             # QR code generation (ZXing)
+│   │   └── QrScannerScreen.kt    # Camera QR scanner (CameraX + ZXing)
+│   ├── PowerModeSelector.kt    # Three-segment power mode toggle + burst banner
 │   └── components/
 │       ├── NetworkStatusBar.kt      # Sync status banner
 │       └── AdminCredentialsDialog.kt # SSH creds prompt
@@ -331,15 +342,16 @@ app/src/main/java/com/pocketnode/
 - [LDK-to-LND Watchtower Bridge](docs/LDK-WATCHTOWER-BRIDGE.md)
 - [Desktop Port Design](docs/DESKTOP-PORT.md)
 - [Power Modes Design](docs/POWER-MODES.md)
+- [Pruned Node Risk Analysis](docs/PRUNED-NODE-RISK-ANALYSIS.md)
+- [LDK Upstream Contribution](docs/LDK-UPSTREAM-CONTRIBUTION.md)
+- [Built-in Tor Design](docs/BUILT-IN-TOR.md)
 
 ## Roadmap
 
 - **Cellular Lightning mode:** Lightning payments on mobile data with zero blockchain bandwidth. bitcoind pauses sync, ldk-node keeps operating via localhost RPC, watchtower monitors channels at home, full sync resumes on WiFi
-- **Pruned node recovery:** Auto-detect missing blocks after extended offline, temporarily grow prune window, show recovery progress, shrink back when caught up
 - **Desktop port:** Same app on Linux, macOS, Windows via Compose Multiplatform. See [design doc](docs/DESKTOP-PORT.md)
-- **VLS (Validating Lightning Signer):** Remote signing for always-online Lightning node
 - **Phone-to-phone chainstate copy:** WiFi Direct or hotspot
-- **Power modes:** Max/Low/Away profiles with burst sync for mobile efficiency. See [design doc](docs/POWER-MODES.md)
+- **LDK upstream contribution:** improving watchtower API in rust-lightning ChannelMonitor ([#813](https://github.com/lightningdevkit/ldk-node/issues/813))
 
 ## Tested On
 
