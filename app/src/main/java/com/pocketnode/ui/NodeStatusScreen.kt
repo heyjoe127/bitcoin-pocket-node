@@ -395,27 +395,6 @@ fun NodeStatusScreen(
                 onAllowCellular = onAllowCellular
             )
 
-            // Battery saver banner
-            val batterySaverActive by BitcoindService.batterySaverActiveFlow.collectAsState()
-            val batteryMonitor by BitcoindService.activeBatteryMonitorFlow.collectAsState()
-            val batteryState by (batteryMonitor?.state ?: kotlinx.coroutines.flow.MutableStateFlow(BatteryMonitor.BatteryState())).collectAsState()
-            if (batterySaverActive) {
-                androidx.compose.foundation.layout.Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Color(0xFFFF9800))
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    Text(
-                        "🔋 Sync paused — battery at ${batteryState.level}%. Plug in to resume.",
-                        color = Color.White,
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
 
             // Burst sync / wallet hold banner
             val burstState by PowerModeManager.burstStateFlow.collectAsState()
@@ -1004,29 +983,6 @@ private fun ActionButtons(
                 onCheckedChange = {
                     autoStartOnBoot = it
                     bootPrefs.edit().putBoolean("auto_start_on_boot", it).apply()
-                },
-                colors = SwitchDefaults.colors(
-                    checkedTrackColor = Color(0xFFFF9800)
-                )
-            )
-        }
-        // Battery saver toggle
-        var batterySaver by remember { mutableStateOf(bootPrefs.getBoolean("battery_saver_enabled", false)) }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                "Pause on battery < 50%",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Switch(
-                checked = batterySaver,
-                onCheckedChange = {
-                    batterySaver = it
-                    bootPrefs.edit().putBoolean("battery_saver_enabled", it).apply()
                 },
                 colors = SwitchDefaults.colors(
                     checkedTrackColor = Color(0xFFFF9800)

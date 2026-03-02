@@ -58,12 +58,6 @@ class BitcoindService : Service() {
             get() = _activeBatteryMonitor.value
             private set(value) { _activeBatteryMonitor.value = value }
 
-        private val _batterySaverActiveGlobal = MutableStateFlow(false)
-        val batterySaverActiveFlow: StateFlow<Boolean> = _batterySaverActiveGlobal
-
-        const val PREF_KEY_BATTERY_SAVER = "battery_saver_enabled"
-        const val BATTERY_THRESHOLD = 50
-
         private val _activePowerModeManager = MutableStateFlow<PowerModeManager?>(null)
         val activePowerModeManagerFlow: StateFlow<PowerModeManager?> = _activePowerModeManager
 
@@ -74,9 +68,7 @@ class BitcoindService : Service() {
 
     private var bitcoindProcess: Process? = null
     private var notificationJob: Job? = null
-    private var batterySaverJob: Job? = null
     private var powerModeManager: PowerModeManager? = null
-    private var _batterySaverActive = _batterySaverActiveGlobal
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     // Network-aware sync control
@@ -103,7 +95,6 @@ class BitcoindService : Service() {
     override fun onDestroy() {
         _isRunning.value = false
         notificationJob?.cancel()
-        batterySaverJob?.cancel()
         powerModeManager?.stop()
         _activePowerModeManager.value = null
         syncController?.stop()
@@ -161,7 +152,6 @@ class BitcoindService : Service() {
                             batteryMonitor = bm
                             activeBatteryMonitor = bm
                             startNotificationUpdater(testRpc)
-                            startBatterySaver(testRpc)
                             val pmm = PowerModeManager(this@BitcoindService)
                             pmm.setRpc(testRpc)
                             pmm.setMode(PowerModeManager.modeFlow.value, serviceScope)
@@ -245,7 +235,6 @@ class BitcoindService : Service() {
                 batteryMonitor = bm
                 activeBatteryMonitor = bm
                 startNotificationUpdater(rpc)
-                startBatterySaver(rpc)
                 val pmm = PowerModeManager(this@BitcoindService)
                 pmm.setRpc(rpc)
                 pmm.setMode(PowerModeManager.modeFlow.value, serviceScope)
@@ -375,28 +364,22 @@ class BitcoindService : Service() {
                         val oraclePrefs = getSharedPreferences("oracle_cache", MODE_PRIVATE)
                         val oraclePrice = oraclePrefs.getInt("price", -1)
 
-                        val batterySaving = _batterySaverActive.value
                         val currentMode = PowerModeManager.modeFlow.value
                         val modeLabel = "${currentMode.emoji} ${currentMode.notificationLabel}"
                         val title = when {
-                            batterySaving -> "🔋 Battery Saver"
                             synced -> modeLabel
                             else -> "⏳ Syncing"
                         }
 
                         val sb = StringBuilder()
                         sb.append("Block ${"%,d".format(height)}")
-                        if (!synced && !batterySaving) {
+                        if (!synced) {
                             sb.append(" / ${"%,d".format(headers)}")
                             sb.append(" · ${"%.1f".format(progress * 100)}%")
                         }
                         sb.append(" · $peers peer${if (peers != 1) "s" else ""}")
                         if (oraclePrice > 0) {
                             sb.append(" · \$${"%,d".format(oraclePrice)}")
-                        }
-                        if (batterySaving) {
-                            val batt = batteryMonitor?.state?.value
-                            sb.append(" · 🔋${batt?.level ?: "?"}%")
                         }
                         if (currentMode == PowerModeManager.Mode.AWAY) {
                             val nextBurst = PowerModeManager.nextBurstFlow.value
@@ -413,59 +396,6 @@ class BitcoindService : Service() {
                 }
                 // Poll faster while waiting for sync, then relax to 30s once synced
                 delay(if (electrumAutoStartedInService) 30_000 else 5_000)
-            }
-        }
-    }
-
-    /**
-     * Monitors battery state and pauses/resumes sync when on battery below threshold.
-     * Only active when the user has enabled the battery saver toggle.
-     */
-    private fun startBatterySaver(rpc: BitcoinRpcClient) {
-        batterySaverJob?.cancel()
-        batterySaverJob = serviceScope.launch {
-            val bm = batteryMonitor ?: return@launch
-            var wasPaused = false
-
-            bm.state.collect { battery ->
-                val prefs = getSharedPreferences("pocketnode_prefs", MODE_PRIVATE)
-                val enabled = prefs.getBoolean(PREF_KEY_BATTERY_SAVER, false)
-
-                if (!enabled) {
-                    if (wasPaused) {
-                        // Re-enable network if we previously paused it
-                        try {
-                            val params = org.json.JSONArray().apply { put(true) }
-                            rpc.call("setnetworkactive", params)
-                            Log.i(TAG, "Battery saver disabled, network resumed")
-                        } catch (_: Exception) {}
-                        wasPaused = false
-                        _batterySaverActive.value = false
-                    }
-                    return@collect
-                }
-
-                val shouldPause = battery.shouldPause(BATTERY_THRESHOLD)
-
-                if (shouldPause && !wasPaused) {
-                    // Pause sync
-                    try {
-                        val params = org.json.JSONArray().apply { put(false) }
-                        rpc.call("setnetworkactive", params)
-                        Log.i(TAG, "Battery saver: pausing sync (${battery.level}%, not charging)")
-                    } catch (_: Exception) {}
-                    wasPaused = true
-                    _batterySaverActive.value = true
-                } else if (!shouldPause && wasPaused) {
-                    // Resume sync
-                    try {
-                        val params = org.json.JSONArray().apply { put(true) }
-                        rpc.call("setnetworkactive", params)
-                        Log.i(TAG, "Battery saver: resuming sync (${battery.level}%, charging=${battery.isCharging})")
-                    } catch (_: Exception) {}
-                    wasPaused = false
-                    _batterySaverActive.value = false
-                }
             }
         }
     }
