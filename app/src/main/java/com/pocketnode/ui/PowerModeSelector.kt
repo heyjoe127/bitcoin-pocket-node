@@ -109,7 +109,7 @@ fun PowerModeSelector(
                 "• Full mempool relay and oracle updates\n" +
                 "• Electrum server fully active\n" +
                 (if (lightningInstalled) "• Lightning fully active\n• Required for opening Lightning channels\n" else "") +
-                "\nEstimated data: ~500 MB/day\n\n" +
+                "\nUnlimited upload and download.\n\n" +
                 "Best when: plugged in on WiFi.")
 
             PowerModeManager.Mode.LOW -> "🔋 Low Data" to (
