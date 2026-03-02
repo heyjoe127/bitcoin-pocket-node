@@ -97,28 +97,30 @@ fun PowerModeSelector(
         val (title, description) = when (currentMode) {
             PowerModeManager.Mode.MAX -> "⚡ Max Data Mode" to
                 "Full power mode for home use.\n\n" +
-                "• Continuous sync with all peers connected\n" +
+                "• Continuous sync, 8 peers always connected\n" +
                 "• Full mempool relay and oracle updates\n" +
                 "• Electrum server and Lightning fully active\n" +
                 "• Maximum throughput, fastest block propagation\n\n" +
+                "Estimated data: ~500 MB/day\n\n" +
                 "Best when: on WiFi and plugged in at home."
 
             PowerModeManager.Mode.LOW -> "🔋 Low Data Mode" to
                 "Balanced mode for daily carry.\n\n" +
                 "• Burst sync every 15 minutes\n" +
-                "• Connects to peers, syncs to chain tip, then disconnects\n" +
+                "• Connects to 8 peers, syncs to chain tip, then disconnects\n" +
                 "• Network radio sleeps between bursts (saves battery)\n" +
-                "• Electrum and Lightning sync during each burst\n" +
+                "• All services sync during each burst\n" +
                 "• Force-close detection within 15 minutes\n\n" +
+                "Estimated data: ~100-200 MB/day\n\n" +
                 "Best when: on WiFi or cellular, phone in pocket."
 
             PowerModeManager.Mode.AWAY -> "🚶 Away Mode" to
                 "Minimal mode for conserving battery and data.\n\n" +
                 "• Burst sync every 60 minutes\n" +
-                "• Connects briefly to sync, then disconnects\n" +
+                "• Connects to 8 peers, syncs briefly, then disconnects\n" +
                 "• Network off between bursts (minimal battery drain)\n" +
-                "• Lightning safety maintained (watchtower covers gaps)\n" +
-                "• Opens app triggers immediate sync\n\n" +
+                "• Lightning safety maintained (watchtower covers gaps)\n\n" +
+                "Estimated data: ~25-50 MB/day\n\n" +
                 "Best when: out for the day on cellular, conserving battery."
         }
 
