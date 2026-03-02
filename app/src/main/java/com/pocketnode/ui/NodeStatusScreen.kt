@@ -1085,7 +1085,7 @@ private fun ActionButtons(
                         modifier = Modifier.verticalScroll(rememberScrollState())
                     ) {
                         Text(
-                            "Your node, your rules.",
+                            "Switch quickly and safely. Your node, your rules.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                         )
