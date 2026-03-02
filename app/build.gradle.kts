@@ -12,7 +12,7 @@ android {
         minSdk = 28
         targetSdk = 34
         versionCode = 1
-        versionName = "0.11-alpha"
+        versionName = "0.12-alpha"
 
         // Only include ARM64 native libs (bitcoind + libbwt_jni)
         ndk {
