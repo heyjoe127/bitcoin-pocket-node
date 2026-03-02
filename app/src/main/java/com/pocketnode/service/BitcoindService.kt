@@ -331,6 +331,8 @@ class BitcoindService : Service() {
                     if (info != null && !info.has("_rpc_error")) {
                         val height = info.optLong("blocks", 0)
                         lastBlockHeight = height.toInt()
+                        getSharedPreferences("pocketnode_prefs", MODE_PRIVATE)
+                            .edit().putInt("last_chain_height", lastBlockHeight).apply()
                         val headers = info.optLong("headers", 0)
                         val progress = info.optDouble("verificationprogress", 0.0)
                         val peers = rpc.getPeerCount()
