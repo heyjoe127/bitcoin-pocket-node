@@ -4,14 +4,16 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.util.Log
+import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * Checks GitHub Releases for a newer version of the app.
+ * Checks GitHub Releases for a newer version and handles APK download + install.
  */
 object UpdateChecker {
     private const val TAG = "UpdateChecker"
@@ -21,8 +23,8 @@ object UpdateChecker {
         val latestVersion: String,
         val currentVersion: String,
         val htmlUrl: String,
-        val hasUpdate: Boolean,
-        val releaseNotes: String = ""
+        val apkUrl: String?,
+        val hasUpdate: Boolean
     )
 
     /**
@@ -48,7 +50,20 @@ object UpdateChecker {
             val json = JSONObject(body)
             val tagName = json.getString("tag_name").removePrefix("v")
             val htmlUrl = json.getString("html_url")
-            val releaseNotes = json.optString("body", "").take(500)
+
+            // Find APK asset
+            var apkUrl: String? = null
+            val assets = json.optJSONArray("assets")
+            if (assets != null) {
+                for (i in 0 until assets.length()) {
+                    val asset = assets.getJSONObject(i)
+                    val name = asset.getString("name")
+                    if (name.endsWith(".apk")) {
+                        apkUrl = asset.getString("browser_download_url")
+                        break
+                    }
+                }
+            }
 
             val hasUpdate = isNewer(tagName, currentVersion)
 
@@ -56,8 +71,8 @@ object UpdateChecker {
                 latestVersion = tagName,
                 currentVersion = currentVersion,
                 htmlUrl = htmlUrl,
-                hasUpdate = hasUpdate,
-                releaseNotes = releaseNotes
+                apkUrl = apkUrl,
+                hasUpdate = hasUpdate
             )
         } catch (e: Exception) {
             Log.w(TAG, "Update check failed: ${e.message}")
@@ -66,11 +81,67 @@ object UpdateChecker {
     }
 
     /**
-     * Compare version strings. Simple comparison: strip non-numeric suffixes,
-     * compare major.minor numerically.
+     * Download APK and trigger Android's package installer.
+     * Returns progress via callback (0-100), or -1 on error.
+     */
+    suspend fun downloadAndInstall(
+        context: Context,
+        apkUrl: String,
+        onProgress: (Int) -> Unit
+    ): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val updateDir = File(context.cacheDir, "updates")
+            updateDir.mkdirs()
+            val apkFile = File(updateDir, "update.apk")
+
+            val conn = URL(apkUrl).openConnection() as HttpURLConnection
+            conn.connectTimeout = 30_000
+            conn.readTimeout = 30_000
+            conn.instanceFollowRedirects = true
+
+            if (conn.responseCode != 200) {
+                Log.e(TAG, "Download failed: HTTP ${conn.responseCode}")
+                return@withContext false
+            }
+
+            val totalBytes = conn.contentLengthLong
+            var downloaded = 0L
+
+            conn.inputStream.use { input ->
+                apkFile.outputStream().use { output ->
+                    val buffer = ByteArray(8192)
+                    var read: Int
+                    while (input.read(buffer).also { read = it } != -1) {
+                        output.write(buffer, 0, read)
+                        downloaded += read
+                        if (totalBytes > 0) {
+                            onProgress(((downloaded * 100) / totalBytes).toInt())
+                        }
+                    }
+                }
+            }
+
+            Log.i(TAG, "APK downloaded: ${apkFile.length()} bytes")
+
+            // Trigger install via FileProvider
+            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", apkFile)
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "application/vnd.android.package-archive")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Download/install failed: ${e.message}", e)
+            false
+        }
+    }
+
+    /**
+     * Compare version strings. Strip suffixes, compare major.minor numerically.
      */
     private fun isNewer(remote: String, local: String): Boolean {
-        // Normalize: "0.11-alpha" -> [0, 11], "0.12" -> [0, 12]
         fun parse(v: String): List<Int> = v.split("-")[0].split(".").mapNotNull { it.toIntOrNull() }
 
         val r = parse(remote)
@@ -83,11 +154,5 @@ object UpdateChecker {
             if (rv < lv) return false
         }
         return false
-    }
-
-    fun openReleasePage(context: Context, url: String) {
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        context.startActivity(intent)
     }
 }

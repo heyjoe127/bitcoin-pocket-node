@@ -994,19 +994,27 @@ private fun ActionButtons(
         val updateContext = LocalContext.current
         var updateInfo by remember { mutableStateOf<com.pocketnode.util.UpdateChecker.UpdateInfo?>(null) }
         var checkingUpdate by remember { mutableStateOf(false) }
+        var downloading by remember { mutableStateOf(false) }
+        var downloadProgress by remember { mutableIntStateOf(0) }
+        val currentAppVersion = remember { try { updateContext.packageManager.getPackageInfo(updateContext.packageName, 0).versionName ?: "?" } catch (_: Exception) { "?" } }
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                val currentAppVersion = remember { try { updateContext.packageManager.getPackageInfo(updateContext.packageName, 0).versionName ?: "?" } catch (_: Exception) { "?" } }
                 Text(
-                    "App version: ${currentAppVersion}",
+                    "App version: $currentAppVersion",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface
                 )
-                if (updateInfo?.hasUpdate == true) {
+                if (downloading) {
+                    Text(
+                        "Downloading... $downloadProgress%",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFFFF9800)
+                    )
+                } else if (updateInfo?.hasUpdate == true) {
                     Text(
                         "v${updateInfo!!.latestVersion} available",
                         style = MaterialTheme.typography.bodySmall,
@@ -1020,10 +1028,30 @@ private fun ActionButtons(
                     )
                 }
             }
-            if (updateInfo?.hasUpdate == true) {
+            if (downloading) {
+                // Show progress, no button needed
+            } else if (updateInfo?.hasUpdate == true && updateInfo?.apkUrl != null) {
                 OutlinedButton(
-                    onClick = { com.pocketnode.util.UpdateChecker.openReleasePage(updateContext, updateInfo!!.htmlUrl) }
+                    onClick = {
+                        downloading = true
+                        downloadProgress = 0
+                        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
+                            com.pocketnode.util.UpdateChecker.downloadAndInstall(
+                                updateContext, updateInfo!!.apkUrl!!
+                            ) { progress -> downloadProgress = progress }
+                            downloading = false
+                        }
+                    }
                 ) { Text("Update") }
+            } else if (updateInfo?.hasUpdate == true) {
+                // No APK asset, open release page
+                OutlinedButton(
+                    onClick = {
+                        val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(updateInfo!!.htmlUrl))
+                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        updateContext.startActivity(intent)
+                    }
+                ) { Text("View release") }
             } else {
                 OutlinedButton(
                     onClick = {
