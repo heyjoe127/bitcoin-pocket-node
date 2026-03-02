@@ -32,8 +32,8 @@ fun PowerModeSelector(
 ) {
     val modes = PowerModeManager.Mode.values()
     var showInfo by remember { mutableStateOf(false) }
-    val lightningState by LightningService.stateFlow.collectAsState()
-    val lightningReady = lightningState.status == LightningService.LightningState.Status.RUNNING
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val lightningInstalled = remember { LightningService.getInstance(context).hasSeed() }
 
     Row(
         modifier = modifier.fillMaxWidth(),
@@ -103,7 +103,7 @@ fun PowerModeSelector(
                 "• Continuous sync, 8 peers always connected\n" +
                 "• Full mempool relay and oracle updates\n" +
                 "• Electrum server fully active\n" +
-                (if (lightningReady) "• Lightning fully active\n• Required for opening Lightning channels\n" else "") +
+                (if (lightningInstalled) "• Lightning fully active\n• Required for opening Lightning channels\n" else "") +
                 "\nEstimated data: ~500 MB/day\n\n" +
                 "Best when: plugged in on WiFi.")
 
@@ -111,7 +111,7 @@ fun PowerModeSelector(
                 "Same WiFi, less data. Syncs every 15 minutes then disconnects.\n\n" +
                 "• Burst sync to chain tip, then network off until next burst\n" +
                 "• All services update during each burst\n" +
-                (if (lightningReady) "• Force-close detection within 15 minutes\n" else "") +
+                (if (lightningInstalled) "• Force-close detection within 15 minutes\n" else "") +
                 "• Opening your wallet keeps peers connected until you close it\n\n" +
                 "Estimated data: ~100-200 MB/day\n\n" +
                 "Best when: on WiFi but not plugged in.")
@@ -119,7 +119,7 @@ fun PowerModeSelector(
             PowerModeManager.Mode.AWAY -> "🚶 Away" to (
                 "Conserves battery and cellular data. Syncs once per hour.\n\n" +
                 "• Burst sync every 60 minutes, network off between\n" +
-                (if (lightningReady) "• Lightning safety maintained (watchtower covers gaps)\n• Channel opens disabled\n" else "") +
+                (if (lightningInstalled) "• Lightning safety maintained (watchtower covers gaps)\n• Channel opens disabled\n" else "") +
                 "• Opening your wallet keeps peers connected until you close it\n\n" +
                 "Estimated data: ~25-50 MB/day\n\n" +
                 "Best when: out on cellular, saving battery.")
