@@ -112,7 +112,7 @@ Realistic scenario at a Bitcoin meetup:
 
 ## Multi-Receiver
 
-The HTTP server can handle multiple simultaneous downloads. Bandwidth splits between receivers, so two downloads take ~40 minutes instead of 20. This is fine for a meetup setting.
+Maximum 3 simultaneous transfers. Bandwidth splits between receivers, so 3 downloads take ~40-60 minutes instead of 20. Once they're done, those 3 can share with others.
 
 The sender's screen shows anonymous transfer progress so they know when it's safe to leave:
 
