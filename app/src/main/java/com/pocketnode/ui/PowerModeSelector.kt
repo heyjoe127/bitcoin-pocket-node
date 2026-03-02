@@ -95,35 +95,32 @@ fun PowerModeSelector(
     // Info dialog
     if (showInfo) {
         val (title, description) = when (currentMode) {
-            PowerModeManager.Mode.MAX -> "⚡ Max Data Mode" to
-                "Full power mode for home use.\n\n" +
+            PowerModeManager.Mode.MAX -> "⚡ Max Data" to
+                "Everything on, all the time.\n\n" +
                 "• Continuous sync, 8 peers always connected\n" +
                 "• Full mempool relay and oracle updates\n" +
                 "• Electrum server and Lightning fully active\n" +
-                "• Maximum throughput, fastest block propagation\n\n" +
+                "• Required for opening Lightning channels\n\n" +
                 "Estimated data: ~500 MB/day\n\n" +
-                "Best when: on WiFi and plugged in at home."
+                "Best when: plugged in on WiFi."
 
-            PowerModeManager.Mode.LOW -> "🔋 Low Data Mode" to
-                "Balanced mode for daily carry.\n\n" +
-                "• Burst sync every 15 minutes\n" +
-                "• Connects to 8 peers, syncs to chain tip, then disconnects\n" +
-                "• Network radio sleeps between bursts (saves battery)\n" +
-                "• All services sync during each burst\n" +
+            PowerModeManager.Mode.LOW -> "🔋 Low Data" to
+                "Same WiFi, less data. Syncs every 15 minutes then disconnects.\n\n" +
+                "• Burst sync to chain tip, then network off until next burst\n" +
+                "• All services update during each burst\n" +
                 "• Force-close detection within 15 minutes\n" +
                 "• Opening your wallet keeps peers connected until you close it\n\n" +
                 "Estimated data: ~100-200 MB/day\n\n" +
-                "Best when: on WiFi or cellular, phone in pocket."
+                "Best when: on WiFi but not plugged in."
 
-            PowerModeManager.Mode.AWAY -> "🚶 Away Mode" to
-                "Minimal mode for conserving battery and data.\n\n" +
-                "• Burst sync every 60 minutes\n" +
-                "• Connects to 8 peers, syncs briefly, then disconnects\n" +
-                "• Network off between bursts (minimal battery drain)\n" +
+            PowerModeManager.Mode.AWAY -> "🚶 Away" to
+                "Conserves battery and cellular data. Syncs once per hour.\n\n" +
+                "• Burst sync every 60 minutes, network off between\n" +
                 "• Lightning safety maintained (watchtower covers gaps)\n" +
-                "• Opening your wallet keeps peers connected until you close it\n\n" +
+                "• Opening your wallet keeps peers connected until you close it\n" +
+                "• Channel opens disabled\n\n" +
                 "Estimated data: ~25-50 MB/day\n\n" +
-                "Best when: out for the day on cellular, conserving battery."
+                "Best when: out on cellular, saving battery."
         }
 
         AlertDialog(
