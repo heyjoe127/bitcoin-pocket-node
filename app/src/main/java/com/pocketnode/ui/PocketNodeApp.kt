@@ -45,7 +45,9 @@ fun PocketNodeApp(
         val context = LocalContext.current
         val setupManager = remember { NodeSetupManager(context) }
 
-        // First run detection: if no bitcoin.conf exists, start on setup screen
+        // First run: no bitcoin.conf = never set up.
+        // Backup is fully disabled (backup_rules.xml + data_extraction_rules.xml),
+        // so restored data from Seedvault should not be an issue on new installs.
         val isFirstRun = remember {
             !java.io.File(context.filesDir, "bitcoin/bitcoin.conf").exists()
         }

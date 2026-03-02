@@ -185,26 +185,34 @@ fun ChainstateCopyScreen(onBack: () -> Unit, onComplete: () -> Unit = {}) {
                     onClick = {
                         // Check if chainstate archive already on phone or on node via SFTP
                         workScope.launch {
-                            val dataDir = java.io.File(context.filesDir, "bitcoin")
-                            val localArchive = java.io.File(dataDir, "node-sync.tar")
-                            if (localArchive.exists() && localArchive.length() > 1_000_000_000) {
-                                // Already on phone — skip archive step
-                                startWithoutAdmin()
-                            } else {
-                                // Check if archive exists on node via SFTP
-                                val host = setupManager.getSavedHost()
-                                val user = setupManager.getSavedUser()
-                                val pass = setupManager.getSavedPassword()
-                                if (host.isNotEmpty() && user.isNotEmpty() && pass.isNotEmpty()) {
-                                    val exists = chainstateManager.checkArchiveExists(host, setupManager.getSavedPort(), user, pass)
-                                    if (exists) {
-                                        startWithoutAdmin()
+                            try {
+                                val dataDir = java.io.File(context.filesDir, "bitcoin")
+                                val localArchive = java.io.File(dataDir, "node-sync.tar")
+                                if (localArchive.exists() && localArchive.length() > 1_000_000_000) {
+                                    startWithoutAdmin()
+                                } else {
+                                    val host = setupManager.getSavedHost()
+                                    val user = setupManager.getSavedUser()
+                                    val pass = setupManager.getSavedPassword()
+                                    if (host.isNotEmpty() && user.isNotEmpty() && pass.isNotEmpty()) {
+                                        val exists = try {
+                                            chainstateManager.checkArchiveExists(host, setupManager.getSavedPort(), user, pass)
+                                        } catch (e: Exception) {
+                                            android.util.Log.e("ChainstateCopyScreen", "checkArchiveExists failed", e)
+                                            false
+                                        }
+                                        if (exists) {
+                                            startWithoutAdmin()
+                                        } else {
+                                            showAdminCreds = true
+                                        }
                                     } else {
                                         showAdminCreds = true
                                     }
-                                } else {
-                                    showAdminCreds = true
                                 }
+                            } catch (e: Exception) {
+                                android.util.Log.e("ChainstateCopyScreen", "Start check failed, showing admin dialog", e)
+                                showAdminCreds = true
                             }
                         }
                     },
@@ -350,14 +358,16 @@ private fun StepRow(
     val thisOrdinal = thisStep.ordinal
 
     val (icon, color) = when {
-        // Completed steps stay green even on error
+        // Completed
         currentStep == ChainstateManager.Step.COMPLETE -> Pair("✅", Color(0xFF4CAF50))
-        // Steps before the current one that were reached = completed
-        thisOrdinal < currentOrdinal -> Pair("✅", Color(0xFF4CAF50))
         // On error: steps already passed stay green
         currentStep == ChainstateManager.Step.ERROR && thisOrdinal < highestStepReached -> Pair("✅", Color(0xFF4CAF50))
         // On error: the step that failed
         currentStep == ChainstateManager.Step.ERROR && thisOrdinal == highestStepReached -> Pair("❌", Color(0xFFF44336))
+        // On error: steps not yet reached
+        currentStep == ChainstateManager.Step.ERROR && thisOrdinal > highestStepReached -> Pair("○", Color(0xFF757575))
+        // Steps before the current one that were reached = completed
+        thisOrdinal < currentOrdinal -> Pair("✅", Color(0xFF4CAF50))
         // Currently active step
         currentOrdinal == thisOrdinal -> Pair("⏳", MaterialTheme.colorScheme.primary)
         // Future steps

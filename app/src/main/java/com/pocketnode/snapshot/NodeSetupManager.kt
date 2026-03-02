@@ -46,6 +46,17 @@ class NodeSetupManager(private val context: Context) {
 
     fun isSetupDone(): Boolean = prefs.getBoolean(KEY_SETUP_DONE, false)
 
+    /**
+     * Mark setup as complete in noBackupFilesDir (never restored by Seedvault/Google Backup).
+     */
+    fun markSetupComplete() {
+        try {
+            val sentinel = java.io.File(context.noBackupFilesDir, ".setup_complete")
+            sentinel.parentFile?.mkdirs()
+            sentinel.writeText(System.currentTimeMillis().toString())
+        } catch (_: Exception) {}
+    }
+
     fun getSavedHost(): String = prefs.getString(KEY_SFTP_HOST, "") ?: ""
     fun getSavedPort(): Int = prefs.getInt(KEY_SFTP_PORT, 22)
     fun getSavedUser(): String = prefs.getString(KEY_SFTP_USER, "") ?: ""
@@ -60,6 +71,7 @@ class NodeSetupManager(private val context: Context) {
             .putString(KEY_SFTP_PASS, password)
             .putBoolean(KEY_SETUP_DONE, true)
             .apply()
+        markSetupComplete()
     }
 
     fun clearCredentials() {
