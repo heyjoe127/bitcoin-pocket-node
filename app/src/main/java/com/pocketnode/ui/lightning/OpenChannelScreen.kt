@@ -16,6 +16,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.pocketnode.lightning.LightningService
+import com.pocketnode.power.PowerModeManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -43,6 +44,8 @@ fun OpenChannelScreen(
     var opening by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    val powerMode by PowerModeManager.modeFlow.collectAsState()
+    val isAwayMode = powerMode == PowerModeManager.Mode.AWAY
 
     Scaffold(
         topBar = {
@@ -150,8 +153,12 @@ fun OpenChannelScreen(
                     }
                 },
                 modifier = Modifier.fillMaxWidth().height(48.dp),
-                enabled = !opening && nodeId.isNotBlank() && address.isNotBlank() && amountSats.isNotBlank(),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800))
+                enabled = !isAwayMode && !opening && nodeId.isNotBlank() && address.isNotBlank() && amountSats.isNotBlank(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFFFF9800),
+                    disabledContainerColor = if (isAwayMode) Color(0xFF607D8B).copy(alpha = 0.3f)
+                        else ButtonDefaults.buttonColors().disabledContainerColor
+                )
             ) {
                 if (opening) {
                     CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
@@ -160,6 +167,15 @@ fun OpenChannelScreen(
                 } else {
                     Text("⚡ Open Channel")
                 }
+            }
+
+            // Away mode warning
+            if (isAwayMode) {
+                Text(
+                    "🚶 Channel opens are disabled in Away Mode. Switch to Low or Max to open channels.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFF607D8B)
+                )
             }
 
             // Result / Error
