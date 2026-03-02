@@ -113,15 +113,6 @@ Watchtower operators get nothing in the normal case (no breaches). Possible ince
 
 The reciprocal model fits best: you opt in to watch for others, and in return others watch for you.
 
-## What Is NOT Being Built (Yet)
-
-- Custom watchtower protocol (using existing LND wtwire)
-- CLN watchtower support (different protocol, future consideration)
-- WireGuard provisioning
-- Orbot dependency (embedded Arti handles Tor)
-- Go daemon
-- Home node reliance (towers run on phones, not separate hardware)
-
 ## Priority
 
 1. **Current**: LDK-to-LND watchtower bridge over Tor (working, shipped)
