@@ -1627,8 +1627,11 @@ private fun AboutCard() {
                     ) {
                         Text("View on GitHub")
                     }
+                    val packageInfo = try {
+                        context.packageManager.getPackageInfo(context.packageName, 0)
+                    } catch (_: Exception) { null }
                     Text(
-                        "Version 0.3-alpha",
+                        "Version ${packageInfo?.versionName ?: "unknown"}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
                     )
