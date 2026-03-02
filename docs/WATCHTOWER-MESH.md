@@ -120,6 +120,7 @@ Paid watchtower service solves this by making it self-sustaining:
 - Clients pay tiny amounts for peace of mind (a few sats per channel update)
 - Max mode users have a direct incentive to stay online
 - The network self-scales: more users = more towers = more redundancy
+- **Dev fee:** 50% of each watchtower fee goes to the project. Sustainable open source funding baked into the protocol, no donations or grants needed long-term
 
 **Free tier:** reciprocal watching (I watch yours, you watch mine) could remain as a no-cost option alongside paid towers. Community/altruistic towers can set their fee to zero.
 
