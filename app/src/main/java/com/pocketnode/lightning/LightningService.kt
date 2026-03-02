@@ -655,6 +655,17 @@ class LightningService(private val context: Context) {
         return node?.listPayments() ?: emptyList()
     }
 
+    fun removePayment(id: String): Result<Unit> {
+        val n = node ?: return Result.failure(Exception("Node not running"))
+        return try {
+            n.removePayment(id)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to remove payment $id", e)
+            Result.failure(e)
+        }
+    }
+
     // === On-chain wallet ===
 
     fun getOnchainAddress(): Result<String> {
