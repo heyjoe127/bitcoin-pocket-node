@@ -109,6 +109,7 @@ Pruned Bitcoin Core on the phone with BIP 157/158 block filters. Zeus with embed
 ## Roadmap
 
 ### Phase 6: Polish & Release
+- [ ] Project website (features, screenshots, download, docs)
 - [ ] Storage management (prune depth configuration)
 - [ ] Peer management UI
 - [ ] Beta testing on multiple Pixel devices
