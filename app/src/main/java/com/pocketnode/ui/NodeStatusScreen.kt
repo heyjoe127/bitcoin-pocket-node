@@ -990,6 +990,57 @@ private fun ActionButtons(
             )
         }
 
+        // App update checker
+        val updateContext = LocalContext.current
+        var updateInfo by remember { mutableStateOf<com.pocketnode.util.UpdateChecker.UpdateInfo?>(null) }
+        var checkingUpdate by remember { mutableStateOf(false) }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    "App version: ${updateInfo?.currentVersion ?: "..."}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                if (updateInfo?.hasUpdate == true) {
+                    Text(
+                        "v${updateInfo!!.latestVersion} available",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFF4CAF50)
+                    )
+                } else if (updateInfo != null && !updateInfo!!.hasUpdate) {
+                    Text(
+                        "Up to date",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            if (updateInfo?.hasUpdate == true) {
+                OutlinedButton(
+                    onClick = { com.pocketnode.util.UpdateChecker.openReleasePage(updateContext, updateInfo!!.htmlUrl) }
+                ) { Text("Update") }
+            } else {
+                OutlinedButton(
+                    onClick = {
+                        checkingUpdate = true
+                        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
+                            updateInfo = com.pocketnode.util.UpdateChecker.check(updateContext)
+                            checkingUpdate = false
+                        }
+                    },
+                    enabled = !checkingUpdate
+                ) { Text(if (checkingUpdate) "Checking..." else "Check for updates") }
+            }
+        }
+        // Check on first load
+        LaunchedEffect(Unit) {
+            updateInfo = com.pocketnode.util.UpdateChecker.check(updateContext)
+        }
+
         // Bitcoin version selector
         val versionContext = LocalContext.current
         var selectedVersion by remember { mutableStateOf(com.pocketnode.util.BinaryExtractor.getSelectedVersion(versionContext)) }
