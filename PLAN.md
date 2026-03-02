@@ -222,6 +222,7 @@ See [Desktop Port Design](docs/DESKTOP-PORT.md) for the full design document.
 **Estimated effort:** 2-3 weeks for a working desktop build with dashboard + chainstate copy + version selection.
 
 ### Nice to Haves
+- [ ] Business mode: point-of-sale UI with preset items and prices, tap to generate Lightning invoice, show QR to customer. For markets, cafes, anyone accepting Lightning in person.
 - [ ] Demo mode: interactive walkthrough of all features with simulated data (no chainstate needed)
 - [ ] Detect corrupted block index after long offline period, offer re-bootstrap
 - [ ] Charging-aware sync (configurable)
