@@ -232,7 +232,7 @@ fun SeedBackupScreen(
                             onClick = { showCreateConfirm = true },
                             modifier = Modifier.weight(1f).height(48.dp),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.secondary
+                                containerColor = Color(0xFFD32F2F)
                             )
                         ) {
                             Text("Create New", maxLines = 1)
