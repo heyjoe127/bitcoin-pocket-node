@@ -45,7 +45,7 @@ fun OpenChannelScreen(
     var result by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     val powerMode by PowerModeManager.modeFlow.collectAsState()
-    val isAwayMode = powerMode == PowerModeManager.Mode.AWAY
+    val needsMaxMode = powerMode != PowerModeManager.Mode.MAX
 
     Scaffold(
         topBar = {
@@ -153,10 +153,10 @@ fun OpenChannelScreen(
                     }
                 },
                 modifier = Modifier.fillMaxWidth().height(48.dp),
-                enabled = !isAwayMode && !opening && nodeId.isNotBlank() && address.isNotBlank() && amountSats.isNotBlank(),
+                enabled = !needsMaxMode && !opening && nodeId.isNotBlank() && address.isNotBlank() && amountSats.isNotBlank(),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color(0xFFFF9800),
-                    disabledContainerColor = if (isAwayMode) Color(0xFF607D8B).copy(alpha = 0.3f)
+                    disabledContainerColor = if (needsMaxMode) Color(0xFF607D8B).copy(alpha = 0.3f)
                         else ButtonDefaults.buttonColors().disabledContainerColor
                 )
             ) {
@@ -169,10 +169,10 @@ fun OpenChannelScreen(
                 }
             }
 
-            // Away mode warning
-            if (isAwayMode) {
+            // Power mode warning
+            if (needsMaxMode) {
                 Text(
-                    "🚶 Channel opens are disabled in Away Mode. Switch to Low or Max to open channels.",
+                    "⚡ Channel opens require Max Data mode for reliable monitoring. Switch to Max to open channels.",
                     style = MaterialTheme.typography.bodySmall,
                     color = Color(0xFF607D8B)
                 )
