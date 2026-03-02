@@ -532,12 +532,12 @@
       <div class="feature-card">
         <div class="feature-icon">⚡</div>
         <h3>Lightning Wallet (LDK)</h3>
-        <p>Built-in Lightning wallet powered by LDK. Send, receive, open channels, payment history. BOLT11 invoices and BOLT12 reusable offers. QR code scanning and display.</p>
+        <p>Built-in Lightning wallet powered by LDK. Send, receive, open channels, payment history. BOLT11 and BOLT12 offers. QR codes. Seed backup and restore.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon">🛡️</div>
         <h3>Watchtower + Tor</h3>
-        <p>Your home node watches your Lightning channels when the phone is offline. Built-in Tor (Arti) for direct .onion connections. No external apps needed.</p>
+        <p>LDK-to-LND watchtower bridge protects your channels when offline. Built-in Tor (Arti) connects directly to .onion watchtowers. No external apps needed.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon">📊</div>
@@ -551,13 +551,13 @@
       </div>
       <div class="feature-card">
         <div class="feature-icon">🔋</div>
-        <h3>Mobile-Optimized</h3>
-        <p>Battery saver, auto-start on boot, metered network detection, persistent mempool across restarts.</p>
+        <h3>Power Modes</h3>
+        <p>Max Data, Low Data, Away Mode. Burst sync saves battery and data. Auto-detects WiFi/cellular and charging state. Your wallet holds peers active when you need them.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon">📱</div>
         <h3>GrapheneOS Native</h3>
-        <p>W^X compliant, no root needed. Tested on Pixel, Samsung, Huawei. Android 7+.</p>
+        <p>W^X compliant, no root needed. Auto-start on boot, persistent mempool, foldable/landscape support. Tested on Pixel, Samsung, Huawei.</p>
       </div>
     </div>
   </div>
@@ -571,7 +571,7 @@
         <div class="step-num">1</div>
         <div>
           <div class="step-title">Install the app</div>
-          <div class="step-desc">Download the APK (80 MB, 3 bitcoind binaries + LDK Lightning + Tor). No Google Play needed.</div>
+          <div class="step-desc">Download the APK (~80 MB, includes 3 bitcoind binaries, LDK Lightning, embedded Tor). No Google Play needed.</div>
         </div>
       </div>
       <div class="step">
@@ -618,8 +618,8 @@
   <span class="green">Electrum server</span> <span class="dim">(:50001) — on-chain wallets</span>
   <span class="green">UTXOracle</span> <span class="dim">— sovereign price from on-chain data</span></div>
     <p style="text-align: center; margin-top: 24px; color: var(--text-dim); font-size: 0.95em;">
-      <strong style="color: var(--orange);">Cellular Lightning mode:</strong> Payments work on mobile data with zero blockchain bandwidth.<br>
-      bitcoind pauses sync, Lightning keeps operating via localhost RPC. Watchtower monitors at home.
+      <strong style="color: var(--orange);">Power modes:</strong> Max Data (continuous), Low Data (15-min burst sync), Away (60-min burst sync).<br>
+      Auto-detects WiFi/cellular and charging state. External wallets hold the network active while connected.
     </p>
   </div>
 </section>
