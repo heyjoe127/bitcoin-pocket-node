@@ -76,11 +76,11 @@ The pruning danger only applies to blocks that were previously downloaded and th
 
 The proactive recovery mechanism (`invalidateblock` + `reconsiderblock`) can fail silently in several ways:
 
-1. **Peer availability:** Old blocks must be re-downloaded from peers. If no connected peer has the required blocks (e.g., all peers are also pruned), recovery stalls without error.
+1. **Peer availability:** Old blocks must be re-downloaded from peers. If no connected peer has the required blocks (e.g., all peers are also pruned), `reconsiderblock` does not fail silently but bitcoind may keep retrying indefinitely rather than failing fast. The 60s stall timeout in our recovery code is doing important work here: it catches this case and aborts rather than blocking startup forever.
 
 2. **Completion time vs timelock:** Re-downloading hundreds of blocks takes time. If the node was offline long enough that the CSV timelock is close to expiring, recovery may not complete before the deadline.
 
-3. **Stale `last_ldk_sync_height`:** The saved sync height is updated during normal operation. If the app crashes or is force-killed before persisting, the saved height may be stale, causing recovery to underestimate the gap or miss it entirely.
+3. **Stale `last_ldk_sync_height`:** The saved sync height is updated during normal operation. If the app crashes or is force-killed before persisting, the saved height may be stale. The dangerous direction is overestimating the height (thinking we are more caught up than we are), which causes recovery to underestimate the gap or skip it entirely, letting LDK start as if everything is fine. Underestimating the height is harmless: it just re-downloads more blocks than needed. **Hardening rule: if the persisted height is uncertain, assume lower, not higher.**
 
 4. **Interrupted re-download:** If the app is killed during recovery (phone restart, user force-stop), partially recovered state may leave LDK in an inconsistent position on next startup.
 
