@@ -167,6 +167,8 @@ Sharing should require Max Data mode (continuous network, full resources). If th
 
 After a successful transfer, the sender gets a prompt: "Share this transfer anonymously to the community counter?" If they tap OK, a +1 is queued locally and pushed to a public counter when internet is available. No device info, no IPs, no timestamps. Just a count of how many nodes have been bootstrapped phone-to-phone.
 
+**Anti-spoofing:** each increment includes a hash of `chainstate_hash + block_height + random_salt`. The counter server deduplicates by chainstate hash + height (one count per unique pair per day). To spoof, you'd need a valid chainstate hash, which means running a real node.
+
 This gives the project a public metric: "X nodes shared peer-to-peer" without compromising anyone's privacy.
 
 ## Future
