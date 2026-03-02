@@ -348,7 +348,7 @@ app/src/main/java/com/pocketnode/
 
 ## Roadmap
 
-- **Phone-to-phone node sharing:** Share your validated chainstate with others over WiFi hotspot. One phone at a meetup bootstraps a whole table. See [design doc](docs/PHONE-TO-PHONE.md)
+- **Phone-to-phone node sharing:** Share your validated chainstate and Lightning block filters over WiFi hotspot. One phone at a meetup bootstraps a whole table. See [design doc](docs/PHONE-TO-PHONE.md)
 - **LDK upstream contribution:** improving watchtower API in rust-lightning ChannelMonitor ([#813](https://github.com/lightningdevkit/ldk-node/issues/813)). Draft PR submitted.
 - **Desktop port:** Same app on Linux, macOS, Windows via Compose Multiplatform. See [design doc](docs/DESKTOP-PORT.md)
 - **Tor for RGS and peer connections:** route Lightning gossip and peer traffic through embedded Arti
