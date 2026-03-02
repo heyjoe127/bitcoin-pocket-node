@@ -114,13 +114,16 @@ Realistic scenario at a Bitcoin meetup:
 
 The HTTP server can handle multiple simultaneous downloads. Bandwidth splits between receivers, so two downloads take ~40 minutes instead of 20. This is fine for a meetup setting.
 
-A progress indicator on the sender's screen shows active connections:
+The sender's screen shows active connections and progress so they know when it's safe to leave:
+
 ```
 📡 Sharing Node
-├── Alice's Pixel - 67% (chainstate)
+├── Alice's Pixel - 67% (chainstate + filters)
 ├── Bob's Samsung - 12% (chainstate)  
-└── 2 active connections
+└── 2 active transfers
 ```
+
+The sender might need to leave the meetup. The progress display lets them see at a glance if anyone is mid-download. Once all transfers complete (or if no one is connected), they can safely toggle off sharing and go. If a transfer is interrupted, the receiver can resume from another sender or switch to the internet download path.
 
 ## APK Distribution
 
@@ -131,7 +134,7 @@ At a meetup without internet, the APK itself needs to get to new phones:
 - **USB transfer**: plug in, copy APK
 - **Local HTTP**: the share server could also serve the APK itself at `/apk`
 
-Serving the APK from the share server is the cleanest: one QR code gives you both the app and the chainstate source.
+The share server serves the APK directly at `/apk`. Receiver opens a browser link from the QR code, downloads and installs the same version the sender is running. One QR code gives you everything: the app, the chainstate, and the block filters.
 
 ## Implementation
 
