@@ -1,23 +1,24 @@
 # LDK Upstream Contribution: Simplified Justice TX API
 
-## Status: Implementation Complete, PR Pending
+## Status: Draft PR Open, Revision In Progress
 
-Code is at `~/rust-lightning` on branch (to be created) `watchtower-justice-api`.
-Target: `lightningdevkit/rust-lightning:main` via `FreeOnlineUser/rust-lightning`.
+- **PR:** https://github.com/lightningdevkit/rust-lightning/pull/4453
+- **Issue:** https://github.com/lightningdevkit/ldk-node/issues/813
+- **Branch:** `FreeOnlineUser/rust-lightning:watchtower-justice-api`
 
 ## Background
 
-TheBlueMatt responded to our ldk-node issue #813 on March 1, 2026. He pointed to
-abandoned PR rust-lightning#2552 (by alecchendev, Sep 2023) and asked if we'd pick it up.
+TheBlueMatt responded to issue #813 on March 1, 2026 asking if we'd pick up
+abandoned PR #2552 (improving watchtower API in ChannelMonitor). Two previous
+pickup attempts by other contributors failed.
 
-Matt's preferred approach: move state tracking inside `ChannelMonitor` itself so that
-extracting justice data becomes a single function call with no external storage.
-
-Two previous pickup attempts both failed (sangbida, maxbax12).
+tnull (Elias Rohrer, ldk-node lead) asked us to coordinate with @enigbe who
+also plans to work on watchtower support. We offered our draft as a starting
+point and deferred on direction.
 
 ## What We Built
 
-### New public API
+### Public API (v2, after Matt's review)
 
 ```rust
 pub struct JusticeTransaction {
@@ -27,57 +28,49 @@ pub struct JusticeTransaction {
 }
 
 impl ChannelMonitor {
-    pub fn get_justice_txs(
-        &self,
-        feerate_per_kw: u64,
-        destination_script: ScriptBuf,
+    // Called during persist_new_channel
+    pub fn sign_initial_justice_tx(
+        &self, feerate_per_kw: u64, destination_script: ScriptBuf,
+    ) -> Option<JusticeTransaction>;
+
+    // Called during update_persisted_channel
+    pub fn sign_justice_txs_from_update(
+        &self, update: &ChannelMonitorUpdate,
+        feerate_per_kw: u64, destination_script: ScriptBuf,
     ) -> Vec<JusticeTransaction>;
 }
 ```
 
-One call. Returns signed justice transactions for all revoked counterparty commitments.
-No external state tracking needed.
+Update-relative: callers know exactly when to call each method and what
+they get back (justice txs produced by that specific update).
 
-### Implementation
+### Storage
 
-- `latest_counterparty_commitment_txs: Vec<CommitmentTransaction>` field on `ChannelMonitorImpl`
-- Populated during initial commitment and during monitor update application
-- Pruned to keep entries within one revocation of current (handles splicing)
-- TLV field 39, optional_vec (backwards-compatible)
-- `get_justice_txs()` checks revocation secrets, builds and signs in one call
+`cur_counterparty_commitment_tx` and `prev_counterparty_commitment_tx` on
+`FundingScope` (not ChannelMonitorImpl). Per-funding-scope tracking supports
+splicing. Serialized as optional TLV fields.
 
-### Test WatchtowerPersister simplified
+### Matt's Review Feedback (Applied)
 
-82 lines of queue management removed. `JusticeTxData` struct, `unsigned_justice_tx_data`
-queue, and `form_justice_data_from_commitment` helper all deleted. Both `persist_new_channel`
-and `update_persisted_channel` now just call `data.get_justice_txs()`.
+1. Storage moved from ChannelMonitorImpl to FundingScope with cur/prev pattern
+2. API changed from stateless `get_justice_txs()` to update-relative methods
+3. Narrative comments removed (LDK style: document what exists, not what changed)
 
 ### Stats
 
-- 127 additions, 83 deletions across 2 files
-- All 3 justice tests pass
-- Clean compile, no warnings
+158 additions, 80 deletions across 2 files. All tests pass, CI green.
 
-## Open Questions (for PR discussion)
+## Open Design Questions
 
-1. **Dust filtering**: revokeable output below dust returns `None` from
-   `revokeable_output_index()`, skipped silently. Sufficient?
-2. **HTLC outputs**: this only handles `to_local` justice. LND towers also skip HTLCs.
-   Add HTLC justice later?
-3. **Signed vs unsigned return**: we return signed. More flexible to return unsigned?
-4. **Feerate source**: caller provides feerate. Should monitor estimate internally?
-
-## Impact on Our Code
-
-When this lands upstream:
-- **ldk-node fork patchset shrinks**: our `WatchtowerPersister` wrapper becomes trivial
-- **ldk-watchtower-client stays separate**: LND wire protocol (Brontide, Tor) is independent
+1. Signed vs unsigned return
+2. HTLC output coverage
+3. Feerate source (caller vs estimator)
+4. Dust filtering behavior
 
 ## Links
 
-- Our issue: https://github.com/lightningdevkit/ldk-node/issues/813
+- PR: https://github.com/lightningdevkit/rust-lightning/pull/4453
+- Issue: https://github.com/lightningdevkit/ldk-node/issues/813
 - Abandoned PR: https://github.com/lightningdevkit/rust-lightning/pull/2552
-- Original watchtower API PR: https://github.com/lightningdevkit/rust-lightning/pull/2337
 - Our ldk-node fork: https://github.com/FreeOnlineUser/ldk-node/tree/watchtower-bridge
 - Our watchtower client: https://github.com/FreeOnlineUser/ldk-watchtower-client
-- Implementation details: ~/rust-lightning/CHANGES-SUMMARY.md
