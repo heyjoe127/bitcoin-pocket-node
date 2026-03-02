@@ -1000,8 +1000,9 @@ private fun ActionButtons(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
+                val currentAppVersion = remember { try { updateContext.packageManager.getPackageInfo(updateContext.packageName, 0).versionName ?: "?" } catch (_: Exception) { "?" } }
                 Text(
-                    "App version: ${updateInfo?.currentVersion ?: "..."}",
+                    "App version: ${currentAppVersion}",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface
                 )
@@ -1036,11 +1037,6 @@ private fun ActionButtons(
                 ) { Text(if (checkingUpdate) "Checking..." else "Check for updates") }
             }
         }
-        // Check on first load
-        LaunchedEffect(Unit) {
-            updateInfo = com.pocketnode.util.UpdateChecker.check(updateContext)
-        }
-
         // Bitcoin version selector
         val versionContext = LocalContext.current
         var selectedVersion by remember { mutableStateOf(com.pocketnode.util.BinaryExtractor.getSelectedVersion(versionContext)) }
