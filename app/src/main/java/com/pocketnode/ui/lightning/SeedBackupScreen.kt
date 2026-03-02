@@ -185,7 +185,7 @@ fun SeedBackupScreen(
                                 Text(
                                     "not recommended",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = Color(0xFFD32F2F)
+                                    color = Color(0xFFFF9800)
                                 )
                             }
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
