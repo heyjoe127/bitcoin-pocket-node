@@ -150,9 +150,15 @@ class PowerModeManager(private val context: Context) {
                                    batteryStateFlow: StateFlow<BatteryMonitor.BatteryState>,
                                    scope: CoroutineScope) {
         autoDetectJob = scope.launch {
+            var firstEmission = true
             combine(networkStateFlow, batteryStateFlow) { network, battery ->
                 suggestMode(network, battery)
             }.collect { suggested ->
+                if (firstEmission) {
+                    // Don't override saved mode at boot — only react to changes
+                    firstEmission = false
+                    return@collect
+                }
                 val current = _modeFlow.value
                 if (suggested != current) {
                     Log.i(TAG, "Auto-switching: $current -> $suggested")
