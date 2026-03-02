@@ -587,13 +587,13 @@ fun LightningScreen(
                             Text("Block Filters", fontWeight = FontWeight.Bold)
                             Spacer(Modifier.height(8.dp))
                             Text(
-                                "BIP 157/158 filters installed. Lightning chain validation runs against your own full node.",
+                                "BIP 157/158 block filters installed (${"%.1f".format(sizeGb)} GB)",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                             )
                             Spacer(Modifier.height(4.dp))
                             Text(
-                                "Storage: ${"%.1f".format(sizeGb)} GB",
+                                "See Connect page for LNDHub and Pruned Neutrino connect info",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                             )
