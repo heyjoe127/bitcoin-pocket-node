@@ -261,7 +261,7 @@ fun SeedBackupScreen(
                                         )
                                     }
                                     Text(
-                                        "A new seed will be generated using your device's secure random number generator (256-bit entropy). " +
+                                        "LDK will generate a new seed using your device's secure random number generator (256-bit entropy). " +
                                         "Lightning will restart with the new wallet.",
                                         style = MaterialTheme.typography.bodySmall
                                     )
