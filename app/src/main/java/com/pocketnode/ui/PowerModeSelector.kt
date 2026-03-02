@@ -114,7 +114,7 @@ fun PowerModeSelector(
                 "Same WiFi, less data. Syncs every 15 minutes then disconnects.\n\n" +
                 "• Burst sync to chain tip, then network off until next burst\n" +
                 "• All services update during each burst\n" +
-                (if (lightningInstalled) "• Force-close detection within 15 minutes\n• Sending and receiving Lightning payments doesn't need node connection\n" else "") +
+                (if (lightningInstalled) "• Sending and receiving Lightning payments doesn't need node connection\n• Force-close detection within 15 minutes\n" else "") +
                 "• Opening your wallet keeps peers connected until you close it\n\n" +
                 "Estimated data: ~100-200 MB/day\n\n" +
                 "Best when: on WiFi but not plugged in.")
