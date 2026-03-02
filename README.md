@@ -40,26 +40,15 @@ Turn any Android phone into a fully-validating Bitcoin full node. No server depe
 
 <table>
 <tr>
-<td align="center" width="33%"><strong>Electrum server</strong></td>
-<td align="center" width="33%"><strong>BlueWallet connected</strong></td>
-<td align="center" width="33%"><strong>BlueWallet wallet</strong></td>
+<td align="center" width="25%"><strong>Electrum server</strong></td>
+<td align="center" width="25%"><strong>BlueWallet connected</strong></td>
+<td align="center" width="25%"><strong>BlueWallet wallet</strong></td>
+<td align="center" width="25%"><strong>Version picker</strong></td>
 </tr>
 <tr>
 <td><img src="docs/images/03-electrum-server.jpg" width="200" alt="Electrum server running with tracked wallets"></td>
 <td><img src="docs/images/04-bluewallet-connected.jpg" width="200" alt="BlueWallet connected to localhost"></td>
 <td><img src="docs/images/04-bluewallet-wallet.jpg" width="200" alt="BlueWallet wallet view"></td>
-</tr>
-</table>
-
-**Version Selection**
-
-<table>
-<tr>
-<td align="center" width="50%"><strong>Connect Wallet</strong></td>
-<td align="center" width="50%"><strong>Version picker</strong></td>
-</tr>
-<tr>
-<td><img src="docs/images/06-connect-wallet.jpg" width="200" alt="All three wallet services"></td>
 <td><img src="docs/images/11-version-picker.png" width="200" alt="Choose Bitcoin implementation"></td>
 </tr>
 </table>
