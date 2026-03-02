@@ -243,7 +243,7 @@ fun SeedBackupScreen(
                         AlertDialog(
                             onDismissRequest = { showCreateConfirm = false },
                             title = {
-                                Text("⚠️ Create New Wallet?", color = Color(0xFFD32F2F))
+                                Text("⚠️ Create New Wallet?", color = Color.White)
                             },
                             text = {
                                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
