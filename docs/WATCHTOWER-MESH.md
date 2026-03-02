@@ -104,14 +104,24 @@ Phone C (Max mode, plugged in)
 - Tower health monitoring (detect offline towers, find replacements)
 - Dashboard toggle: "Run watchtower for others" with storage usage indicator
 
-### Incentives
+### Watchtower as a Service
 
-Watchtower operators get nothing in the normal case (no breaches). Possible incentive models:
-- **Reciprocal**: I watch yours, you watch mine. No payment needed. Natural fit for Pocket Node since every user can be both.
-- **Paid**: small Lightning payment per blob stored. Requires watchtower to have Lightning (which it does).
-- **Altruistic**: community towers run as public goods (like Bitcoin full nodes today)
+The watchtower is the only part of the Pocket Node stack that isn't fully sovereign. Everything else — bitcoind, LDK, Electrum server, Tor — runs locally. You're trusting someone else's uptime for channel protection.
 
-The reciprocal model fits best: you opt in to watch for others, and in return others watch for you.
+Paid watchtower service solves this by making it self-sustaining:
+
+- Pocket Nodes in Max mode opt in as paid watchtowers
+- Clients pay a small Lightning fee per blob stored (microsats)
+- Payment happens over the same Lightning channels the watchtower is protecting
+- No external service, no subscription, no account — just peer-to-peer Lightning payments
+
+**Economics:**
+- Tower operators earn sats passively for keeping their phone plugged in
+- Clients pay tiny amounts for peace of mind (a few sats per channel update)
+- Max mode users have a direct incentive to stay online
+- The network self-scales: more users = more towers = more redundancy
+
+**Free tier:** reciprocal watching (I watch yours, you watch mine) could remain as a no-cost option alongside paid towers. Community/altruistic towers can set their fee to zero.
 
 ## Priority
 
