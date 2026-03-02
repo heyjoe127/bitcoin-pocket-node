@@ -112,7 +112,7 @@ Realistic scenario at a Bitcoin meetup:
 
 ## Multi-Receiver
 
-Maximum 3 simultaneous transfers. Bandwidth splits between receivers, so 3 downloads take ~40-60 minutes instead of 20. Once they're done, those 3 can share with others.
+Maximum 2 simultaneous transfers. This keeps download times short (~30 minutes each), and those 2 can immediately start sharing with others. Exponential spread: 1→2→4→8.
 
 The sender's screen shows anonymous transfer progress so they know when it's safe to leave:
 
