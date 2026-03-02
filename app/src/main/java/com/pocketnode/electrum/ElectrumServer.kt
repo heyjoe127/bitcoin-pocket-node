@@ -58,8 +58,8 @@ class ElectrumServer(
                         val handler = ConnectionHandler(client)
                         synchronized(connections) { connections.add(handler) }
                         Thread(handler, "electrum-client-${client.port}").start()
-                        // Trigger burst sync so wallet gets fresh data
-                        PowerModeManager.onWalletConnected?.invoke()
+                        // Hold network active while wallet is connected
+                        PowerModeManager.onWalletSessionStart?.invoke()
                     } catch (e: java.net.SocketException) {
                         if (running.get()) Log.w(TAG, "Accept error: ${e.message}")
                     }
@@ -138,8 +138,15 @@ class ElectrumServer(
                 if (running.get()) Log.d(TAG, "Client disconnected: ${e.message}")
             } finally {
                 close()
-                synchronized(connections) { connections.remove(this) }
-                Log.d(TAG, "Client handler finished")
+                val remaining: Int
+                synchronized(connections) {
+                    connections.remove(this)
+                    remaining = connections.size
+                }
+                Log.d(TAG, "Client handler finished ($remaining clients remaining)")
+                if (remaining == 0) {
+                    PowerModeManager.onWalletSessionEnd?.invoke()
+                }
             }
         }
 

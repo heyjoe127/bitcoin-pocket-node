@@ -52,11 +52,11 @@ Each burst:
 
 The burst adapts naturally: if caught up (0-1 new blocks), it completes in seconds. If behind (many blocks), it uses the full timeout window. No explicit adaptive logic needed.
 
-### Wallet-Triggered Burst
+### Wallet Hold
 
-When an external wallet (BlueWallet, etc.) connects to the Electrum server, an immediate burst sync is triggered automatically. This ensures the wallet sees fresh balance data and can broadcast transactions even if the node is between scheduled bursts.
+When an external wallet (BlueWallet, etc.) connects to the Electrum server, the network is held active for the duration of the connection. This ensures the wallet has peers for fresh data and can broadcast transactions immediately.
 
-A 2-minute cooldown prevents repeated triggers from the same connection. This applies to both Low Data and Away modes (Max Data is always connected, so no trigger needed).
+Burst cycling pauses while a wallet is connected and resumes automatically when the last client disconnects. This applies to both Low Data and Away modes (Max Data is always connected).
 
 ## Auto-Detection
 

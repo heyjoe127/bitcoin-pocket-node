@@ -53,11 +53,9 @@ class PowerModeManager(private val context: Context) {
         /** Epoch millis of next scheduled burst (0 = not scheduled) */
         val nextBurstFlow: StateFlow<Long> = _nextBurstFlow
 
-        /** Cooldown: ignore wallet-triggered bursts within this window */
-        private const val WALLET_BURST_COOLDOWN_MS = 120_000L  // 2 min
-
-        /** Callback for external triggers (e.g. Electrum client connect) */
-        var onWalletConnected: (() -> Unit)? = null
+        /** Callbacks for wallet session tracking (Electrum client connect/disconnect) */
+        var onWalletSessionStart: (() -> Unit)? = null
+        var onWalletSessionEnd: (() -> Unit)? = null
     }
 
     enum class Mode(val label: String, val emoji: String, val notificationLabel: String) {
@@ -80,7 +78,7 @@ class PowerModeManager(private val context: Context) {
     private var autoDetectJob: Job? = null
     private var rpc: BitcoinRpcClient? = null
     private var activeScope: CoroutineScope? = null
-    private var lastWalletBurstTime = 0L
+    private var walletHoldingNetwork = false
     private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     init {
@@ -104,9 +102,10 @@ class PowerModeManager(private val context: Context) {
         }
         Log.i(TAG, "Power mode: $previous -> $mode${if (isAuto) " (auto)" else ""}")
 
-        // Cancel existing burst cycle
+        // Cancel existing burst cycle and wallet hold
         burstJob?.cancel()
         burstJob = null
+        walletHoldingNetwork = false
         _burstStateFlow.value = BurstState.IDLE
         _nextBurstFlow.value = 0L
 
@@ -174,8 +173,9 @@ class PowerModeManager(private val context: Context) {
                            batteryStateFlow: StateFlow<BatteryMonitor.BatteryState>,
                            scope: CoroutineScope) {
         activeScope = scope
-        // Wire up wallet connect callback for burst triggers
-        onWalletConnected = { onWalletClientConnected() }
+        // Wire up wallet session callbacks
+        onWalletSessionStart = { onWalletSessionStarted() }
+        onWalletSessionEnd = { onWalletSessionEnded() }
         if (_autoEnabled.value) {
             startAutoDetection(networkStateFlow, batteryStateFlow, scope)
         }
@@ -285,24 +285,46 @@ class PowerModeManager(private val context: Context) {
 
     /**
      * Called when an external wallet (BlueWallet etc.) connects to the Electrum server.
-     * Triggers an immediate burst so the wallet gets fresh data and can broadcast txs.
-     * Respects a 2-minute cooldown to avoid repeated triggers.
+     * Holds the network active so the wallet has peers for fresh data and tx broadcast.
+     * Burst cycling is paused until the last wallet disconnects.
      */
-    fun onWalletClientConnected() {
+    private fun onWalletSessionStarted() {
         val mode = _modeFlow.value
-        if (mode == Mode.MAX) return
-        if (_burstStateFlow.value == BurstState.SYNCING) return
+        if (mode == Mode.MAX) return  // Already fully connected
+        if (walletHoldingNetwork) return  // Already holding
 
-        val now = System.currentTimeMillis()
-        if (now - lastWalletBurstTime < WALLET_BURST_COOLDOWN_MS) {
-            Log.d(TAG, "Wallet connect burst skipped (cooldown)")
-            return
-        }
-        lastWalletBurstTime = now
+        walletHoldingNetwork = true
+        Log.i(TAG, "Wallet connected — holding network active")
+
+        // Cancel burst cycling, just keep network on
+        burstJob?.cancel()
+        burstJob = null
+        _burstStateFlow.value = BurstState.IDLE
+        _nextBurstFlow.value = 0L
 
         val scope = activeScope ?: return
-        Log.i(TAG, "Wallet connected — triggering immediate burst sync")
-        triggerBurst(scope)
+        scope.launch(Dispatchers.IO) {
+            setNetworkActive(rpc ?: return@launch, true)
+        }
+    }
+
+    /**
+     * Called when the last wallet disconnects from the Electrum server.
+     * Resumes normal burst cycling for the current power mode.
+     */
+    private fun onWalletSessionEnded() {
+        if (!walletHoldingNetwork) return
+        walletHoldingNetwork = false
+
+        val mode = _modeFlow.value
+        if (mode == Mode.MAX) return  // Max stays connected anyway
+
+        Log.i(TAG, "All wallets disconnected — resuming burst cycle")
+
+        val scope = activeScope ?: return
+        scope.launch(Dispatchers.IO) {
+            applyMode(mode)
+        }
     }
 
     /** Clean up when service stops */

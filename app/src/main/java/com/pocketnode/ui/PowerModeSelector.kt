@@ -111,7 +111,7 @@ fun PowerModeSelector(
                 "• Network radio sleeps between bursts (saves battery)\n" +
                 "• All services sync during each burst\n" +
                 "• Force-close detection within 15 minutes\n" +
-                "• Opening your wallet triggers an immediate sync\n\n" +
+                "• Opening your wallet keeps peers connected until you close it\n\n" +
                 "Estimated data: ~100-200 MB/day\n\n" +
                 "Best when: on WiFi or cellular, phone in pocket."
 
@@ -121,7 +121,7 @@ fun PowerModeSelector(
                 "• Connects to 8 peers, syncs briefly, then disconnects\n" +
                 "• Network off between bursts (minimal battery drain)\n" +
                 "• Lightning safety maintained (watchtower covers gaps)\n" +
-                "• Opening your wallet triggers an immediate sync\n\n" +
+                "• Opening your wallet keeps peers connected until you close it\n\n" +
                 "Estimated data: ~25-50 MB/day\n\n" +
                 "Best when: out for the day on cellular, conserving battery."
         }
