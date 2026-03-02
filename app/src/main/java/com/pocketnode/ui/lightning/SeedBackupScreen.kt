@@ -113,7 +113,7 @@ fun SeedBackupScreen(
                         )
                     } else if (!showSeed) {
                         Text(
-                            "Tap below to reveal your seed words. Make sure no one is watching your screen.",
+                            "Tap below to reveal your seed words. Make sure no one is watching your screen, including cameras.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -127,7 +127,7 @@ fun SeedBackupScreen(
                                 containerColor = Color(0xFFD32F2F)
                             )
                         ) {
-                            Text("Show Seed Words", color = Color.White)
+                            Text("Show Seed for Backup", color = Color.White)
                         }
                     } else if (seedWords == null) {
                         Text(
@@ -170,7 +170,10 @@ fun SeedBackupScreen(
                                 )
                             }
 
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 OutlinedButton(onClick = {
                                     clipboardManager.setText(
                                         AnnotatedString(words.joinToString(" "))
@@ -179,6 +182,13 @@ fun SeedBackupScreen(
                                 }) {
                                     Text(if (copied) "Copied!" else "Copy to Clipboard")
                                 }
+                                Text(
+                                    "not recommended",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color(0xFFD32F2F)
+                                )
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 OutlinedButton(onClick = {
                                     showSeed = false
                                     seedWords = null
