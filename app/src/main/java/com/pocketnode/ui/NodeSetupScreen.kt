@@ -37,7 +37,7 @@ fun NodeSetupScreen(
 
     var host by remember { mutableStateOf("") }
     var sshPort by remember { mutableStateOf("22") }
-    var sshUser by remember { mutableStateOf("umbrel") }
+    var sshUser by remember { mutableStateOf("") }
     var sshPassword by remember { mutableStateOf("") }
     var showPassword by remember { mutableStateOf(false) }
 
