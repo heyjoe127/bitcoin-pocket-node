@@ -457,7 +457,7 @@ fun NodeStatusScreen(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(
-                        "Auto-adjust power mode",
+                        "Auto-adjust data mode",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
