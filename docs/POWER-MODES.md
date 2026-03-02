@@ -58,9 +58,11 @@ When an external wallet (BlueWallet, etc.) connects to the Electrum server, the 
 
 Burst cycling pauses while a wallet is connected and resumes automatically when the last client disconnects. This applies to both Low Data and Away modes (Max Data is always connected).
 
+A blue banner ("📱 Wallet connected — network active") appears on the dashboard while a wallet is connected, persisting for 10 seconds after disconnect.
+
 ## Auto-Detection
 
-Opt-in toggle: "Auto-adjust power mode." Monitors network and battery state in real-time.
+Opt-in toggle: "Auto-adjust data mode." Monitors network and battery state in real-time.
 
 | Condition | Mode |
 |-----------|------|
@@ -106,4 +108,10 @@ Data per burst includes: header sync, compact block relay, mempool gossip during
 
 Force-close timeouts are measured in blocks (~10 min each). Even Away Mode's 60-minute intervals give plenty of margin. The watchtower independently monitors the chain, so channel safety is maintained even during long idle periods between bursts.
 
+**Channel opens require Max Data mode.** The Open Channel button is disabled in Low and Away modes because burst sync gaps could miss critical funding confirmation states. Users can still browse peers and prepare channel details, but must switch to Max to open.
+
 See `docs/PRUNED-NODE-RISK-ANALYSIS.md` for detailed risk analysis.
+
+## UTXOracle
+
+The oracle runs entirely on local RPC calls (`getblock`, `getblockcount`), reading blocks already stored by bitcoind. No network connection is needed at oracle calculation time. In burst modes, the oracle updates whenever new blocks arrive during a burst. In Away mode this means roughly hourly price updates, which is sufficient for a sovereign price oracle.

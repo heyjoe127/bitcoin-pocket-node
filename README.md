@@ -94,7 +94,7 @@ See [Version Selection Design](docs/VERSION-SELECTION.md) and [BIP 110 Research]
 - **VPN-aware networking:** Detects actual connection type behind VPN (cellular vs WiFi)
 - **Data budgets** for WiFi and cellular
 - **Power modes:** Max Data, Low Data, Away Mode with burst sync for mobile efficiency
-- **Auto power mode:** detects WiFi/cellular and charging state, adjusts automatically
+- **Auto data mode:** detects WiFi/cellular and charging state, adjusts automatically
 - **Battery saver** pauses sync when unplugged below 50%
 - **Auto-start on boot**
 - **Secure node pairing** with restricted SFTP account (no access to your bitcoin data)
