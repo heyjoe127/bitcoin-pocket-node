@@ -1,6 +1,7 @@
 package com.pocketnode.ui.lightning
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -235,11 +236,21 @@ fun SeedBackupScreen(
                                 containerColor = Color(0xFFD32F2F)
                             )
                         ) {
-                            Text("Create New", maxLines = 1)
+                            Text("Create New", maxLines = 1, color = Color.White)
                         }
                     }
 
                     if (showCreateConfirm) {
+                        // Dark scrim overlay behind dialog
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.Black.copy(alpha = 0.7f))
+                                .clickable(
+                                    indication = null,
+                                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                                ) { showCreateConfirm = false }
+                        )
                         AlertDialog(
                             onDismissRequest = { showCreateConfirm = false },
                             title = {
