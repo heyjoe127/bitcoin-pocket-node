@@ -125,20 +125,16 @@ As network matures, users open channels to arbitrary peers beyond Olympus. No ne
 - [ ] LAN exposure toggle for Zeus on separate device (same network)
 - [ ] Documentation for opening peer channels
 
-### Lightning Phase 3: Home Node Watchtower
-Your home node watches your phone's Lightning channels when the phone is offline. Uses LND's built-in watchtower, enabled during the existing SSH setup step.
+### Lightning Phase 3: Watchtower ✅
+LDK-to-LND watchtower bridge over Tor. Phone pushes encrypted justice blobs to any LND watchtower via native BOLT 8 Brontide protocol. Embedded Arti handles .onion connectivity.
 
-See [Watchtower Design](docs/WATCHTOWER-MESH.md) for details.
+See [Watchtower Design](docs/WATCHTOWER-MESH.md) and [LDK-to-LND Bridge](docs/LDK-WATCHTOWER-BRIDGE.md) for details.
 
-**What we built:**
-- [x] Read-only watchtower detection via SSH (`lncli tower info`)
-- [x] Dedicated WatchtowerScreen with credential fields and status display
-- [x] Tower URI (pubkey + .onion host) saved to SharedPreferences
-- [x] Auto-detect during chainstate/filter copy flows (when admin SSH in scope)
-- [x] Copy pubkey and host separately (matches Zeus's Add Watchtower UI)
-- [x] SSH host/port/admin username saved, password prompted each time
-- [x] Dashboard navigation button to watchtower screen
-- [x] No remote config modification: user enables watchtower via their node's UI
+- [x] Custom Brontide (BOLT 8) implementation with secp256k1 ECDH
+- [x] LND wtwire protocol: CreateSession + StateUpdate
+- [x] Embedded Arti (0.39.0) for direct .onion watchtower connection
+- [x] Auto-push blobs after every payment with dynamic fee estimation
+- [x] End-to-end verified against live LND tower on Umbrel
 
 ### Lightning Phase 4: LDK Migration ✅
 Replace Zeus embedded LND with ldk-node (Lightning Dev Kit): modular Lightning library with native Android bindings. Designed for mobile (constrained storage, intermittent connectivity).
@@ -185,7 +181,7 @@ bitcoind ← RPC → ldk-node (in-process)
 
 **Pruned node compatibility:** ldk-node uses `getblock` via RPC, no service bit checks. Works natively with pruned nodes for normal use. If the phone is offline longer than the prune window (~2 weeks at `prune=2048`), ldk-node can't fetch blocks it missed. Recovery: temporarily increase prune setting, let bitcoind re-download the gap blocks, ldk-node catches up, then shrink prune back to normal. User sees a "Recovering Lightning state..." screen with progress.
 
-**Cellular Lightning mode:** When on cellular/metered network, bitcoind pauses block sync (zero download bandwidth) but stays running for RPC. ldk-node continues operating Lightning normally: payments, channel updates, invoice generation all work over the Lightning peer network. On-chain transactions still broadcast via minimal peer connection. Force-close monitoring handled by home node watchtower. Full block sync resumes automatically on WiFi. Dashboard shows "Lightning active, blockchain paused." Only possible because everything runs in-process via localhost RPC.
+**Power modes:** Three data modes (Max/Low/Away) control sync behaviour. Low and Away use burst sync via `setnetworkactive` RPC. External wallets hold the network active while connected. Channel opens require Max mode. See [Power Modes Design](docs/POWER-MODES.md).
 
 ### Desktop Port (Compose Multiplatform)
 Same app, same experience, phone or desktop. Using Jetpack Compose Multiplatform to share UI code between Android and desktop (Linux, macOS, Windows).
