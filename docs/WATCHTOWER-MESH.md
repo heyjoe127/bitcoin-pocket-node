@@ -80,8 +80,10 @@ Fixed rate (1000 sats/year) for all towers. No price competition, no haggling. U
 
 Uptime reputation builds from client attestations over time. New towers start with no history.
 
-**Discovery fallbacks:**
-1. **Nostr relay** (primary): decentralised directory, no central server
+**All discovery traffic routes through embedded Arti (Tor).** The entire watchtower flow is Tor end-to-end: marketplace queries, tower connections, blob pushes, payments. ISP sees nothing. This also avoids regional relay issues (e.g. high latency to US/EU relays from Australia).
+
+**Discovery:**
+1. **Nostr relay via Tor** (primary): query existing public relays for watchtower events (custom kind). Standard relays, no special infrastructure. Towers publish a replaceable event with their .onion address and uptime stats.
 2. **Manual exchange**: share tower URIs via QR code for direct peering
 3. **DNS seeds**: hardcoded community towers as bootstrap fallback
 
