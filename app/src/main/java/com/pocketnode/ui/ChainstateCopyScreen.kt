@@ -34,6 +34,8 @@ fun ChainstateCopyScreen(onBack: () -> Unit, onComplete: () -> Unit = {}) {
     val workScope = rememberCoroutineScope()
     val setupManager = remember { NodeSetupManager(context) }
     val chainstateManager = remember { ChainstateManager.getInstance(context) }
+    // Reset any stale state from previous attempts
+    LaunchedEffect(Unit) { chainstateManager.reset() }
     val state by chainstateManager.state.collectAsState()
 
     // Keep screen on during active transfer
