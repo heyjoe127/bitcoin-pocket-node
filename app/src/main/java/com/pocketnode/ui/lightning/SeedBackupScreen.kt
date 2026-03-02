@@ -268,42 +268,46 @@ fun SeedBackupScreen(
                                 }
                             },
                             confirmButton = {
-                                Button(
-                                    onClick = {
-                                        // Stop Lightning if running
-                                        if (lightningService.isRunning()) {
-                                            lightningService.stop()
-                                        }
-                                        // Delete existing seed and state so LDK generates fresh
-                                        val lightningDir = java.io.File(context.filesDir, "lightning")
-                                        lightningDir.listFiles()?.forEach { file ->
-                                            if (!file.name.startsWith("keys_seed.bak.")) {
-                                                file.deleteRecursively()
-                                            }
-                                        }
-                                        showCreateConfirm = false
-                                        restoreSuccess = false
-                                        createSuccess = true
-                                        // Restart Lightning to generate new seed
-                                        val prefs = context.getSharedPreferences("pocketnode_prefs", android.content.Context.MODE_PRIVATE)
-                                        val rpcUser = prefs.getString("rpc_user", "pocketnode") ?: "pocketnode"
-                                        val rpcPass = prefs.getString("rpc_password", "") ?: ""
-                                        if (rpcPass.isNotEmpty()) {
-                                            Thread {
-                                                try {
-                                                    lightningService.start(rpcUser, rpcPass)
-                                                } catch (_: Exception) {}
-                                            }.start()
-                                        }
-                                    },
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F))
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    Text("Delete and Create New")
-                                }
-                            },
-                            dismissButton = {
-                                OutlinedButton(onClick = { showCreateConfirm = false }) {
-                                    Text("Cancel")
+                                    OutlinedButton(
+                                        onClick = { showCreateConfirm = false },
+                                        modifier = Modifier.weight(1f).height(48.dp)
+                                    ) {
+                                        Text("Cancel", maxLines = 1)
+                                    }
+                                    Button(
+                                        onClick = {
+                                            if (lightningService.isRunning()) {
+                                                lightningService.stop()
+                                            }
+                                            val lightningDir = java.io.File(context.filesDir, "lightning")
+                                            lightningDir.listFiles()?.forEach { file ->
+                                                if (!file.name.startsWith("keys_seed.bak.")) {
+                                                    file.deleteRecursively()
+                                                }
+                                            }
+                                            showCreateConfirm = false
+                                            restoreSuccess = false
+                                            createSuccess = true
+                                            val prefs = context.getSharedPreferences("pocketnode_prefs", android.content.Context.MODE_PRIVATE)
+                                            val rpcUser = prefs.getString("rpc_user", "pocketnode") ?: "pocketnode"
+                                            val rpcPass = prefs.getString("rpc_password", "") ?: ""
+                                            if (rpcPass.isNotEmpty()) {
+                                                Thread {
+                                                    try {
+                                                        lightningService.start(rpcUser, rpcPass)
+                                                    } catch (_: Exception) {}
+                                                }.start()
+                                            }
+                                        },
+                                        modifier = Modifier.weight(1f).height(48.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F))
+                                    ) {
+                                        Text("Delete", maxLines = 1)
+                                    }
                                 }
                             }
                         )
