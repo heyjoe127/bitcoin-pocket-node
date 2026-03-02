@@ -23,19 +23,14 @@ Phone (ldk-node)              Tor (.onion)              Home Node (LND)
 - **Embedded Arti (0.39.0)**: in-process Tor client for .onion connectivity, no Orbot dependency
 - **Auto-push**: blobs sent after every payment, dynamic fee estimation from local bitcoind
 
-### Home Node Setup
+### Setup
 
-The watchtower URI (pubkey@onion:9911) is configured once during Lightning setup. Most home node OSes (Umbrel, Start9, RaspiBlitz, myNode) run LND with watchtower capability and expose Tor hidden services by default.
+The watchtower URI (pubkey@onion:9911) is configured once during Lightning setup. The phone connects directly to the tower's .onion address via embedded Arti — no SSH, no VPN, no port forwarding.
 
-The SSH connection used for chainstate/filter copy can detect and enable the watchtower automatically:
-
-| Node OS | Detection | LND Access |
-|---------|-----------|------------|
-| **Umbrel** | `~/umbrel/` directory | `docker exec lightning lncli tower info` |
-| **Start9** | `start-cli` available | Docker service wrapper |
-| **RaspiBlitz** | `/mnt/hdd/lnd/` | `lncli tower info` (native) |
-| **myNode** | `/mnt/hdd/mynode/` | `lncli tower info` (native or Docker) |
-| **Manual LND** | `lncli` in PATH | `lncli tower info` directly |
+Any LND watchtower is compatible. Common sources:
+- Another Pocket Node user running in Max mode (future: decentralised network)
+- Home node running LND (Umbrel, Start9, RaspiBlitz, myNode etc.)
+- Public community watchtowers
 
 ## Power Mode Integration
 
@@ -129,6 +124,6 @@ The reciprocal model fits best: you opt in to watch for others, and in return ot
 
 ## Priority
 
-1. **Current**: single home node watchtower via LDK-to-LND bridge (working, shipped)
+1. **Current**: LDK-to-LND watchtower bridge over Tor (working, shipped)
 2. **Next**: multi-tower support (push blobs to 2-3 towers instead of one)
 3. **Future**: watchtower server mode on Pocket Node, peer discovery via Nostr, reciprocal network
