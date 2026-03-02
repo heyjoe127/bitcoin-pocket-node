@@ -242,6 +242,11 @@ See [Desktop Port Design](docs/DESKTOP-PORT.md) for the full design document.
 - [ ] Block visualization: animated graphic showing stub creation → pruning → backfill
 - [ ] Mempool home screen widget
 
+### Hardening
+- [ ] Block LDK startup until prune recovery confirms completion (not just triggered)
+- [ ] Watchtower blob push retry loop with user alert when tower is unreachable
+- [ ] "Offline too long" warning on startup when offline duration approaches prune window
+
 ### Performance
 - [ ] Optimize stub file creation: only create stubs for files actually in index range (reduce 15 min pruning)
 - [ ] Copy more block files (~3-4 blk/rev pairs) to cover full pruning window (reorg safety)
