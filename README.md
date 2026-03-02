@@ -348,7 +348,6 @@ app/src/main/java/com/pocketnode/
 
 ## Roadmap
 
-- **Cellular Lightning mode:** Lightning payments on mobile data with zero blockchain bandwidth. bitcoind pauses sync, ldk-node keeps operating via localhost RPC, watchtower monitors channels at home, full sync resumes on WiFi
 - **Desktop port:** Same app on Linux, macOS, Windows via Compose Multiplatform. See [design doc](docs/DESKTOP-PORT.md)
 - **Phone-to-phone chainstate copy:** WiFi Direct or hotspot
 - **LDK upstream contribution:** improving watchtower API in rust-lightning ChannelMonitor ([#813](https://github.com/lightningdevkit/ldk-node/issues/813))
