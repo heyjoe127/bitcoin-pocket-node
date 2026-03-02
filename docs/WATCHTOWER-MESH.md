@@ -1,158 +1,125 @@
-# Watchtower: Home Node Protection
+# Watchtower Design
 
-## Concept
+## What's Built
 
-Your home node watches your phone's Lightning channels. When the phone is offline (sleeping, traveling, no signal), the home node detects breach attempts and broadcasts justice transactions on your behalf.
+Bitcoin Pocket Node uses a custom LDK-to-LND watchtower bridge. The phone runs ldk-node and pushes encrypted justice blobs to an LND watchtower over Tor, using the native BOLT 8 (Brontide) protocol.
 
-No mesh. No discovery protocol. No new infrastructure. Just your existing home node doing one more job.
+See `docs/LDK-WATCHTOWER-BRIDGE.md` for the full technical design.
 
-## What Exists Today
+### Current Architecture
 
-LND ships with a complete watchtower implementation:
+```
+Phone (ldk-node)              Tor (.onion)              Home Node (LND)
+├── WatchtowerBridge.kt  ──────────────────────────>  LND Watchtower
+│   ├── Drains state blobs from ldk-node               ├── Encrypted blob store
+│   ├── Encrypts as JusticeKitV0                       ├── Watches every block
+│   └── Pushes via Brontide (BOLT 8)                   └── Broadcasts justice tx
+└── Embedded Arti (Tor client)
+```
 
-- **Server** (`watchtower.active=1`): watches channels for other nodes
-- **Client** (`wtclient.active=1`): sends channel state to a watchtower
+**Key components:**
+- **ldk-node fork** (`FreeOnlineUser/ldk-node`, branch `watchtower-bridge`): custom persistence that captures channel state for watchtower updates
+- **ldk-watchtower-client** (`FreeOnlineUser/ldk-watchtower-client`): Rust library implementing BOLT 8 Brontide handshake + LND wtwire protocol
+- **Embedded Arti (0.39.0)**: in-process Tor client for .onion connectivity, no Orbot dependency
+- **Auto-push**: blobs sent after every payment, dynamic fee estimation from local bitcoind
 
-The phone already pairs with the home node via SSH during setup. The watchtower feature piggybacks on that existing relationship.
+### Home Node Setup
 
-## How It Works
+The watchtower URI (pubkey@onion:9911) is configured once during Lightning setup. Most home node OSes (Umbrel, Start9, RaspiBlitz, myNode) run LND with watchtower capability and expose Tor hidden services by default.
 
-### Automatic During SSH Setup
-
-During the existing SSH flow (chainstate copy, block filter copy), the app already connects to the home node. Watchtower setup happens automatically as part of this flow:
-
-1. SSH into home node (credentials already provided)
-2. Detect node OS and LND location (see Node Detection below)
-3. Enable `watchtower.active=1` in LND config if not already set
-4. Restart LND if config changed
-5. Read watchtower .onion URI via `lncli tower info`
-6. Store URI locally on phone
-7. When Lightning is active, embedded Tor connects to watchtower automatically
-
-**User experience: zero additional steps.** If they set up their home node for chainstate copy, watchtower protection comes free.
-
-### Node Detection
-
-The app detects which node OS is running and finds LND accordingly:
+The SSH connection used for chainstate/filter copy can detect and enable the watchtower automatically:
 
 | Node OS | Detection | LND Access |
 |---------|-----------|------------|
-| **Umbrel** | `~/umbrel/` directory exists | `docker exec lightning lncli tower info` |
-| **Citadel** | `~/citadel/` directory (Umbrel fork) | Similar Docker path |
-| **Start9** | `start-cli` available | Docker service, `start-cli` wrapper |
-| **RaspiBlitz** | `/mnt/hdd/lnd/` or raspiblitz config | `lncli tower info` (native) |
+| **Umbrel** | `~/umbrel/` directory | `docker exec lightning lncli tower info` |
+| **Start9** | `start-cli` available | Docker service wrapper |
+| **RaspiBlitz** | `/mnt/hdd/lnd/` | `lncli tower info` (native) |
 | **myNode** | `/mnt/hdd/mynode/` | `lncli tower info` (native or Docker) |
-| **Manual LND** | `lncli` in PATH or common locations | `lncli tower info` directly |
+| **Manual LND** | `lncli` in PATH | `lncli tower info` directly |
 
-Detection order: check for known markers via SSH, fall back to generic `lncli` detection. If no LND is found, skip watchtower gracefully (Bitcoin-only nodes are fine).
+## Power Mode Integration
 
-### SshUtils.kt Integration
+Watchtower safety is maintained across all power modes:
 
-Extends existing `SshUtils.kt` (already has `detectDockerContainer`, `findBitcoinDataDir`):
+- **Max Data**: continuous monitoring, blobs pushed immediately
+- **Low Data**: watchtower covers 15-minute gaps between bursts. Blobs pushed during each burst.
+- **Away Mode**: watchtower covers 60-minute gaps. This is the primary safety net: even with hourly syncs, the watchtower is watching continuously from the home node.
 
-```kotlin
-// New functions
-fun detectLnd(session: Session): LndInfo?
-fun enableWatchtower(session: Session, lndInfo: LndInfo): Boolean
-fun getWatchtowerUri(session: Session, lndInfo: LndInfo): String?
-```
+Channel opens require Max Data mode to ensure reliable funding confirmation monitoring.
 
-`LndInfo` data class holds: node OS type, LND path, Docker container name (if applicable), lncli command prefix.
+## Decentralised Watchtower Network
 
-## Embedded Tor
+### The Problem with a Single Watchtower
 
-The app bundles a lightweight Tor client (~5-10 MB) for watchtower connectivity:
+A single home watchtower has a single point of failure:
+- Home internet goes down
+- Node crashes or corrupts
+- Power outage
+- ISP blocks Tor
 
-- Starts silently when Lightning is active and a watchtower URI is configured
-- Connects to the home node's .onion watchtower address
-- Works from anywhere (home WiFi, cellular, public WiFi)
-- No Orbot dependency, no user configuration
+If the watchtower is offline at the exact moment a breach occurs, the justice transaction doesn't get broadcast.
 
-| Location | Connection |
-|----------|-----------|
-| Home WiFi | Tor .onion (consistent path, works even if LAN IP changes) |
-| Away from home | Tor .onion (same path, works everywhere) |
+### Concept: Peer Watchtower Network
 
-Using Tor for all watchtower connections (even on LAN) simplifies the logic: one code path, always works, no IP discovery needed.
+Multiple Pocket Node users could watch each other's channels, creating redundancy without trust:
 
-## Reachability
+**How it works:**
+- Watchtower blobs are encrypted. The watchtower can only use them if a breach is detected on-chain. It cannot steal funds or learn channel balances.
+- Users opt in to running a watchtower server on their home node
+- The app discovers and connects to multiple watchtowers (home node + peers)
+- Blobs are pushed to all connected towers. Any one of them can broadcast the justice tx.
 
-The home node's watchtower listens on port 9911. Umbrel (and most node OSes) already run Tor and expose LND services via hidden services. The tower's .onion address is typically available without additional configuration.
+**Discovery options:**
+1. **Manual exchange**: share watchtower URIs directly (QR code, NFC, messaging)
+2. **Nostr relay**: publish watchtower URIs to a Nostr relay. Users subscribe and add towers they trust. No central directory.
+3. **DNS seeds**: hardcoded fallback towers run by the project or community members
 
-If Tor is not running on the home node, the setup flow detects this and prompts the user. Most node OSes include Tor by default.
+**Trust model:**
+- Watchtower blobs reveal nothing about your channels (encrypted until breach)
+- A malicious watchtower can refuse to act, but cannot steal funds
+- Multiple towers provide redundancy: you only need one honest tower online during a breach
+- No KYC, no accounts, just pubkey-based identity
 
-## Implementation
-
-### Changes to Existing Code
-
-**SshUtils.kt** (shared SSH utility):
-- `detectLnd()`: probe for LND across node OS types
-- `enableWatchtower()`: add config line, restart LND if needed
-- `getWatchtowerUri()`: run lncli, parse .onion URI
-
-**NodeSetupManager.kt** (during admin SSH setup):
-- After chainstate/filter operations, call watchtower detection
-- Store tower URI in SharedPreferences
-- Silent: no UI unless LND restart is needed
-
-**New: TorManager.kt**:
-- Manage embedded Tor lifecycle
-- Start when Lightning active + watchtower configured
-- Provide SOCKS proxy for watchtower client connection
-
-**New: WatchtowerManager.kt**:
-- On Lightning setup completion, add home node tower via LND wtclient API
-- Store tower URI in SharedPreferences
-- Dashboard status: "Protected by home node" or "No watchtower configured"
-
-**NodeStatusScreen.kt** (dashboard):
-- Watchtower status indicator (shield icon when protected)
-
-**SetupChecklistScreen.kt**:
-- Watchtower auto-detected as part of Lightning step status
-
-### LND API Calls
-
-All available via LND REST API:
+### Architecture for Decentralised Towers
 
 ```
-# Get tower info (server side, during setup via SSH)
-lncli tower info
-→ { "pubkey": "02f1...", "uris": ["02f1...@abc.onion:9911"] }
+Phone (ldk-node)
+├── Push blobs to home tower (primary, always)
+├── Push blobs to peer tower A (backup)
+├── Push blobs to peer tower B (backup)
+└── Any tower can independently detect breach and broadcast justice tx
 
-# Add tower (client side, on phone Zeus/LND)
-POST /v2/watchtower/client
-{ "pubkey": "02f1...", "address": "abc.onion:9911" }
-
-# List towers (for dashboard status)
-GET /v2/watchtower/client
-→ { "towers": [...] }
+Home Node
+├── LND watchtower server (existing)
+├── Optional: also watches for other Pocket Node users
+└── Tor hidden service (existing)
 ```
 
-## Setup Checklist Integration
+**New components needed:**
+- Watchtower server mode in the app or home node (LND already has this)
+- Tower discovery (Nostr relay or manual)
+- Multi-tower blob distribution in WatchtowerBridge
+- Tower health monitoring (detect offline towers, find replacements)
 
-The Lightning step (Step 6) in the setup checklist reflects watchtower status:
+### Incentives
 
-- "Block filters installed, watchtower configured" (all green)
-- "Block filters installed, no watchtower" (Lightning works but unprotected)
-- "Copy block filters from your home node via dashboard" (not yet set up)
+Watchtower operators get nothing in the normal case (no breaches). Possible incentive models:
+- **Reciprocal**: I watch yours, you watch mine. No payment needed.
+- **Paid**: small Lightning payment per blob stored. Requires watchtower to have Lightning.
+- **Altruistic**: community towers run as public goods (like Bitcoin full nodes today)
 
-## What Is NOT Being Built
+The reciprocal model fits Pocket Node best: every user with a home node can be both client and server.
 
-- Mesh discovery
-- Nostr integration
-- Go daemon
+## What Is NOT Being Built (Yet)
+
+- Custom watchtower protocol (using existing LND wtwire)
+- CLN watchtower support (different protocol, future consideration)
 - WireGuard provisioning
-- CLN support (future consideration)
-- Custom protocol
-- Orbot dependency
+- Orbot dependency (embedded Arti handles Tor)
+- Go daemon
 
-This is automatic detection during SSH setup, an embedded Tor client, and one API call on the phone.
+## Priority
 
-## Future
-
-- **CLN support**: if demand exists, add Core Lightning watchtower protocol
-- **Mesh redundancy**: Nostr-based discovery for multiple watchtowers from other users (optional backup layer on top of home node)
-- **IPv6 direct**: for users with IPv6, skip Tor for lower latency watchtower connection
-
-The home node watchtower remains the primary. Everything else is optional enhancement.
+1. **Current**: single home node watchtower (working, shipped)
+2. **Next**: multi-tower support (push blobs to 2-3 towers instead of one)
+3. **Future**: peer discovery via Nostr, reciprocal watching
