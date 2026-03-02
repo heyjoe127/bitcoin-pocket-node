@@ -122,6 +122,16 @@ Paid watchtower service solves this by making it self-sustaining:
 - The network self-scales: more users = more towers = more redundancy
 - **Dev fee:** 50% of each watchtower fee goes to the project. Sustainable open source funding baked into the protocol, no donations or grants needed long-term
 
+**Pricing:** 1000 sats/year per client. Cheap enough that nobody thinks twice, sustainable enough to incentivise operators. One Lightning payment extends coverage by a year. 100 clients = 100k sats/year passive income for keeping your phone plugged in.
+
+**Subscription model:**
+- Tower stores `expiry_timestamp` per client session
+- Each StateUpdate checks if subscription is active
+- 30-day warning before expiry: "Watchtower subscription expires soon. Renew for 1000 sats?"
+- On expiry: tower stops accepting new blobs, but existing blobs stay stored (no mid-channel protection gap)
+- Renewal is a single Lightning payment that extends the timestamp by a year
+- The payment itself is the receipt, no accounts or billing
+
 **Free tier:** reciprocal watching (I watch yours, you watch mine) could remain as a no-cost option alongside paid towers. Community/altruistic towers can set their fee to zero.
 
 ## Priority
