@@ -31,7 +31,7 @@ Bitcoin Pocket Node runs LDK connected to a pruned Bitcoin Core node via JSON-RP
 
 1. **Proactive prune recovery:** On startup, compares `pruneheight` vs `last_ldk_sync_height`. If there is a gap, uses `invalidateblock` + `reconsiderblock` to force bitcoind to re-download pruned blocks before LDK starts. This handles the common case where the node was offline but the CSV timelock has not expired.
 
-2. **Watchtower:** LDK-to-LND watchtower bridge pushes justice blob data to a remote LND tower (via Tor or SSH tunnel). The tower monitors the chain 24/7 and can broadcast a penalty transaction independently, even when your phone is completely offline. This eliminates Risk 2 entirely.
+2. **Watchtower:** LDK-to-LND watchtower bridge pushes justice blob data to a remote LND tower (via Tor or SSH tunnel). The tower monitors the chain 24/7 and can broadcast a penalty transaction independently, even when your phone is completely offline. Combined with prune recovery, this reduces Risk 2 to requiring two independent failures (recovery fails AND watchtower is down).
 
 3. **Prune window sizing:** `prune=2048` retains ~2 weeks of blocks, roughly matching the typical 2016-block CSV timelock. This makes it very unlikely that a breach block gets pruned before recovery can act.
 
@@ -71,6 +71,22 @@ Bitcoin Pocket Node runs LDK connected to a pruned Bitcoin Core node via JSON-RP
 If both LDK and bitcoind go offline together and return together, the catch-up process is safe. Bitcoind syncs forward from its last known block, downloading all blocks that occurred during the offline period. These are new blocks that were never downloaded, so they have not been pruned. LDK receives them via normal RPC and reconciles all channel state correctly.
 
 The pruning danger only applies to blocks that were previously downloaded and then discarded, not blocks that occurred during an offline window.
+
+## Prune Recovery Failure Modes
+
+The proactive recovery mechanism (`invalidateblock` + `reconsiderblock`) can fail silently in several ways:
+
+1. **Peer availability:** Old blocks must be re-downloaded from peers. If no connected peer has the required blocks (e.g., all peers are also pruned), recovery stalls without error.
+
+2. **Completion time vs timelock:** Re-downloading hundreds of blocks takes time. If the node was offline long enough that the CSV timelock is close to expiring, recovery may not complete before the deadline.
+
+3. **Stale `last_ldk_sync_height`:** The saved sync height is updated during normal operation. If the app crashes or is force-killed before persisting, the saved height may be stale, causing recovery to underestimate the gap or miss it entirely.
+
+4. **Interrupted re-download:** If the app is killed during recovery (phone restart, user force-stop), partially recovered state may leave LDK in an inconsistent position on next startup.
+
+**Critical requirement:** Startup logging must confirm completion of recovery, not just that recovery was triggered. A log entry like "Prune recovery complete: blocks X through Y re-downloaded" must appear before LDK is started. If recovery does not complete, LDK should not start and the user should see a clear error.
+
+**Current status:** Recovery logs progress and checks for stalls (60s timeout), but does not yet block LDK startup on confirmed completion. This is a hardening item for a future release.
 
 ## Detection
 

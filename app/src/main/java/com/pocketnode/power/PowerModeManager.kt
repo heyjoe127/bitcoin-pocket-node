@@ -37,6 +37,7 @@ class PowerModeManager(private val context: Context) {
         private const val AWAY_PEERS = 2
 
         private const val PREF_KEY_AUTO_POWER = "power_mode_auto"
+        private const val PREF_KEY_MANUAL_MODE = "power_mode_manual"
 
         private val _modeFlow = MutableStateFlow(Mode.LOW)
         val modeFlow: StateFlow<Mode> = _modeFlow
@@ -54,8 +55,8 @@ class PowerModeManager(private val context: Context) {
     }
 
     enum class Mode(val label: String, val emoji: String, val notificationLabel: String) {
-        MAX("Max", "⚡", "Max Data"),
-        LOW("Low", "🔋", "Low Data"),
+        MAX("Max", "⚡", "Max Data Mode"),
+        LOW("Low", "🔋", "Low Data Mode"),
         AWAY("Away", "🚶", "Away Mode");
 
         companion object {
@@ -86,11 +87,15 @@ class PowerModeManager(private val context: Context) {
     }
 
     /** Switch power mode. Applies immediately. */
-    fun setMode(mode: Mode, scope: CoroutineScope) {
+    fun setMode(mode: Mode, scope: CoroutineScope, isAuto: Boolean = false) {
         val previous = _modeFlow.value
         _modeFlow.value = mode
         prefs.edit().putString(PREF_KEY_POWER_MODE, mode.name).apply()
-        Log.i(TAG, "Power mode: $previous -> $mode")
+        // Save as last manual choice when user picks it directly
+        if (!isAuto) {
+            prefs.edit().putString(PREF_KEY_MANUAL_MODE, mode.name).apply()
+        }
+        Log.i(TAG, "Power mode: $previous -> $mode${if (isAuto) " (auto)" else ""}")
 
         // Cancel existing burst cycle
         burstJob?.cancel()
@@ -114,6 +119,11 @@ class PowerModeManager(private val context: Context) {
         autoDetectJob?.cancel()
         if (enabled) {
             startAutoDetection(networkStateFlow, batteryStateFlow, scope)
+        } else {
+            // Revert to last manually-set mode
+            val lastManual = Mode.fromString(prefs.getString(PREF_KEY_MANUAL_MODE, "LOW") ?: "LOW")
+            Log.i(TAG, "Auto disabled, reverting to manual: $lastManual")
+            setMode(lastManual, scope)
         }
     }
 
@@ -135,7 +145,7 @@ class PowerModeManager(private val context: Context) {
                 val current = _modeFlow.value
                 if (suggested != current) {
                     Log.i(TAG, "Auto-switching: $current -> $suggested")
-                    setMode(suggested, scope)
+                    setMode(suggested, scope, isAuto = true)
                 }
             }
         }
