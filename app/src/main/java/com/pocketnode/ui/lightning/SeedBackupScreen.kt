@@ -52,7 +52,7 @@ fun SeedBackupScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Wallet Seed") },
+                title = { Text("Wallet Seed and Backup") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
@@ -123,10 +123,10 @@ fun SeedBackupScreen(
                                 copied = false
                             },
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.error
+                                containerColor = Color(0xFFD32F2F)
                             )
                         ) {
-                            Text("Show Seed Words")
+                            Text("Show Seed Words", color = Color.White)
                         }
                     } else if (seedWords == null) {
                         Text(
@@ -306,7 +306,7 @@ fun SeedBackupScreen(
                                         modifier = Modifier.weight(1f).height(48.dp),
                                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F))
                                     ) {
-                                        Text("Delete", maxLines = 1)
+                                        Text("Delete", maxLines = 1, color = Color.White)
                                     }
                                 }
                             }

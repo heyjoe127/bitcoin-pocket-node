@@ -549,7 +549,7 @@ fun LightningScreen(
                     onClick = onNavigateToSeedBackup,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("\uD83D\uDD11 Wallet Backup")
+                    Text("\uD83D\uDD11 Wallet Seed and Backup")
                 }
 
                 // Stop node
