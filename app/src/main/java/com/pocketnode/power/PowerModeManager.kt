@@ -208,10 +208,11 @@ class PowerModeManager(private val context: Context) {
         }
     }
 
-    /** Start the burst sync cycle for Away mode */
+    /** Start the burst sync cycle for Low/Away mode */
     private fun startBurstCycle(intervalMs: Long) {
         burstJob?.cancel()
-        burstJob = CoroutineScope(Dispatchers.IO).launch {
+        val scope = activeScope ?: return
+        burstJob = scope.launch(Dispatchers.IO) {
             while (isActive) {
                 // Burst: turn network on, sync, turn off
                 doBurst()
@@ -258,8 +259,10 @@ class PowerModeManager(private val context: Context) {
 
             Log.i(TAG, "Burst sync ${if (synced) "complete" else "timed out"}")
 
-            // Disable network until next burst
-            setNetworkActive(client, false)
+            // Disable network until next burst (but not if we're now in MAX mode)
+            if (_modeFlow.value != Mode.MAX) {
+                setNetworkActive(client, false)
+            }
         } catch (e: kotlinx.coroutines.CancellationException) {
             // Mode changed — don't touch network state, let the new mode handle it
             Log.d(TAG, "Burst sync cancelled (mode change)")
