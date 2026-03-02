@@ -140,6 +140,8 @@ class NodeSetupManager(private val context: Context) {
         sshPassword: String,
         onProgress: (String) -> Unit = {}
     ): SetupResult = withContext(Dispatchers.IO) {
+        // Clear any stale prefs from a previous install (backup restore)
+        clearCredentials()
         val log = StringBuilder()
         fun log(msg: String) {
             Log.d(TAG, msg)
