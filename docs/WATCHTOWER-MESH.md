@@ -59,15 +59,15 @@ A single home watchtower has a single point of failure:
 
 If the watchtower is offline at the exact moment a breach occurs, the justice transaction doesn't get broadcast.
 
-### Concept: Peer Watchtower Network
+### Concept: Decentralised Pocket Node Watchtower Network
 
-Multiple Pocket Node users could watch each other's channels, creating redundancy without trust:
+Pocket Node users in Max mode (plugged in, on WiFi) can opt in to running a watchtower server directly on their phone. No home node required. Every Pocket Node becomes both a watchtower client and server, creating a peer-to-peer protection network.
 
 **How it works:**
-- Watchtower blobs are encrypted. The watchtower can only use them if a breach is detected on-chain. It cannot steal funds or learn channel balances.
-- Users opt in to running a watchtower server on their home node
-- The app discovers and connects to multiple watchtowers (home node + peers)
-- Blobs are pushed to all connected towers. Any one of them can broadcast the justice tx.
+- A Pocket Node in Max mode runs an LND-compatible watchtower server via Tor hidden service
+- Other Pocket Node users connect and push encrypted justice blobs
+- Blobs are encrypted: the tower can only use them if a breach is detected on-chain. It cannot steal funds or learn channel balances.
+- Users push blobs to multiple peer towers for redundancy. Any one tower can broadcast the justice tx.
 
 **Discovery options:**
 1. **Manual exchange**: share watchtower URIs directly (QR code, NFC, messaging)
@@ -80,35 +80,43 @@ Multiple Pocket Node users could watch each other's channels, creating redundanc
 - Multiple towers provide redundancy: you only need one honest tower online during a breach
 - No KYC, no accounts, just pubkey-based identity
 
-### Architecture for Decentralised Towers
+### Architecture
 
 ```
-Phone (ldk-node)
-├── Push blobs to home tower (primary, always)
-├── Push blobs to peer tower A (backup)
-├── Push blobs to peer tower B (backup)
-└── Any tower can independently detect breach and broadcast justice tx
+Phone A (Max mode, plugged in)              Phone B (Low/Away mode, mobile)
+├── ldk-node (own channels)                 ├── ldk-node (own channels)
+├── Watchtower server (opt-in)  <────────── ├── Push blobs to Phone A
+│   ├── Encrypted blob store                ├── Push blobs to Phone C
+│   ├── Watches every block                 └── Any tower can punish breach
+│   └── Broadcasts justice tx
+└── Tor hidden service
 
-Home Node
-├── LND watchtower server (existing)
-├── Optional: also watches for other Pocket Node users
-└── Tor hidden service (existing)
+Phone C (Max mode, plugged in)
+├── ldk-node (own channels)
+├── Watchtower server (opt-in)  <────────── Phone B also pushes here
+└── Tor hidden service
 ```
+
+**The key insight:** a Pocket Node in Max mode is already running bitcoind continuously, syncing every block. Adding watchtower server capability is lightweight: it just stores encrypted blobs and checks each new block for breaches. The phone is already doing the hard work.
+
+**Max mode requirement:** watchtower servers only run in Max mode. In Low or Away mode the phone has gaps between syncs, which defeats the purpose of watching for breaches. When the mode switches away from Max, the server pauses (existing clients will rely on other towers).
 
 **New components needed:**
-- Watchtower server mode in the app or home node (LND already has this)
-- Tower discovery (Nostr relay or manual)
+- Watchtower server implementation in the app (LND wtwire protocol, same as what our client already speaks)
+- Blob storage manager (encrypted blobs on device, prunable after channel close)
+- Tower discovery (Nostr relay or manual URI exchange)
 - Multi-tower blob distribution in WatchtowerBridge
 - Tower health monitoring (detect offline towers, find replacements)
+- Dashboard toggle: "Run watchtower for others" with storage usage indicator
 
 ### Incentives
 
 Watchtower operators get nothing in the normal case (no breaches). Possible incentive models:
-- **Reciprocal**: I watch yours, you watch mine. No payment needed.
-- **Paid**: small Lightning payment per blob stored. Requires watchtower to have Lightning.
+- **Reciprocal**: I watch yours, you watch mine. No payment needed. Natural fit for Pocket Node since every user can be both.
+- **Paid**: small Lightning payment per blob stored. Requires watchtower to have Lightning (which it does).
 - **Altruistic**: community towers run as public goods (like Bitcoin full nodes today)
 
-The reciprocal model fits Pocket Node best: every user with a home node can be both client and server.
+The reciprocal model fits best: you opt in to watch for others, and in return others watch for you.
 
 ## What Is NOT Being Built (Yet)
 
@@ -117,9 +125,10 @@ The reciprocal model fits Pocket Node best: every user with a home node can be b
 - WireGuard provisioning
 - Orbot dependency (embedded Arti handles Tor)
 - Go daemon
+- Home node reliance (towers run on phones, not separate hardware)
 
 ## Priority
 
-1. **Current**: single home node watchtower (working, shipped)
+1. **Current**: single home node watchtower via LDK-to-LND bridge (working, shipped)
 2. **Next**: multi-tower support (push blobs to 2-3 towers instead of one)
-3. **Future**: peer discovery via Nostr, reciprocal watching
+3. **Future**: watchtower server mode on Pocket Node, peer discovery via Nostr, reciprocal network
