@@ -64,10 +64,26 @@ Pocket Node users in Max mode (plugged in, on WiFi) can opt in to running a watc
 - Blobs are encrypted: the tower can only use them if a breach is detected on-chain. It cannot steal funds or learn channel balances.
 - Users push blobs to multiple peer towers for redundancy. Any one tower can broadcast the justice tx.
 
-**Discovery options:**
-1. **Manual exchange**: share watchtower URIs directly (QR code, NFC, messaging)
-2. **Nostr relay**: publish watchtower URIs to a Nostr relay. Users subscribe and add towers they trust. No central directory.
-3. **DNS seeds**: hardcoded fallback towers run by the project or community members
+**Marketplace:**
+
+The app includes a "Browse Watchtowers" screen. Available towers publish to a Nostr relay. Users pick 2-3 towers, pay the fixed rate, done. No manual URI exchange needed.
+
+```
+Available Towers
+├── Tower A - 98.5% uptime - 1000 sats/yr
+├── Tower B - 95.2% uptime - 1000 sats/yr
+├── Tower C - 99.1% uptime - 1000 sats/yr (free tier)
+└── 47 towers available
+```
+
+Fixed rate (1000 sats/year) for all towers. No price competition, no haggling. Users pick based on uptime reputation, not cost. Keeps the UX simple: tap, pay, protected.
+
+Uptime reputation builds from client attestations over time. New towers start with no history.
+
+**Discovery fallbacks:**
+1. **Nostr relay** (primary): decentralised directory, no central server
+2. **Manual exchange**: share tower URIs via QR code for direct peering
+3. **DNS seeds**: hardcoded community towers as bootstrap fallback
 
 **Trust model:**
 - Watchtower blobs reveal nothing about your channels (encrypted until breach)
