@@ -10,6 +10,7 @@ import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.util.concurrent.atomic.AtomicBoolean
+import com.pocketnode.power.PowerModeManager
 
 /**
  * Lightweight Electrum protocol server for personal wallet tracking.
@@ -57,6 +58,8 @@ class ElectrumServer(
                         val handler = ConnectionHandler(client)
                         synchronized(connections) { connections.add(handler) }
                         Thread(handler, "electrum-client-${client.port}").start()
+                        // Trigger burst sync so wallet gets fresh data
+                        PowerModeManager.onWalletConnected?.invoke()
                     } catch (e: java.net.SocketException) {
                         if (running.get()) Log.w(TAG, "Accept error: ${e.message}")
                     }

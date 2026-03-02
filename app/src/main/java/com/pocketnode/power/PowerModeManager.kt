@@ -52,6 +52,12 @@ class PowerModeManager(private val context: Context) {
         private val _nextBurstFlow = MutableStateFlow(0L)
         /** Epoch millis of next scheduled burst (0 = not scheduled) */
         val nextBurstFlow: StateFlow<Long> = _nextBurstFlow
+
+        /** Cooldown: ignore wallet-triggered bursts within this window */
+        private const val WALLET_BURST_COOLDOWN_MS = 120_000L  // 2 min
+
+        /** Callback for external triggers (e.g. Electrum client connect) */
+        var onWalletConnected: (() -> Unit)? = null
     }
 
     enum class Mode(val label: String, val emoji: String, val notificationLabel: String) {
@@ -74,6 +80,7 @@ class PowerModeManager(private val context: Context) {
     private var autoDetectJob: Job? = null
     private var rpc: BitcoinRpcClient? = null
     private var activeScope: CoroutineScope? = null
+    private var lastWalletBurstTime = 0L
     private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     init {
@@ -167,6 +174,8 @@ class PowerModeManager(private val context: Context) {
                            batteryStateFlow: StateFlow<BatteryMonitor.BatteryState>,
                            scope: CoroutineScope) {
         activeScope = scope
+        // Wire up wallet connect callback for burst triggers
+        onWalletConnected = { onWalletClientConnected() }
         if (_autoEnabled.value) {
             startAutoDetection(networkStateFlow, batteryStateFlow, scope)
         }
@@ -252,19 +261,44 @@ class PowerModeManager(private val context: Context) {
         _burstStateFlow.value = BurstState.IDLE
     }
 
-    /** Trigger an immediate burst sync (e.g. when user opens the app in Away mode) */
+    /** Trigger an immediate burst sync (e.g. when user opens the app or wallet connects) */
     fun triggerBurst(scope: CoroutineScope) {
-        if (_modeFlow.value != Mode.AWAY) return
+        val mode = _modeFlow.value
+        if (mode == Mode.MAX) return
         if (_burstStateFlow.value == BurstState.SYNCING) return
+
+        val intervalMs = if (mode == Mode.LOW) LOW_BURST_INTERVAL_MS else AWAY_BURST_INTERVAL_MS
 
         burstJob?.cancel()
         burstJob = null
 
         scope.launch(Dispatchers.IO) {
             doBurst()
-            // Resume normal cycle after manual burst
-            startBurstCycle(AWAY_BURST_INTERVAL_MS)
+            // Resume normal cycle after triggered burst
+            startBurstCycle(intervalMs)
         }
+    }
+
+    /**
+     * Called when an external wallet (BlueWallet etc.) connects to the Electrum server.
+     * Triggers an immediate burst so the wallet gets fresh data and can broadcast txs.
+     * Respects a 2-minute cooldown to avoid repeated triggers.
+     */
+    fun onWalletClientConnected() {
+        val mode = _modeFlow.value
+        if (mode == Mode.MAX) return
+        if (_burstStateFlow.value == BurstState.SYNCING) return
+
+        val now = System.currentTimeMillis()
+        if (now - lastWalletBurstTime < WALLET_BURST_COOLDOWN_MS) {
+            Log.d(TAG, "Wallet connect burst skipped (cooldown)")
+            return
+        }
+        lastWalletBurstTime = now
+
+        val scope = activeScope ?: return
+        Log.i(TAG, "Wallet connected — triggering immediate burst sync")
+        triggerBurst(scope)
     }
 
     /** Clean up when service stops */
