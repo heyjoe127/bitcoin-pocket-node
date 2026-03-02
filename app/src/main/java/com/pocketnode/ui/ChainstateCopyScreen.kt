@@ -1,5 +1,6 @@
 package com.pocketnode.ui
 
+import android.util.Log
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
@@ -185,26 +186,37 @@ fun ChainstateCopyScreen(onBack: () -> Unit, onComplete: () -> Unit = {}) {
                     onClick = {
                         // Check if chainstate archive already on phone or on node via SFTP
                         workScope.launch {
-                            val dataDir = java.io.File(context.filesDir, "bitcoin")
-                            val localArchive = java.io.File(dataDir, "node-sync.tar")
-                            if (localArchive.exists() && localArchive.length() > 1_000_000_000) {
-                                // Already on phone — skip archive step
-                                startWithoutAdmin()
-                            } else {
-                                // Check if archive exists on node via SFTP
-                                val host = setupManager.getSavedHost()
-                                val user = setupManager.getSavedUser()
-                                val pass = setupManager.getSavedPassword()
-                                if (host.isNotEmpty() && user.isNotEmpty() && pass.isNotEmpty()) {
-                                    val exists = chainstateManager.checkArchiveExists(host, setupManager.getSavedPort(), user, pass)
-                                    if (exists) {
-                                        startWithoutAdmin()
+                            try {
+                                val dataDir = java.io.File(context.filesDir, "bitcoin")
+                                val localArchive = java.io.File(dataDir, "node-sync.tar")
+                                if (localArchive.exists() && localArchive.length() > 1_000_000_000) {
+                                    // Already on phone — skip archive step
+                                    startWithoutAdmin()
+                                } else {
+                                    // Check if archive exists on node via SFTP
+                                    val host = setupManager.getSavedHost()
+                                    val user = setupManager.getSavedUser()
+                                    val pass = setupManager.getSavedPassword()
+                                    if (host.isNotEmpty() && user.isNotEmpty() && pass.isNotEmpty()) {
+                                        val exists = try {
+                                            chainstateManager.checkArchiveExists(host, setupManager.getSavedPort(), user, pass)
+                                        } catch (e: Exception) {
+                                            Log.e("ChainstateCopyScreen", "checkArchiveExists failed", e)
+                                            false
+                                        }
+                                        if (exists) {
+                                            startWithoutAdmin()
+                                        } else {
+                                            showAdminCreds = true
+                                        }
                                     } else {
                                         showAdminCreds = true
                                     }
-                                } else {
-                                    showAdminCreds = true
                                 }
+                            } catch (e: Exception) {
+                                // Any unexpected failure — always fall back to asking for admin creds
+                                Log.e("ChainstateCopyScreen", "Start check failed, showing admin dialog", e)
+                                showAdminCreds = true
                             }
                         }
                     },
