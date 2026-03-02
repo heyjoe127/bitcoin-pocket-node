@@ -114,7 +114,7 @@ fun PowerModeSelector(
                 "Same WiFi, less data. Syncs every 15 minutes then disconnects.\n\n" +
                 "• Burst sync to chain tip, then network off until next burst\n" +
                 "• All services update during each burst\n" +
-                (if (lightningInstalled) "• Force-close detection within 15 minutes\n• Lightning can send and receive payments without node connection\n" else "") +
+                (if (lightningInstalled) "• Force-close detection within 15 minutes\n• Sending and receiving Lightning payments doesn't need node connection\n" else "") +
                 "• Opening your wallet keeps peers connected until you close it\n\n" +
                 "Estimated data: ~100-200 MB/day\n\n" +
                 "Best when: on WiFi but not plugged in.")
@@ -122,7 +122,7 @@ fun PowerModeSelector(
             PowerModeManager.Mode.AWAY -> "🚶 Away" to (
                 "Conserves battery and cellular data. Syncs once per hour.\n\n" +
                 "• Burst sync every 60 minutes, network off between\n" +
-                (if (lightningInstalled) "• Lightning can send and receive payments without node connection\n• Lightning safety maintained (watchtower covers gaps)\n• Channel opens disabled\n" else "") +
+                (if (lightningInstalled) "• Sending and receiving Lightning payments doesn't need node connection\n• Lightning safety maintained (watchtower covers gaps)\n• Channel opens disabled\n" else "") +
                 "• Opening your wallet keeps peers connected until you close it\n\n" +
                 "Estimated data: ~25-50 MB/day\n\n" +
                 "Best when: out on cellular, saving battery.")
