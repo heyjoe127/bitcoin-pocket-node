@@ -417,10 +417,11 @@ fun NodeStatusScreen(
                 }
             }
 
-            // Burst sync banner (Away mode)
+            // Burst sync / wallet hold banner
             val burstState by PowerModeManager.burstStateFlow.collectAsState()
             val nextBurst by PowerModeManager.nextBurstFlow.collectAsState()
-            BurstSyncBanner(burstState = burstState, nextBurstMs = nextBurst)
+            val walletConnected by PowerModeManager.walletConnectedFlow.collectAsState()
+            BurstSyncBanner(burstState = burstState, nextBurstMs = nextBurst, walletConnected = walletConnected)
 
             Column(
                 modifier = Modifier

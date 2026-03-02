@@ -141,14 +141,35 @@ fun PowerModeSelector(
 
 /**
  * Burst sync status banner for Low Data and Away modes.
- * Shows next sync time or current sync progress.
+ * Shows next sync time, current sync progress, or wallet hold status.
  */
 @Composable
 fun BurstSyncBanner(
     burstState: PowerModeManager.BurstState,
     nextBurstMs: Long,
+    walletConnected: Boolean = false,
     modifier: Modifier = Modifier
 ) {
+    // Wallet hold takes priority over burst state
+    if (walletConnected) {
+        Row(
+            modifier = modifier
+                .fillMaxWidth()
+                .background(Color(0xFF2196F3))
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = "📱 Wallet connected — network active",
+                color = Color.White,
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Bold
+            )
+        }
+        return
+    }
+
     if (burstState == PowerModeManager.BurstState.IDLE && nextBurstMs == 0L) return
 
     val text = when (burstState) {

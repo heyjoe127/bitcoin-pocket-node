@@ -56,6 +56,10 @@ class PowerModeManager(private val context: Context) {
         /** Callbacks for wallet session tracking (Electrum client connect/disconnect) */
         var onWalletSessionStart: (() -> Unit)? = null
         var onWalletSessionEnd: (() -> Unit)? = null
+
+        /** True while a wallet is connected (persists 10s after disconnect) */
+        private val _walletConnectedFlow = MutableStateFlow(false)
+        val walletConnectedFlow: StateFlow<Boolean> = _walletConnectedFlow
     }
 
     enum class Mode(val label: String, val emoji: String, val notificationLabel: String) {
@@ -79,6 +83,7 @@ class PowerModeManager(private val context: Context) {
     private var rpc: BitcoinRpcClient? = null
     private var activeScope: CoroutineScope? = null
     private var walletHoldingNetwork = false
+    private var walletIndicatorJob: Job? = null
     private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     init {
@@ -294,6 +299,8 @@ class PowerModeManager(private val context: Context) {
         if (walletHoldingNetwork) return  // Already holding
 
         walletHoldingNetwork = true
+        walletIndicatorJob?.cancel()
+        _walletConnectedFlow.value = true
         Log.i(TAG, "Wallet connected — holding network active")
 
         // Cancel burst cycling, just keep network on
@@ -321,7 +328,14 @@ class PowerModeManager(private val context: Context) {
 
         Log.i(TAG, "All wallets disconnected — resuming burst cycle")
 
+        // Keep indicator visible for 10s after disconnect
         val scope = activeScope ?: return
+        walletIndicatorJob?.cancel()
+        walletIndicatorJob = scope.launch {
+            delay(10_000)
+            _walletConnectedFlow.value = false
+        }
+
         scope.launch(Dispatchers.IO) {
             applyMode(mode)
         }
