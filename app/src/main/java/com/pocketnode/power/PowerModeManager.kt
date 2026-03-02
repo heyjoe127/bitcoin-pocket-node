@@ -216,6 +216,9 @@ class PowerModeManager(private val context: Context) {
                 // Burst: turn network on, sync, turn off
                 doBurst()
 
+                // Check if cancelled during burst (mode changed)
+                if (!isActive) break
+
                 // Schedule next burst
                 val nextBurst = System.currentTimeMillis() + intervalMs
                 _nextBurstFlow.value = nextBurst
