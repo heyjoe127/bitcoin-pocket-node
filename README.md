@@ -31,21 +31,52 @@ Turn any Android phone into a fully-validating Bitcoin full node. No server depe
 
 **Node + On-chain wallet**
 
-| Setup checklist | Electrum server | BlueWallet connected | BlueWallet wallet |
-|:---:|:---:|:---:|:---:|
-| ![Setup checklist all green](docs/images/01-checklist.jpg) | ![Electrum server running with tracked wallets](docs/images/03-electrum-server.jpg) | ![BlueWallet connected to localhost](docs/images/04-bluewallet-connected.jpg) | ![BlueWallet wallet view](docs/images/04-bluewallet-wallet.jpg) |
+<table>
+<tr>
+<td align="center" width="25%"><strong>Setup checklist</strong></td>
+<td align="center" width="25%"><strong>Electrum server</strong></td>
+<td align="center" width="25%"><strong>BlueWallet connected</strong></td>
+<td align="center" width="25%"><strong>BlueWallet wallet</strong></td>
+</tr>
+<tr>
+<td><img src="docs/images/01-checklist.jpg" width="200" alt="Setup checklist all green"></td>
+<td><img src="docs/images/03-electrum-server.jpg" width="200" alt="Electrum server running with tracked wallets"></td>
+<td><img src="docs/images/04-bluewallet-connected.jpg" width="200" alt="BlueWallet connected to localhost"></td>
+<td><img src="docs/images/04-bluewallet-wallet.jpg" width="200" alt="BlueWallet wallet view"></td>
+</tr>
+</table>
 
 **Lightning + Version Selection**
 
-| Lightning enabled | Connect Wallet | Version picker |
-|:---:|:---:|:---:|
-| ![Dashboard with Lightning Ready](docs/images/05-lightning-dashboard.jpg) | ![All three wallet services](docs/images/06-connect-wallet.jpg) | ![Choose Bitcoin implementation](docs/images/11-version-picker.png) |
+<table>
+<tr>
+<td align="center" width="33%"><strong>Lightning enabled</strong></td>
+<td align="center" width="33%"><strong>Connect Wallet</strong></td>
+<td align="center" width="33%"><strong>Version picker</strong></td>
+</tr>
+<tr>
+<td><img src="docs/images/05-lightning-dashboard.jpg" width="200" alt="Dashboard with Lightning Ready"></td>
+<td><img src="docs/images/06-connect-wallet.jpg" width="200" alt="All three wallet services"></td>
+<td><img src="docs/images/11-version-picker.png" width="200" alt="Choose Bitcoin implementation"></td>
+</tr>
+</table>
 
 **Lightning Wallet**
 
-| Dashboard | Lightning wallet | Watchtower + Seed | Peer browser |
-|:---:|:---:|:---:|:---:|
-| ![Dashboard with power modes](docs/images/dashboard-home.png) | ![Lightning send/receive](docs/images/lightning-wallet.png) | ![Watchtower active](docs/images/lightning-watchtower.png) | ![Browse Lightning peers](docs/images/peer-browser.png) |
+<table>
+<tr>
+<td align="center" width="25%"><strong>Dashboard</strong></td>
+<td align="center" width="25%"><strong>Lightning wallet</strong></td>
+<td align="center" width="25%"><strong>Watchtower + Seed</strong></td>
+<td align="center" width="25%"><strong>Peer browser</strong></td>
+</tr>
+<tr>
+<td><img src="docs/images/dashboard-home.png" width="200" alt="Dashboard with power modes"></td>
+<td><img src="docs/images/lightning-wallet.png" width="200" alt="Lightning send/receive"></td>
+<td><img src="docs/images/lightning-watchtower.png" width="200" alt="Watchtower active"></td>
+<td><img src="docs/images/peer-browser.png" width="200" alt="Browse Lightning peers"></td>
+</tr>
+</table>
 
 ## How It Works
 
