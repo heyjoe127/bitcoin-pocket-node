@@ -254,7 +254,7 @@ fun SeedBackupScreen(
                                             .padding(12.dp)
                                     ) {
                                         Text(
-                                            "This will permanently delete your current wallet. All channels will be lost. Make sure you have backed up your seed words first.",
+                                            "This will permanently delete your current wallet. You will lose all channels and any value stored. Make sure you have backed up your seed words first.",
                                             color = Color.White,
                                             fontWeight = FontWeight.Bold,
                                             style = MaterialTheme.typography.bodyMedium
