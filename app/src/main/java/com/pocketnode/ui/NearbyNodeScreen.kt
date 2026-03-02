@@ -15,10 +15,17 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import android.content.Intent
+import android.os.Build
+import android.util.Log
+import com.pocketnode.service.BitcoindService
 import com.pocketnode.share.ShareClient
 import com.pocketnode.share.ShareServer
-import com.pocketnode.snapshot.ChainstateManager
+import com.pocketnode.util.ConfigGenerator
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
 /**
@@ -30,20 +37,38 @@ import org.json.JSONObject
 fun NearbyNodeScreen(
     onBack: () -> Unit,
     onComplete: () -> Unit,
-    onScanQr: ((String) -> Unit) -> Unit = {}
+    onScanQr: ((String) -> Unit) -> Unit = {},
+    initialHost: String? = null,
+    initialPort: Int? = null
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val client = remember { ShareClient(context) }
     val downloadState by client.stateFlow.collectAsState()
 
-    var host by remember { mutableStateOf("") }
-    var port by remember { mutableIntStateOf(ShareServer.PORT) }
+    var host by remember { mutableStateOf(initialHost ?: "") }
+    var port by remember { mutableIntStateOf(initialPort ?: ShareServer.PORT) }
     var serverInfo by remember { mutableStateOf<ShareClient.ShareInfo?>(null) }
     var connecting by remember { mutableStateOf(false) }
     var downloading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var includeFilters by remember { mutableStateOf(true) }
+
+    // Auto-connect if opened via deep link with host
+    LaunchedEffect(initialHost) {
+        if (!initialHost.isNullOrEmpty() && serverInfo == null && !connecting) {
+            connecting = true
+            error = null
+            try {
+                serverInfo = client.getInfo(host, port)
+                if (serverInfo == null) error = "Could not connect to $host:$port"
+            } catch (e: Exception) {
+                error = e.message ?: "Connection failed"
+            } finally {
+                connecting = false
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -121,23 +146,112 @@ fun NearbyNodeScreen(
                 }
 
                 if (downloadState.phase == "Download complete") {
+                    var postStatus by remember { mutableStateOf("Creating block file stubs...") }
+                    var postDone by remember { mutableStateOf(false) }
+
                     Spacer(Modifier.height(8.dp))
 
                     Text(
-                        "Creating block file stubs and starting node...",
+                        postStatus,
                         style = MaterialTheme.typography.bodyMedium,
                         textAlign = TextAlign.Center
                     )
 
-                    // Trigger stub creation and node start
+                    if (!postDone) {
+                        Spacer(Modifier.height(8.dp))
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(32.dp),
+                            color = Color(0xFFFF9800)
+                        )
+                    }
+
                     LaunchedEffect(Unit) {
-                        // Save flag that chainstate was downloaded from nearby node
-                        context.getSharedPreferences("pocketnode_prefs", 0)
-                            .edit()
-                            .putBoolean("chainstate_from_nearby", true)
-                            .putBoolean("archive_has_filters", includeFilters && serverInfo?.hasFilters == true)
-                            .apply()
-                        onComplete()
+                        withContext(Dispatchers.IO) {
+                            try {
+                                val bitcoinDir = context.filesDir.resolve("bitcoin")
+                                val blocksDir = bitcoinDir.resolve("blocks")
+                                blocksDir.mkdirs()
+
+                                // Find highest blk file number from downloaded files
+                                val lastBlkNum = blocksDir.listFiles()
+                                    ?.filter { it.name.matches(Regex("blk\\d+\\.dat")) }
+                                    ?.mapNotNull { it.name.removePrefix("blk").removeSuffix(".dat").toIntOrNull() }
+                                    ?.maxOrNull() ?: 0
+
+                                // Create empty stubs for all missing blk/rev files
+                                var stubCount = 0
+                                for (i in 0..lastBlkNum) {
+                                    val blk = blocksDir.resolve("blk%05d.dat".format(i))
+                                    val rev = blocksDir.resolve("rev%05d.dat".format(i))
+                                    if (!blk.exists()) { blk.createNewFile(); stubCount++ }
+                                    if (!rev.exists()) { rev.createNewFile(); stubCount++ }
+                                    if (stubCount > 0 && stubCount % 1000 == 0) {
+                                        postStatus = "Creating stubs: $stubCount files..."
+                                    }
+                                }
+                                Log.i("NearbyNode", "Created $stubCount stub files (0 to $lastBlkNum)")
+
+                                // Configure bitcoin.conf
+                                postStatus = "Configuring node..."
+                                ConfigGenerator.ensureConfig(context)
+                                val confFile = bitcoinDir.resolve("bitcoin.conf")
+                                if (confFile.exists()) {
+                                    var confText = confFile.readText()
+                                    if (!confText.contains("checklevel=")) {
+                                        confText += "\nchecklevel=0\n"
+                                    }
+                                    // Block filters config
+                                    val filtersExist = bitcoinDir.resolve("indexes/blockfilter/basic/db").exists()
+                                    if (includeFilters && filtersExist) {
+                                        if (!confText.contains("blockfilterindex=")) {
+                                            confText += "\n# Lightning support (BIP 157/158 block filters)\nblockfilterindex=1\npeerblockfilters=1\n"
+                                        }
+                                        if (confText.contains("listen=0")) {
+                                            confText = confText.replace("listen=0", "listen=1")
+                                            if (!confText.contains("bind=")) {
+                                                confText = confText.replace("listen=1", "listen=1\nbind=127.0.0.1")
+                                            }
+                                        }
+                                    }
+                                    confFile.writeText(confText)
+                                }
+
+                                // Save prefs
+                                context.getSharedPreferences("pocketnode_prefs", 0).edit()
+                                    .putBoolean("chainstate_from_nearby", true)
+                                    .putBoolean("archive_has_filters", includeFilters && serverInfo?.hasFilters == true)
+                                    .putBoolean("node_was_running", true)
+                                    .apply()
+
+                                // Mark setup done
+                                context.getSharedPreferences("node_setup", 0).edit()
+                                    .putBoolean("setup_done", true)
+                                    .apply()
+
+                                // Start bitcoind
+                                postStatus = "Starting node..."
+                                withContext(Dispatchers.Main) {
+                                    val intent = Intent(context, BitcoindService::class.java)
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                        context.startForegroundService(intent)
+                                    } else {
+                                        context.startService(intent)
+                                    }
+                                }
+
+                                // Wait briefly for service to start
+                                delay(2000)
+                                postStatus = "Node started! ✓"
+                                postDone = true
+
+                                delay(1500)
+                            } catch (e: Exception) {
+                                Log.e("NearbyNode", "Post-download setup failed", e)
+                                postStatus = "Error: ${e.message}"
+                                postDone = true
+                            }
+                        }
+                        if (postDone) onComplete()
                     }
                 }
 

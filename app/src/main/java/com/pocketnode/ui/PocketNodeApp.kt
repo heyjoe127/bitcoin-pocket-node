@@ -190,7 +190,7 @@ fun PocketNodeApp(
                         navController.navigate("internet_download")
                     },
                     onNearbyNode = {
-                        navController.navigate("nearby_node")
+                        navController.navigate("nearby_node?host=&port=")
                     },
                     onPullFromNode = {
                         if (setupManager.isSetupDone()) {
@@ -357,9 +357,22 @@ fun PocketNodeApp(
                     chainHeight = com.pocketnode.service.BitcoindService.lastBlockHeight
                 )
             }
-            composable("nearby_node") {
+            composable(
+                "nearby_node?host={host}&port={port}",
+                arguments = listOf(
+                    androidx.navigation.navArgument("host") { defaultValue = "" },
+                    androidx.navigation.navArgument("port") { defaultValue = "" }
+                ),
+                deepLinks = listOf(
+                    androidx.navigation.navDeepLink { uriPattern = "pocketnode://share?host={host}&port={port}" }
+                )
+            ) { backStackEntry ->
+                val deepLinkHost = backStackEntry.arguments?.getString("host")?.takeIf { it.isNotEmpty() }
+                val deepLinkPort = backStackEntry.arguments?.getString("port")?.takeIf { it.isNotEmpty() }?.toIntOrNull()
                 NearbyNodeScreen(
                     onBack = { navController.popBackStack() },
+                    initialHost = deepLinkHost,
+                    initialPort = deepLinkPort,
                     onComplete = {
                         navController.popBackStack("status", inclusive = false)
                     },

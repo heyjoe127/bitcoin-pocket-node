@@ -118,6 +118,7 @@ class ShareServer(private val context: Context) {
                 Log.d(TAG, "Request: $path")
 
                 when {
+                    path == "/" -> serveLandingPage(socket)
                     path == "/info" -> serveInfo(socket)
                     path == "/manifest" -> serveManifest(socket)
                     path == "/apk" -> serveApk(socket)
@@ -130,6 +131,78 @@ class ShareServer(private val context: Context) {
                 try { socket.close() } catch (_: Exception) {}
             }
         }.also { it.isDaemon = true; it.start() }
+    }
+
+    /**
+     * GET / — landing page for browsers. Works for people with or without the app.
+     */
+    private fun serveLandingPage(socket: Socket) {
+        val chainHeight = getChainHeight()
+        val version = getAppVersion()
+        val hasFilters = File(bitcoinDir, "indexes/blockfilter/basic").let {
+            it.exists() && (it.listFiles()?.size ?: 0) > 1
+        }
+        val filtersText = if (hasFilters) "Lightning block filters included" else ""
+        val html = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pocket Node</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #121212; color: #e0e0e0;
+    display: flex; justify-content: center; align-items: center;
+    min-height: 100vh; padding: 24px;
+  }
+  .card {
+    background: #1e1e1e; border-radius: 16px; padding: 32px;
+    max-width: 400px; width: 100%; text-align: center;
+  }
+  h1 { font-size: 24px; color: #fff; margin-bottom: 4px; }
+  .subtitle { color: #999; font-size: 14px; margin-bottom: 24px; }
+  .stats {
+    background: #2a2a2a; border-radius: 12px; padding: 16px;
+    margin-bottom: 24px; text-align: left;
+  }
+  .stat { display: flex; justify-content: space-between; padding: 6px 0; }
+  .stat-label { color: #999; }
+  .stat-value { color: #fff; font-weight: 600; font-family: monospace; }
+  .filters { color: #4CAF50; font-size: 13px; margin-top: 4px; }
+  .btn {
+    display: block; width: 100%; padding: 16px; border-radius: 12px;
+    font-size: 16px; font-weight: 600; text-decoration: none;
+    margin-bottom: 12px; border: none; cursor: pointer;
+  }
+  .btn-primary { background: #FF9800; color: #000; }
+  .btn-secondary { background: #2a2a2a; color: #FF9800; border: 1px solid #FF9800; }
+  .btn:active { opacity: 0.8; }
+  .note { color: #666; font-size: 12px; margin-top: 16px; line-height: 1.5; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>&#x20BF; Pocket Node</h1>
+  <div class="subtitle">A nearby phone is sharing its Bitcoin node</div>
+  <div class="stats">
+    <div class="stat"><span class="stat-label">Block height</span><span class="stat-value">${"%,d".format(chainHeight)}</span></div>
+    <div class="stat"><span class="stat-label">Version</span><span class="stat-value">$version</span></div>
+    ${if (filtersText.isNotEmpty()) "<div class=\"filters\">&#x26A1; $filtersText</div>" else ""}
+  </div>
+  <a class="btn btn-primary" href="/apk" download>Download Pocket Node APK</a>
+  <a class="btn btn-secondary" href="pocketnode://share?host=${getLocalIpAddress() ?: "unknown"}&port=$PORT">I already have the app</a>
+  <div class="note">
+    After installing, open the app and choose "Copy from nearby phone" during setup,
+    or scan the QR code again from within the app.
+  </div>
+</div>
+</body>
+</html>
+""".trimIndent()
+        sendResponse(socket, 200, "OK", html, "text/html")
     }
 
     /**

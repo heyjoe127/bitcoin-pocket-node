@@ -19,7 +19,6 @@ import androidx.compose.ui.unit.dp
 import com.pocketnode.share.ShareServer
 import com.pocketnode.ui.lightning.QrCodeImage
 import kotlinx.coroutines.delay
-import org.json.JSONObject
 
 /**
  * Share screen: enables phone-to-phone node sharing.
@@ -167,14 +166,8 @@ fun ShareScreen(
 
             } else {
                 // Server running - show QR code
-                val qrData = remember(serverIp, chainHeight, hasFilters) {
-                    JSONObject().apply {
-                        put("host", serverIp ?: "unknown")
-                        put("port", ShareServer.PORT)
-                        put("chainHeight", chainHeight)
-                        put("hasFilters", hasFilters)
-                        put("version", try { context.packageManager.getPackageInfo(context.packageName, 0).versionName } catch (_: Exception) { "?" })
-                    }.toString()
+                val qrData = remember(serverIp) {
+                    "http://${serverIp ?: "unknown"}:${ShareServer.PORT}"
                 }
 
                 Text(
@@ -195,7 +188,7 @@ fun ShareScreen(
                         QrCodeImage(data = qrData, size = 280)
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            "Scan with Pocket Node",
+                            "Scan with any camera or QR reader",
                             style = MaterialTheme.typography.bodySmall,
                             color = Color.Gray
                         )

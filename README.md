@@ -376,10 +376,13 @@ app/src/main/java/com/pocketnode/
 - [Pruned Node Risk Analysis](docs/PRUNED-NODE-RISK-ANALYSIS.md)
 - [LDK Upstream Contribution](docs/LDK-UPSTREAM-CONTRIBUTION.md)
 - [Built-in Tor Design](docs/BUILT-IN-TOR.md)
+- [iOS Port Feasibility](docs/IOS-PORT.md)
+- [Phone-to-Phone Sharing](docs/PHONE-TO-PHONE.md)
 
 ## Roadmap
 
-- **Phone-to-phone node sharing:** Share your validated chainstate and Lightning block filters over WiFi hotspot. One phone at a meetup bootstraps a whole table. See [design doc](docs/PHONE-TO-PHONE.md)
+- **Phone-to-phone node sharing:** Share your validated node with nearby phones over WiFi. Scan a QR code, download the chainstate, full node in ~20 minutes. Works for people who don't have the app yet: the QR opens a landing page where they download the APK first. Up to 2 concurrent transfers. See [design doc](docs/PHONE-TO-PHONE.md)
+- **iOS port:** Burst sync + watchtower + in-process LDK make iOS viable. No one has shipped a full node on iOS because everyone assumed continuous background execution was required. Burst sync removes that assumption. See [feasibility analysis](docs/IOS-PORT.md)
 - **LDK upstream contribution:** improving watchtower API in rust-lightning ChannelMonitor ([#813](https://github.com/lightningdevkit/ldk-node/issues/813)). Draft PR submitted.
 - **Desktop port:** Same app on Linux, macOS, Windows via Compose Multiplatform. See [design doc](docs/DESKTOP-PORT.md)
 - **Tor for RGS and peer connections:** route Lightning gossip and peer traffic through embedded Arti
