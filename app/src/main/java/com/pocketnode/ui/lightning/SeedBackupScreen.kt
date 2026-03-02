@@ -1,6 +1,7 @@
 package com.pocketnode.ui.lightning
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -135,38 +136,22 @@ fun SeedBackupScreen(
                             Text("Back")
                         }
                     } else {
-                        // Display seed words in numbered grid
+                        // Display seed words as plain text
                         seedWords?.let { words ->
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(
-                                        MaterialTheme.colorScheme.surfaceVariant,
-                                        RoundedCornerShape(8.dp)
-                                    )
-                                    .padding(12.dp),
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                // 4 columns x 6 rows
-                                for (row in 0 until 6) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceEvenly
-                                    ) {
-                                        for (col in 0 until 4) {
-                                            val idx = row * 4 + col
-                                            if (idx < words.size) {
-                                                Text(
-                                                    "${idx + 1}. ${words[idx]}",
-                                                    fontFamily = FontFamily.Monospace,
-                                                    fontSize = 13.sp,
-                                                    modifier = Modifier.weight(1f),
-                                                    textAlign = TextAlign.Start
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
+                            SelectionContainer {
+                                Text(
+                                    words.joinToString(" "),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(
+                                            MaterialTheme.colorScheme.surfaceVariant,
+                                            RoundedCornerShape(8.dp)
+                                        )
+                                        .padding(16.dp),
+                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = 15.sp,
+                                    lineHeight = 28.sp
+                                )
                             }
 
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
