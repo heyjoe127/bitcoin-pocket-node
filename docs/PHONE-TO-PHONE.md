@@ -163,6 +163,12 @@ Small scope. The chainstate copy logic already exists. Main new work:
 
 Sharing should require Max Data mode (continuous network, full resources). If the sender switches to Low or Away, sharing pauses with a note: "Switch to Max to continue sharing."
 
+## Community Stats
+
+After a successful transfer, the sender gets a prompt: "Share this transfer anonymously to the community counter?" If they tap OK, a +1 is queued locally and pushed to a public counter when internet is available. No device info, no IPs, no timestamps. Just a count of how many nodes have been bootstrapped phone-to-phone.
+
+This gives the project a public metric: "X nodes shared peer-to-peer" without compromising anyone's privacy.
+
 ## Future
 
 - **WiFi Direct**: no hotspot needed, phones connect peer-to-peer
