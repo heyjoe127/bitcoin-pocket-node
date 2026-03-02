@@ -244,7 +244,7 @@ class PowerModeManager(private val context: Context) {
                         synced = true
                         break
                     }
-                } catch (_: Exception) {}
+                } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) {}
                 delay(5_000)
             }
 
@@ -252,6 +252,10 @@ class PowerModeManager(private val context: Context) {
 
             // Disable network until next burst
             setNetworkActive(client, false)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            // Mode changed — don't touch network state, let the new mode handle it
+            Log.d(TAG, "Burst sync cancelled (mode change)")
+            throw e
         } catch (e: Exception) {
             Log.e(TAG, "Burst sync error: ${e.message}")
             // Leave network off on error, next burst will retry
