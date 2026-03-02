@@ -33,7 +33,10 @@ fun PowerModeSelector(
     val modes = PowerModeManager.Mode.values()
     var showInfo by remember { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
-    val lightningInstalled = remember { LightningService.getInstance(context).hasSeed() }
+    val lightningInstalled = remember {
+        val filterDir = java.io.File(context.filesDir, "bitcoin/indexes/blockfilter/basic")
+        filterDir.exists() && (filterDir.listFiles()?.size ?: 0) > 1
+    }
 
     Row(
         modifier = modifier.fillMaxWidth(),
