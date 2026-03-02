@@ -46,16 +46,14 @@ Turn any Android phone into a fully-validating Bitcoin full node. No server depe
 </tr>
 </table>
 
-**Lightning + Version Selection**
+**Version Selection**
 
 <table>
 <tr>
-<td align="center" width="33%"><strong>Lightning enabled</strong></td>
-<td align="center" width="33%"><strong>Connect Wallet</strong></td>
-<td align="center" width="33%"><strong>Version picker</strong></td>
+<td align="center" width="50%"><strong>Connect Wallet</strong></td>
+<td align="center" width="50%"><strong>Version picker</strong></td>
 </tr>
 <tr>
-<td><img src="docs/images/05-lightning-dashboard.jpg" width="200" alt="Dashboard with Lightning Ready"></td>
 <td><img src="docs/images/06-connect-wallet.jpg" width="200" alt="All three wallet services"></td>
 <td><img src="docs/images/11-version-picker.png" width="200" alt="Choose Bitcoin implementation"></td>
 </tr>
