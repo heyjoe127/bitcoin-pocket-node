@@ -452,10 +452,12 @@ class ChainstateManager private constructor(private val context: Context) {
                 return@withContext false
             }
 
-            // The block index references every blk/rev file by number. If a file is missing,
-            // bitcoind aborts on startup. We only ship the tip blk/rev (needed for validation)
-            // and create empty stubs for all earlier files. Bitcoind opens them but never reads
-            // historical data during normal operation -- it only needs the UTXO set and tip block.
+            // The block index references every blk/rev file by number. bitcoind aborts
+            // if any referenced file is missing, so we create empty stubs for all of them.
+            // On first startup with prune=2048, bitcoind prunes the stubs outside the
+            // prune window. With ~5000 stubs this takes ~15 minutes on a Pixel.
+            // TODO: strip old entries from the LevelDB block index instead of creating
+            // stubs, so bitcoind doesn't need to prune thousands of empty files.
             _state.value = _state.value.copy(progress = "Creating block file stubs...")
             blocksDir.mkdirs()
             var stubCount = 0
