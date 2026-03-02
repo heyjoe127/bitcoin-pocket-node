@@ -31,7 +31,7 @@ fun ChainstateCopyScreen(onBack: () -> Unit, onComplete: () -> Unit = {}) {
     val view = androidx.compose.ui.platform.LocalView.current
     val scope = rememberCoroutineScope()
     // Use a scope that survives recomposition for long-running work
-    val workScope = remember { kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.SupervisorJob()) }
+    val workScope = rememberCoroutineScope()
     val setupManager = remember { NodeSetupManager(context) }
     val chainstateManager = remember { ChainstateManager.getInstance(context) }
     val state by chainstateManager.state.collectAsState()
