@@ -117,8 +117,8 @@ The HTTP server can handle multiple simultaneous downloads. Bandwidth splits bet
 A progress indicator on the sender's screen shows active connections:
 ```
 📡 Sharing Node
-├── Alice's Pixel — 67% (chainstate)
-├── Bob's Samsung — 12% (chainstate)  
+├── Alice's Pixel - 67% (chainstate)
+├── Bob's Samsung - 12% (chainstate)  
 └── 2 active connections
 ```
 
@@ -163,6 +163,5 @@ Sharing should require Max Data mode (continuous network, full resources). If th
 ## Future
 
 - **WiFi Direct**: no hotspot needed, phones connect peer-to-peer
-- **Block filter sharing**: sender who has filters can share them alongside chainstate
 - **Chain of trust display**: "Your chainstate came from Brad's Pixel, which copied from his Umbrel" (provenance, not trust)
 - **Meetup mode**: dedicated full-screen UI optimized for standing around a table, large QR code, progress visible from across the room
