@@ -45,6 +45,7 @@ fun SeedBackupScreen(
     var restoreInput by remember { mutableStateOf("") }
     var restoreError by remember { mutableStateOf<String?>(null) }
     var restoreSuccess by remember { mutableStateOf(false) }
+    var createSuccess by remember { mutableStateOf(false) }
     var copied by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -196,34 +197,89 @@ fun SeedBackupScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        "Restore from Seed",
+                        "Wallet Setup",
                         style = MaterialTheme.typography.titleMedium
                     )
                     Text(
-                        "Restore your Lightning wallet from a 24-word backup. " +
-                                "This will replace the current wallet seed.",
+                        "Restore an existing wallet from a 24-word backup, or create a new one.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
-                    Button(
-                        onClick = {
-                            // Auto-stop Lightning if running
-                            if (lightningService.isRunning()) {
-                                lightningService.stop()
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = {
+                                // Auto-stop Lightning if running
+                                if (lightningService.isRunning()) {
+                                    lightningService.stop()
+                                }
+                                restoreInput = ""
+                                restoreError = null
+                                restoreSuccess = false
+                                showRestoreDialog = true
                             }
-                            restoreInput = ""
-                            restoreError = null
-                            restoreSuccess = false
-                            showRestoreDialog = true
+                        ) {
+                            Text("Restore from Backup")
                         }
-                    ) {
-                        Text("Restore from Mnemonic")
+
+                        var showCreateConfirm by remember { mutableStateOf(false) }
+                        OutlinedButton(
+                            onClick = { showCreateConfirm = true }
+                        ) {
+                            Text("Create New")
+                        }
+
+                        if (showCreateConfirm) {
+                            AlertDialog(
+                                onDismissRequest = { showCreateConfirm = false },
+                                title = { Text("Create New Wallet?") },
+                                text = {
+                                    Text(
+                                        "This will generate a new wallet seed using your device's secure random number generator (256-bit entropy). " +
+                                        "Any existing wallet data will be cleared.\n\n" +
+                                        "Start Lightning after creating to generate the seed, then back up your 24 words immediately."
+                                    )
+                                },
+                                confirmButton = {
+                                    Button(onClick = {
+                                        // Stop Lightning if running
+                                        if (lightningService.isRunning()) {
+                                            lightningService.stop()
+                                        }
+                                        // Delete existing seed and state so LDK generates fresh
+                                        val lightningDir = java.io.File(context.filesDir, "lightning")
+                                        lightningDir.listFiles()?.forEach { file ->
+                                            if (!file.name.startsWith("keys_seed.bak.")) {
+                                                file.deleteRecursively()
+                                            }
+                                        }
+                                        showCreateConfirm = false
+                                        restoreSuccess = false
+                                        createSuccess = true
+                                    }) {
+                                        Text("Create")
+                                    }
+                                },
+                                dismissButton = {
+                                    OutlinedButton(onClick = { showCreateConfirm = false }) {
+                                        Text("Cancel")
+                                    }
+                                }
+                            )
+                        }
                     }
 
                     if (restoreSuccess) {
                         Text(
                             "Wallet restored successfully. Start Lightning to use it.",
+                            color = Color(0xFF4CAF50),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+
+                    if (createSuccess) {
+                        Text(
+                            "Wallet data cleared. Start Lightning to generate a new seed, then back up your 24 words.",
                             color = Color(0xFF4CAF50),
                             style = MaterialTheme.typography.bodyMedium
                         )
