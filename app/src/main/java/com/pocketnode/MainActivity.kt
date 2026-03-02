@@ -36,6 +36,21 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        // Defend against Seedvault/backup restoring stale SharedPreferences.
+        // noBackupFilesDir is NEVER backed up. If our sentinel is missing but
+        // prefs exist, a backup restore happened — wipe the prefs.
+        val sentinel = java.io.File(noBackupFilesDir, ".setup_complete")
+        if (!sentinel.exists()) {
+            val prefsToCheck = listOf("pocketnode_sftp", "pocketnode_prefs", "node_setup", "sync_settings", "ssh_prefs")
+            for (name in prefsToCheck) {
+                val p = getSharedPreferences(name, MODE_PRIVATE)
+                if (p.all.isNotEmpty()) {
+                    android.util.Log.i("MainActivity", "Clearing stale prefs: $name (backup restore detected)")
+                    p.edit().clear().apply()
+                }
+            }
+        }
+
         // Auto-start node if it was running before app was killed
         val prefs = getSharedPreferences("pocketnode_prefs", MODE_PRIVATE)
         if (prefs.getBoolean("node_was_running", false) && !BitcoindService.isRunningFlow.value) {
