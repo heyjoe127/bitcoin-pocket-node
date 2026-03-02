@@ -182,6 +182,12 @@ class PowerModeManager(private val context: Context) {
         onWalletSessionStart = { onWalletSessionStarted() }
         onWalletSessionEnd = { onWalletSessionEnded() }
         if (_autoEnabled.value) {
+            // Immediately evaluate and apply the correct mode before starting the collector,
+            // so we don't briefly run in the wrong mode (e.g. burst cycling in LOW when should be MAX)
+            val suggested = suggestMode(networkStateFlow.value, batteryStateFlow.value)
+            if (suggested != _modeFlow.value) {
+                setMode(suggested, scope, isAuto = true)
+            }
             startAutoDetection(networkStateFlow, batteryStateFlow, scope)
         }
     }
