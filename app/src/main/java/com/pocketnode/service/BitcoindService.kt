@@ -61,6 +61,9 @@ class BitcoindService : Service() {
         private val _activePowerModeManager = MutableStateFlow<PowerModeManager?>(null)
         val activePowerModeManagerFlow: StateFlow<PowerModeManager?> = _activePowerModeManager
 
+        /** Last known block height — used by share screen */
+        var lastBlockHeight: Int = 0
+
         /** Whether bitcoind is currently running — observed by dashboard on launch */
         private val _isRunning = MutableStateFlow(false)
         val isRunningFlow: StateFlow<Boolean> = _isRunning
@@ -327,6 +330,7 @@ class BitcoindService : Service() {
                     val info = rpc.getBlockchainInfo()
                     if (info != null && !info.has("_rpc_error")) {
                         val height = info.optLong("blocks", 0)
+                        lastBlockHeight = height.toInt()
                         val headers = info.optLong("headers", 0)
                         val progress = info.optDouble("verificationprogress", 0.0)
                         val peers = rpc.getPeerCount()

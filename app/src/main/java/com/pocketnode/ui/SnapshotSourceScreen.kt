@@ -23,6 +23,7 @@ fun SnapshotSourceScreen(
     onBack: () -> Unit,
     onPullFromNode: () -> Unit = {},
     onDownloadFromInternet: () -> Unit = {},
+    onNearbyNode: () -> Unit = {},
     @Suppress("UNUSED_PARAMETER") onCopyChainstate: () -> Unit = {}
 ) {
     var showComingSoon by remember { mutableStateOf(false) }
@@ -77,6 +78,14 @@ fun SnapshotSourceScreen(
                 subtitle = "Copy chainstate directly from your node over LAN. " +
                     "Instant full node at chain tip. ~9 GB, ~20 minutes.",
                 onClick = onPullFromNode
+            )
+
+            SnapshotOption(
+                icon = Icons.Outlined.PhoneAndroid,
+                title = "Copy from nearby phone",
+                subtitle = "Someone at a meetup sharing their node? " +
+                    "Scan their QR code and copy over WiFi. ~20 minutes.",
+                onClick = onNearbyNode
             )
 
             Spacer(Modifier.height(8.dp))

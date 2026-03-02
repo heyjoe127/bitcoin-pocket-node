@@ -1,0 +1,299 @@
+package com.pocketnode.ui
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import com.pocketnode.share.ShareClient
+import com.pocketnode.share.ShareServer
+import com.pocketnode.snapshot.ChainstateManager
+import kotlinx.coroutines.launch
+import org.json.JSONObject
+
+/**
+ * Receiver screen: connect to a nearby phone sharing its node.
+ * Supports QR scan or manual IP entry.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun NearbyNodeScreen(
+    onBack: () -> Unit,
+    onComplete: () -> Unit,
+    onScanQr: ((String) -> Unit) -> Unit = {}
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val client = remember { ShareClient(context) }
+    val downloadState by client.stateFlow.collectAsState()
+
+    var host by remember { mutableStateOf("") }
+    var port by remember { mutableIntStateOf(ShareServer.PORT) }
+    var serverInfo by remember { mutableStateOf<ShareClient.ShareInfo?>(null) }
+    var connecting by remember { mutableStateOf(false) }
+    var downloading by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var includeFilters by remember { mutableStateOf(true) }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Nearby Node") },
+                navigationIcon = {
+                    IconButton(onClick = onBack, enabled = !downloading) {
+                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                }
+            )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(24.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            if (downloading) {
+                // Download in progress
+                Text(
+                    "Downloading from nearby node",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(downloadState.phase, fontWeight = FontWeight.Bold)
+
+                        if (downloadState.totalFiles > 0) {
+                            Text(
+                                "File ${downloadState.filesCompleted + 1} of ${downloadState.totalFiles}",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+
+                        if (downloadState.currentFile.isNotEmpty()) {
+                            Text(
+                                downloadState.currentFile.split("/").last(),
+                                style = MaterialTheme.typography.bodySmall,
+                                fontFamily = FontFamily.Monospace,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
+                        }
+
+                        // Overall progress bar
+                        LinearProgressIndicator(
+                            progress = { downloadState.totalProgress / 100f },
+                            modifier = Modifier.fillMaxWidth().height(8.dp),
+                            color = Color(0xFFFF9800)
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                "${downloadState.totalProgress}%",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                "${"%.1f".format(downloadState.bytesDownloaded / (1024.0 * 1024 * 1024))} / ${"%.1f".format(downloadState.totalBytes / (1024.0 * 1024 * 1024))} GB",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
+                }
+
+                if (downloadState.phase == "Download complete") {
+                    Spacer(Modifier.height(8.dp))
+
+                    Text(
+                        "Creating block file stubs and starting node...",
+                        style = MaterialTheme.typography.bodyMedium,
+                        textAlign = TextAlign.Center
+                    )
+
+                    // Trigger stub creation and node start
+                    LaunchedEffect(Unit) {
+                        // Save flag that chainstate was downloaded from nearby node
+                        context.getSharedPreferences("pocketnode_prefs", 0)
+                            .edit()
+                            .putBoolean("chainstate_from_nearby", true)
+                            .putBoolean("archive_has_filters", includeFilters && serverInfo?.hasFilters == true)
+                            .apply()
+                        onComplete()
+                    }
+                }
+
+            } else if (serverInfo != null) {
+                // Connected - show server info and download button
+                Text(
+                    "Node Found",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1B5E20))
+                ) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Connected to $host", fontWeight = FontWeight.Bold, color = Color.White)
+                        Text("Block height: ${"%,d".format(serverInfo!!.chainHeight)}", color = Color.White.copy(alpha = 0.9f))
+                        Text("App version: ${serverInfo!!.version}", color = Color.White.copy(alpha = 0.9f))
+                        if (serverInfo!!.hasFilters) {
+                            Text("Lightning block filters available ⚡", color = Color(0xFF81C784))
+                        }
+                        Text(
+                            "${serverInfo!!.activeTransfers}/${serverInfo!!.maxConcurrent} transfers active",
+                            color = Color.White.copy(alpha = 0.7f)
+                        )
+                    }
+                }
+
+                if (serverInfo!!.hasFilters) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("Include block filters", fontWeight = FontWeight.Medium)
+                            Text(
+                                "Required for Lightning. Adds ~12 GB to download.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
+                        }
+                        Switch(
+                            checked = includeFilters,
+                            onCheckedChange = { includeFilters = it },
+                            colors = SwitchDefaults.colors(checkedTrackColor = Color(0xFFFF9800))
+                        )
+                    }
+                }
+
+                Button(
+                    onClick = {
+                        downloading = true
+                        scope.launch {
+                            val success = client.downloadChainstate(host, port, includeFilters)
+                            if (!success) {
+                                downloading = false
+                                error = "Download failed. Check connection and try again."
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800))
+                ) {
+                    Text("Start Download", fontWeight = FontWeight.Bold)
+                }
+
+            } else {
+                // Not connected - show scan/manual entry
+                Text(
+                    "Connect to a nearby node",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Text(
+                    "Ask the sender to open \"Share My Node\" and scan their QR code, or enter the IP address manually.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                )
+
+                // Scan QR button
+                Button(
+                    onClick = {
+                        onScanQr { qrData ->
+                            try {
+                                val json = JSONObject(qrData)
+                                host = json.getString("host")
+                                port = json.optInt("port", ShareServer.PORT)
+                                // Auto-connect after scan
+                                connecting = true
+                                scope.launch {
+                                    serverInfo = client.getInfo(host, port)
+                                    connecting = false
+                                    if (serverInfo == null) {
+                                        error = "Could not connect to $host:$port"
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                error = "Invalid QR code"
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800)),
+                    enabled = !connecting
+                ) {
+                    Text("Scan QR Code", fontWeight = FontWeight.Bold)
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+                Text("Or enter manually:", style = MaterialTheme.typography.bodyMedium)
+
+                OutlinedTextField(
+                    value = host,
+                    onValueChange = { host = it; error = null },
+                    label = { Text("IP Address") },
+                    placeholder = { Text("192.168.43.1") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+
+                Button(
+                    onClick = {
+                        connecting = true
+                        error = null
+                        scope.launch {
+                            serverInfo = client.getInfo(host, port)
+                            connecting = false
+                            if (serverInfo == null) {
+                                error = "Could not connect to $host:$port. Make sure you're on the same network."
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = host.isNotBlank() && !connecting
+                ) {
+                    Text(if (connecting) "Connecting..." else "Connect")
+                }
+            }
+
+            // Error display
+            if (error != null) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+                ) {
+                    Text(
+                        error!!,
+                        modifier = Modifier.padding(16.dp),
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                }
+            }
+        }
+    }
+}

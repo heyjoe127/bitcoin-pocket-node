@@ -67,6 +67,7 @@ fun NodeStatusScreen(
     onNavigateToBlockFilter: () -> Unit = {},
     onNavigateToWatchtower: () -> Unit = {},
     onNavigateToLightning: () -> Unit = {},
+    onNavigateToShare: () -> Unit = {},
     mempoolPaneVisible: Boolean = false
 ) {
     val context = LocalContext.current
@@ -547,6 +548,7 @@ fun NodeStatusScreen(
                 // Action buttons
                 ActionButtons(
                     isRunning = isRunning,
+                    isSynced = nodeStatus.startsWith("Synced"),
                     showPrice = showPrice,
                     onShowPriceChange = { showPrice = it; appPrefs.edit().putBoolean("show_price", it).apply() },
                     showFairTrade = showFairTrade,
@@ -560,6 +562,7 @@ fun NodeStatusScreen(
                     onNavigateToBlockFilter = onNavigateToBlockFilter,
                     onNavigateToWatchtower = onNavigateToWatchtower,
                     onNavigateToLightning = onNavigateToLightning,
+                    onNavigateToShare = onNavigateToShare,
                     mempoolPaneVisible = mempoolPaneVisible,
                     onToggleNode = {
                         if (isRunning) {
@@ -910,6 +913,7 @@ private fun StatsGrid(
 @Composable
 private fun ActionButtons(
     isRunning: Boolean,
+    isSynced: Boolean = false,
     showPrice: Boolean,
     onShowPriceChange: (Boolean) -> Unit,
     showFairTrade: Boolean,
@@ -923,6 +927,7 @@ private fun ActionButtons(
     onNavigateToBlockFilter: () -> Unit = {},
     onNavigateToWatchtower: () -> Unit = {},
     onNavigateToLightning: () -> Unit = {},
+    onNavigateToShare: () -> Unit = {},
     mempoolPaneVisible: Boolean = false,
     onToggleNode: () -> Unit
 ) {
@@ -1418,6 +1423,20 @@ private fun ActionButtons(
             ) {
                 Text(
                     "⚡ Add Lightning Support",
+                    style = MaterialTheme.typography.labelSmall
+                )
+            }
+        }
+
+        // Share My Node button — only when synced
+        if (isRunning && isSynced) {
+            OutlinedButton(
+                onClick = onNavigateToShare,
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    "📡 Share My Node",
                     style = MaterialTheme.typography.labelSmall
                 )
             }

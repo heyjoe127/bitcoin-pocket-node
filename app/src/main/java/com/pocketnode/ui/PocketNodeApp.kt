@@ -91,6 +91,7 @@ fun PocketNodeApp(
                                 onNavigateToBlockFilter = { navController.navigate("block_filter") },
                                 onNavigateToWatchtower = { navController.navigate("watchtower") },
                                 onNavigateToLightning = { navController.navigate("lightning") },
+                                onNavigateToShare = { navController.navigate("share") },
                                 mempoolPaneVisible = true
                             )
                         }
@@ -121,7 +122,8 @@ fun PocketNodeApp(
                     onNavigateToWallet = { navController.navigate("connect_wallet") },
                     onNavigateToBlockFilter = { navController.navigate("block_filter") },
                     onNavigateToWatchtower = { navController.navigate("watchtower") },
-                    onNavigateToLightning = { navController.navigate("lightning") }
+                    onNavigateToLightning = { navController.navigate("lightning") },
+                    onNavigateToShare = { navController.navigate("share") }
                 )
                 }
             }
@@ -186,6 +188,9 @@ fun PocketNodeApp(
                     onBack = { navController.popBackStack() },
                     onDownloadFromInternet = {
                         navController.navigate("internet_download")
+                    },
+                    onNearbyNode = {
+                        navController.navigate("nearby_node")
                     },
                     onPullFromNode = {
                         if (setupManager.isSetupDone()) {
@@ -338,6 +343,29 @@ fun PocketNodeApp(
                             }
                         }, 1500)
                         navController.popBackStack("status", inclusive = false)
+                    }
+                )
+            }
+            composable("share") {
+                ShareScreen(
+                    onBack = { navController.popBackStack() },
+                    onStopNode = {
+                        val ctx = navController.context
+                        val intent = android.content.Intent(ctx, com.pocketnode.service.BitcoindService::class.java)
+                        ctx.stopService(intent)
+                    },
+                    chainHeight = com.pocketnode.service.BitcoindService.lastBlockHeight
+                )
+            }
+            composable("nearby_node") {
+                NearbyNodeScreen(
+                    onBack = { navController.popBackStack() },
+                    onComplete = {
+                        navController.popBackStack("status", inclusive = false)
+                    },
+                    onScanQr = { callback ->
+                        // Store callback and navigate to QR scanner
+                        navController.navigate("qr_scanner")
                     }
                 )
             }
