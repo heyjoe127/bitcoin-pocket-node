@@ -69,7 +69,7 @@ fun PocketNodeApp(
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             val isWideScreen = maxWidth >= 550.dp
 
-        NavHost(navController = navController, startDestination = if (isFirstRun) "setup" else "status") {
+        NavHost(navController = navController, startDestination = if (isFirstRun) "snapshot" else "status") {
             composable("status") {
                 if (isWideScreen) {
                     // Dual-pane: dashboard left, mempool right
