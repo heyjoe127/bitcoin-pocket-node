@@ -184,11 +184,8 @@ class PowerModeManager(private val context: Context) {
                 _nextBurstFlow.value = 0L
             }
             Mode.LOW -> {
-                // Network stays on but we could reduce peers in future
-                // For now: continuous sync with network on
-                setNetworkActive(client, true)
-                _burstStateFlow.value = BurstState.IDLE
-                _nextBurstFlow.value = 0L
+                // Burst sync every 15 minutes: sync to tip, then sleep
+                startBurstCycle(LOW_BURST_INTERVAL_MS)
             }
             Mode.AWAY -> {
                 // Start burst sync cycle: sync now, then sleep
