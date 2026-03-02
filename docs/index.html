@@ -465,7 +465,7 @@
 
 <section class="hero">
   <div class="container">
-    <div class="hero-badge">v0.10-alpha — BOLT12, QR Codes, Lightning Wallet</div>
+    <div class="hero-badge" id="version-badge">Loading...</div>
     <h1>Bitcoin node in your<br><span class="highlight">pocket</span> in 20 minutes</h1>
     <p class="subtitle">Turn any Android phone into a fully-validating Bitcoin full node with a built-in Lightning wallet. Send and receive payments validated entirely by your own node. No third parties.</p>
     <div class="hero-buttons">
@@ -672,5 +672,20 @@
   </div>
 </footer>
 
+<script>
+  fetch('https://api.github.com/repos/FreeOnlineUser/bitcoin-pocket-node/releases/latest')
+    .then(r => r.json())
+    .then(data => {
+      const badge = document.getElementById('version-badge');
+      if (data.tag_name) {
+        badge.textContent = data.tag_name + (data.name ? ' — ' + data.name : '');
+      } else {
+        badge.textContent = 'Bitcoin Pocket Node';
+      }
+    })
+    .catch(() => {
+      document.getElementById('version-badge').textContent = 'Bitcoin Pocket Node';
+    });
+</script>
 </body>
 </html>
