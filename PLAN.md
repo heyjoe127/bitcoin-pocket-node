@@ -222,6 +222,15 @@ See [Desktop Port Design](docs/DESKTOP-PORT.md) for the full design document.
 
 **Estimated effort:** 2-3 weeks for a working desktop build with dashboard + chainstate copy + version selection.
 
+### iOS Port
+Burst sync + watchtower + in-process LDK accidentally made iOS viable. See [docs/IOS-PORT.md](docs/IOS-PORT.md) for full analysis.
+
+Key insight: iOS BGProcessingTask gives several minutes when charging on WiFi (basically Max mode), and foreground catch-up only takes seconds for a pruned node. Watchtower covers channel safety while the app is suspended. No one has shipped a full node on iOS because everyone assumed continuous background execution was required. Burst sync removes that assumption.
+
+Compose Multiplatform targets iOS (same shared UI as desktop port). bitcoind cross-compiles to ARM64. ldk-node has Swift bindings. Arti (Tor) compiles for iOS.
+
+**Not building now.** Explore after Android is stable. Estimated effort: 13-19 weeks.
+
 ### Nice to Haves
 - [ ] Business mode: point-of-sale UI with preset items and prices, tap to generate Lightning invoice, show QR to customer. For markets, cafes, anyone accepting Lightning in person.
 - [ ] Demo mode: interactive walkthrough of all features with simulated data (no chainstate needed)
