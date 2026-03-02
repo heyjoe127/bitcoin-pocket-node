@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Bitcoin Pocket Node — Full node on your phone in 20 minutes</title>
+<title>Bitcoin Pocket Node - Full node on your phone in 20 minutes</title>
 <meta name="description" content="Turn any Android phone into a fully-validating Bitcoin full node. No server dependency, no ongoing tethering. Your phone becomes a sovereign Bitcoin node.">
 <meta property="og:title" content="Bitcoin Pocket Node">
 <meta property="og:description" content="Full Bitcoin node on your phone in under 20 minutes. Sovereign validation, Lightning support, built-in Electrum server.">
@@ -615,8 +615,8 @@
        <span class="dim">BOLT11+12)</span>      <span class="blue">External wallets</span>
                        <span class="dim">(BlueWallet, Zeus)</span>
 
-  <span class="green">Electrum server</span> <span class="dim">(:50001) — on-chain wallets</span>
-  <span class="green">UTXOracle</span> <span class="dim">— sovereign price from on-chain data</span></div>
+  <span class="green">Electrum server</span> <span class="dim">(:50001) - on-chain wallets</span>
+  <span class="green">UTXOracle</span> <span class="dim">- sovereign price from on-chain data</span></div>
     <p style="text-align: center; margin-top: 24px; color: var(--text-dim); font-size: 0.95em;">
       <strong style="color: var(--orange);">Power modes:</strong> Max Data (continuous), Low Data (15-min burst sync), Away (60-min burst sync).<br>
       Auto-detects WiFi/cellular and charging state. External wallets hold the network active while connected.
@@ -668,7 +668,7 @@
       <a href="https://github.com/FreeOnlineUser/bitcoin-pocket-node/blob/main/PLAN.md">Roadmap</a>
       <a href="chainstate-copy-presentation-v2.html">Presentation</a>
     </div>
-    <p>Built by <a href="https://github.com/FreeOnlineUser">@FreeOnlineUser</a> — MIT License</p>
+    <p>Built by <a href="https://github.com/FreeOnlineUser">@FreeOnlineUser</a> - MIT License</p>
   </div>
 </footer>
 
@@ -678,7 +678,7 @@
     .then(data => {
       const badge = document.getElementById('version-badge');
       if (data.tag_name) {
-        badge.textContent = data.tag_name + (data.name ? ' — ' + data.name : '');
+        badge.textContent = data.tag_name + (data.name ? ' - ' + data.name : '');
       } else {
         badge.textContent = 'Bitcoin Pocket Node';
       }
