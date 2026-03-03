@@ -36,6 +36,8 @@ class ElectrumService(private val context: Context) {
 
         // Shared across all instances so stop/start from different screens works
         private var server: ElectrumServer? = null
+        var addressIndex: AddressIndex? = null
+            private set
         private var scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     }
 
@@ -94,6 +96,7 @@ class ElectrumService(private val context: Context) {
                 // Build components
                 val rpc = BitcoinRpcClient(creds.first, creds.second)
                 val addressIndex = AddressIndex(rpc, context)
+                Companion.addressIndex = addressIndex
                 val methods = ElectrumMethods(rpc, addressIndex)
                 val subscriptions = SubscriptionManager(rpc, addressIndex)
 

@@ -5,6 +5,8 @@ import android.util.Log
 import com.pocketnode.rpc.BitcoinRpcClient
 import org.json.JSONArray
 import org.json.JSONObject
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import java.io.File
 import java.security.MessageDigest
 
@@ -268,7 +270,8 @@ class AddressIndex(private val rpc: BitcoinRpcClient, private val context: Conte
 
         Log.i(TAG, "Index built: ${addressToScripthash.size} addresses, ${scripthashToAddress.size} scripthashes")
 
-        // Recover missing history in background
+        // Check initial recovery status, then recover missing history
+        checkRecoveryStatus()
         recoverMissingHistory()
     }
 
@@ -276,15 +279,56 @@ class AddressIndex(private val rpc: BitcoinRpcClient, private val context: Conte
      * Find addresses with UTXOs but incomplete history, and recover from mempool.space.
      * Only runs once per address (results are persisted).
      */
-    private suspend fun recoverMissingHistory() {
-        val prefs = context.getSharedPreferences("electrum_recovery", Context.MODE_PRIVATE)
-        val recoveredAddresses = prefs.getStringSet("recovered", emptySet())?.toMutableSet() ?: mutableSetOf()
+    data class RecoveryStatus(
+        val totalAddresses: Int = 0,
+        val recoveredAddresses: Int = 0,
+        val totalTxFound: Int = 0,
+        val isRecovering: Boolean = false,
+        val isComplete: Boolean = false
+    )
 
-        // Find addresses that need recovery: have UTXOs but haven't been recovered yet
+    private val _recoveryStatus = MutableStateFlow(RecoveryStatus())
+    val recoveryStatus: StateFlow<RecoveryStatus> = _recoveryStatus
+
+    /**
+     * Check if all tracked addresses have been recovered.
+     */
+    fun checkRecoveryStatus() {
+        val prefs = context.getSharedPreferences("electrum_recovery", Context.MODE_PRIVATE)
+        val recovered = prefs.getStringSet("recovered", emptySet()) ?: emptySet()
+        val total = addressToScripthash.keys.size
+        val done = addressToScripthash.keys.count { it in recovered }
+        val txCount = persistedHistory.values.sumOf { it.size }
+        _recoveryStatus.value = RecoveryStatus(
+            totalAddresses = total,
+            recoveredAddresses = done,
+            totalTxFound = txCount,
+            isComplete = total > 0 && done >= total
+        )
+    }
+
+    /**
+     * Recover missing history from mempool.space.
+     * Called automatically on startup for new addresses, or manually via UI.
+     * @param force If true, re-query all addresses (not just new ones)
+     */
+    suspend fun recoverMissingHistory(force: Boolean = false) {
+        val prefs = context.getSharedPreferences("electrum_recovery", Context.MODE_PRIVATE)
+        val recoveredAddresses = if (force) {
+            mutableSetOf()  // re-query everything
+        } else {
+            prefs.getStringSet("recovered", emptySet())?.toMutableSet() ?: mutableSetOf()
+        }
+
+        // Find addresses that need recovery
         val needsRecovery = mutableSetOf<String>()
         for (addr in addressToScripthash.keys) {
             if (addr in recoveredAddresses) continue
-            // Check if this address has UTXOs in chainstate
+            if (force) {
+                needsRecovery.add(addr)
+                continue
+            }
+            // Only auto-recover addresses with UTXOs
             val scanResult = rpc.call("scantxoutset", JSONArray().apply {
                 put("start")
                 put(JSONArray().apply { put("addr($addr)") })
@@ -297,10 +341,17 @@ class AddressIndex(private val rpc: BitcoinRpcClient, private val context: Conte
             }
         }
 
-        if (needsRecovery.isEmpty()) return
-        Log.i(TAG, "Recovering history for ${needsRecovery.size} addresses with UTXOs")
+        if (needsRecovery.isEmpty()) {
+            checkRecoveryStatus()
+            return
+        }
 
-        // Count known transactions per address
+        Log.i(TAG, "Recovering history for ${needsRecovery.size} addresses")
+        _recoveryStatus.value = _recoveryStatus.value.copy(
+            isRecovering = true,
+            totalAddresses = addressToScripthash.keys.size
+        )
+
         val knownCounts = mutableMapOf<String, Int>()
         for (addr in needsRecovery) {
             val sh = addressToScripthash[addr] ?: continue
@@ -319,11 +370,23 @@ class AddressIndex(private val rpc: BitcoinRpcClient, private val context: Conte
             recoveredAddresses.add(addr)
         }
 
-        // Mark addresses as recovered so we don't re-query
+        // Also mark addresses that had no results as recovered (they're empty)
+        for (addr in needsRecovery) {
+            recoveredAddresses.add(addr)
+        }
+
         prefs.edit().putStringSet("recovered", recoveredAddresses).apply()
         if (newTxCount > 0) {
             Log.i(TAG, "Recovered $newTxCount transactions from mempool.space")
         }
+
+        _recoveryStatus.value = RecoveryStatus(
+            totalAddresses = addressToScripthash.keys.size,
+            recoveredAddresses = recoveredAddresses.size,
+            totalTxFound = persistedHistory.values.sumOf { it.size },
+            isRecovering = false,
+            isComplete = true
+        )
     }
 
     /**

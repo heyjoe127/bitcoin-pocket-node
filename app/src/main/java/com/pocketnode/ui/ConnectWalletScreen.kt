@@ -12,6 +12,7 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Tag
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -24,6 +25,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.pocketnode.service.BitcoindService
 import com.pocketnode.service.ElectrumService
+import kotlinx.coroutines.launch
 
 /**
  * Screen for connecting external wallet apps to the local Electrum server (BWT).
@@ -169,12 +171,75 @@ fun ConnectWalletScreen(onBack: () -> Unit) {
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Electrum Tracked Wallets", fontWeight = FontWeight.Bold)
+                    val recoveryStatus = ElectrumService.addressIndex
+                        ?.recoveryStatus?.collectAsState()?.value
+                    val coroutineScope = rememberCoroutineScope()
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Electrum Tracked Wallets", fontWeight = FontWeight.Bold,
+                            modifier = Modifier.weight(1f))
+                        if (recoveryStatus != null && (xpubs.isNotEmpty() || addresses.isNotEmpty())) {
+                            if (recoveryStatus.isRecovering) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                    color = Color(0xFFFF9800)
+                                )
+                            } else if (recoveryStatus.isComplete) {
+                                Text("✅", style = MaterialTheme.typography.bodyMedium)
+                            } else {
+                                Text("⚠️", style = MaterialTheme.typography.bodyMedium)
+                            }
+                        }
+                    }
                     Text(
-                        "This is a lightweight Electrum server for mobile. Add the wallets you want to track here.",
+                        "Pruned-node native Electrum server. Balances read directly from the UTXO set, so they're accurate from the moment you add a wallet. Transaction history is recovered automatically and persisted forever, even after blocks are pruned.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
+
+                    // Recovery status + manual recover button
+                    if (recoveryStatus != null && (xpubs.isNotEmpty() || addresses.isNotEmpty())) {
+                        Spacer(Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                val statusText = when {
+                                    recoveryStatus.isRecovering -> "Recovering history..."
+                                    recoveryStatus.isComplete -> "${recoveryStatus.totalTxFound} transactions tracked"
+                                    else -> "History may be incomplete"
+                                }
+                                Text(
+                                    statusText,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (recoveryStatus.isComplete) Color(0xFF4CAF50) else Color(0xFFFF9800)
+                                )
+                            }
+                            if (!recoveryStatus.isRecovering) {
+                                OutlinedButton(
+                                    onClick = {
+                                        coroutineScope.launch {
+                                            ElectrumService.addressIndex?.recoverMissingHistory(force = true)
+                                        }
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                    colors = ButtonDefaults.outlinedButtonColors(
+                                        contentColor = Color(0xFFF7931A)
+                                    )
+                                ) {
+                                    Text(
+                                        if (recoveryStatus.isComplete) "Refresh" else "Recover History",
+                                        style = MaterialTheme.typography.labelSmall
+                                    )
+                                }
+                            }
+                        }
+                    }
 
                     if (xpubs.isEmpty() && addresses.isEmpty()) {
                         Spacer(Modifier.height(12.dp))
