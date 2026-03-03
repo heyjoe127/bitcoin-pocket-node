@@ -83,7 +83,7 @@ class ElectrumService(private val context: Context) {
 
                 if (xpubSet.isEmpty() && addresses.isEmpty() && descriptors.isEmpty()) {
                     _state.value = ElectrumState(status = ElectrumState.Status.ERROR,
-                        error = "No xpubs, descriptors, or addresses configured. Add them in Connect Wallet settings.")
+                        error = "No xpubs, descriptors, or addresses configured. Add them in Electrum Tracked Wallets.")
                     return@launch
                 }
 
