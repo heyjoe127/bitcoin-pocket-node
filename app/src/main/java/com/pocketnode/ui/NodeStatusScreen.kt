@@ -354,7 +354,7 @@ fun NodeStatusScreen(
                     // Auto-start BWT when node becomes synced (if it was running before)
                     if (newStatus.startsWith("Synced") && !nodeStatus.startsWith("Synced") && !electrumAutoStarted) {
                         val prefs = context.getSharedPreferences("pocketnode_prefs", android.content.Context.MODE_PRIVATE)
-                        if (prefs.getBoolean("electrum_was_running", false)) {
+                        if (prefs.getBoolean("electrum_was_running", true)) {
                             electrumAutoStarted = true
                             val bwt = com.pocketnode.service.ElectrumService(context)
                             bwt.start(saveState = false) // don't re-save, already true

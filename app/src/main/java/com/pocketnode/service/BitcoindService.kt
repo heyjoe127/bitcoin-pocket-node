@@ -351,7 +351,7 @@ class BitcoindService : Service() {
                         // Auto-start BWT when synced (if it was previously running)
                         if (synced && !electrumAutoStartedInService) {
                             val prefs = getSharedPreferences("pocketnode_prefs", MODE_PRIVATE)
-                            if (prefs.getBoolean("electrum_was_running", false)) {
+                            if (prefs.getBoolean("electrum_was_running", true)) {
                                 electrumAutoStartedInService = true
                                 // BWT (Bitcoin Wallet Tracker) needs a synced node to index wallet history.
                                 // Re-launch it automatically so the user's wallet is ready without manual action.
