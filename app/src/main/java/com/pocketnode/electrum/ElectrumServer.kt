@@ -120,9 +120,20 @@ class ElectrumServer(
                     if (line.isBlank()) continue
 
                     try {
-                        val request = JSONObject(line)
-                        val response = handleRequest(request)
-                        sendJson(response)
+                        val trimmed = line.trim()
+                        if (trimmed.startsWith("[")) {
+                            // Batch request: array of JSON-RPC calls
+                            val batch = org.json.JSONArray(trimmed)
+                            for (i in 0 until batch.length()) {
+                                val request = batch.getJSONObject(i)
+                                val response = handleRequest(request)
+                                sendJson(response)
+                            }
+                        } else {
+                            val request = JSONObject(trimmed)
+                            val response = handleRequest(request)
+                            sendJson(response)
+                        }
                     } catch (e: Exception) {
                         Log.w(TAG, "Bad request: ${e.message}")
                         // Send error response

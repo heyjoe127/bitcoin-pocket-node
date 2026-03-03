@@ -237,33 +237,47 @@ class AddressIndex(private val rpc: BitcoinRpcClient, private val context: Conte
         scripthashToAddress.clear()
         addressToScripthash.clear()
 
-        // Get all addresses known to the wallet
-        // Use listdescriptors to see what's tracked, then derive addresses
-        val result = walletRpc("listreceivedbyaddress", JSONArray().apply {
-            put(0)     // minconf
-            put(true)  // include_empty
-            put(true)  // include_watchonly
-        })
+        // Derive addresses from descriptors using deriveaddresses RPC
+        // This generates the actual addresses BlueWallet will query
+        val listResult = walletRpc("listdescriptors", JSONArray())
+        if (listResult != null) {
+            val descsArray = listResult.optJSONObject("value")?.optJSONArray("descriptors")
+                ?: listResult.optJSONArray("descriptors")
+            if (descsArray != null) {
+                for (i in 0 until descsArray.length()) {
+                    val descObj = descsArray.getJSONObject(i)
+                    val desc = descObj.optString("desc", "")
+                    if (desc.isEmpty()) continue
 
+                    // Derive first 100 addresses from each descriptor (receive + change)
+                    val deriveResult = rpc.call("deriveaddresses", JSONArray().apply {
+                        put(desc)
+                        put(JSONArray().apply { put(0); put(99) })  // range [0, 99]
+                    })
+                    if (deriveResult != null && !deriveResult.has("_rpc_error")) {
+                        // Result could be in "value" or directly an array
+                        val addrs = deriveResult.optJSONArray("value") ?: deriveResult.optJSONArray("result")
+                        if (addrs != null) {
+                            for (j in 0 until addrs.length()) {
+                                val addr = addrs.optString(j, "")
+                                if (addr.isNotEmpty()) indexAddress(addr)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Also index any addresses from listreceivedbyaddress (catch-all)
+        val result = walletRpc("listreceivedbyaddress", JSONArray().apply {
+            put(0); put(true); put(true)
+        })
         if (result != null) {
             val arr = result.optJSONArray("value")
             if (arr != null) {
                 for (i in 0 until arr.length()) {
                     val entry = arr.getJSONObject(i)
-                    val address = entry.getString("address")
-                    indexAddress(address)
-                }
-            }
-        }
-
-        // Also get addresses from getaddressesbylabel (catch-all)
-        val labelResult = walletRpc("getaddressesbylabel", JSONArray().apply { put("") })
-        if (labelResult != null) {
-            val keys = labelResult.keys()
-            while (keys.hasNext()) {
-                val address = keys.next()
-                if (address != "_rpc_error" && address != "value") {
-                    indexAddress(address)
+                    indexAddress(entry.getString("address"))
                 }
             }
         }
