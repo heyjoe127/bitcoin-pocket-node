@@ -32,74 +32,12 @@ class AddressIndex(private val rpc: BitcoinRpcClient, private val context: Conte
     private val addressToScripthash = mutableMapOf<String, String>()
     private val rawDescriptors = mutableListOf<String>()  // for scantxoutset
 
-    // UTXO cache: scanned once, refreshed on new blocks
-    // address -> list of UTXO objects {txid, vout, height, amount(sats)}
-    data class CachedUtxo(val txid: String, val vout: Int, val height: Int, val amountSats: Long)
-    private val utxoCache = mutableMapOf<String, List<CachedUtxo>>()
-    private var utxoCacheHeight = 0  // block height when last scanned
-    private val utxoCacheLock = Object()
+    // (scantxoutset cache removed: using pure descriptor wallet RPCs now)
 
     /**
      * Scan all tracked addresses in one scantxoutset call and cache results.
      * Called after index rebuild and on new blocks.
      */
-    suspend fun refreshUtxoCache() {
-        val allAddresses = addressToScripthash.keys.toList()
-        if (allAddresses.isEmpty()) return
-
-        // Build scan descriptors for all addresses
-        val scanDescs = JSONArray()
-        for (addr in allAddresses) {
-            scanDescs.put("addr($addr)")
-        }
-
-        Log.i(TAG, "Scanning UTXO set for ${allAddresses.size} addresses...")
-        val scanResult = rpc.callLongRunning("scantxoutset", JSONArray().apply {
-            put("start")
-            put(scanDescs)
-        })
-
-        if (scanResult == null || scanResult.has("_rpc_error")) {
-            Log.w(TAG, "scantxoutset failed: ${scanResult?.optString("message")}")
-            return
-        }
-
-        val newCache = mutableMapOf<String, MutableList<CachedUtxo>>()
-        val unspents = scanResult.optJSONArray("unspents")
-        if (unspents != null) {
-            for (i in 0 until unspents.length()) {
-                val utxo = unspents.getJSONObject(i)
-                val addr = utxo.optString("desc", "").let { desc ->
-                    // desc format: "addr(bc1q...)#checksum"
-                    val start = desc.indexOf('(') + 1
-                    val end = desc.indexOf(')')
-                    if (start > 0 && end > start) desc.substring(start, end) else ""
-                }
-                if (addr.isEmpty()) continue
-
-                val cached = CachedUtxo(
-                    txid = utxo.getString("txid"),
-                    vout = utxo.getInt("vout"),
-                    height = utxo.optInt("height", 0),
-                    amountSats = btcToSats(utxo.getDouble("amount"))
-                )
-                newCache.getOrPut(addr) { mutableListOf() }.add(cached)
-
-                // Persist to tx history
-                val sh = addressToScripthash[addr]
-                if (sh != null) persistTx(sh, cached.txid, cached.height)
-            }
-        }
-
-        synchronized(utxoCacheLock) {
-            utxoCache.clear()
-            utxoCache.putAll(newCache)
-            utxoCacheHeight = scanResult.optInt("height", 0)
-        }
-
-        Log.i(TAG, "UTXO cache refreshed: ${newCache.values.sumOf { it.size }} UTXOs across ${newCache.size} addresses at height $utxoCacheHeight")
-    }
-
     // Persistent transaction history: survives block pruning
     private val txHistoryFile = File(context.filesDir, "electrum_tx_history.json")
     // scripthash -> set of "txid:height"
@@ -361,8 +299,6 @@ class AddressIndex(private val rpc: BitcoinRpcClient, private val context: Conte
         Log.i(TAG, "Index built: ${addressToScripthash.size} addresses, ${scripthashToAddress.size} scripthashes")
 
         // Check initial recovery status, then recover missing history
-        // Scan all UTXOs in one call and cache
-        refreshUtxoCache()
         checkRecoveryStatus()
         recoverMissingHistory()
     }
@@ -420,11 +356,13 @@ class AddressIndex(private val rpc: BitcoinRpcClient, private val context: Conte
                 needsRecovery.add(addr)
                 continue
             }
-            // Only auto-recover addresses with UTXOs (from cache)
-            synchronized(utxoCacheLock) {
-                if (utxoCache.containsKey(addr)) {
-                    needsRecovery.add(addr)
-                }
+            // Only auto-recover addresses that have received transactions
+            val txResult = walletRpc("listunspent", JSONArray().apply {
+                put(0); put(9999999); put(JSONArray().apply { put(addr) })
+            })
+            val arr = txResult?.optJSONArray("value")
+            if (arr != null && arr.length() > 0) {
+                needsRecovery.add(addr)
             }
         }
 
@@ -496,30 +434,27 @@ class AddressIndex(private val rpc: BitcoinRpcClient, private val context: Conte
     /**
      * Get confirmed and unconfirmed balance for a scripthash.
      */
+    // -- Query methods: pure descriptor wallet RPCs + persisted history --
+
     suspend fun getBalance(scripthash: String): Pair<Long, Long> {
         val addresses = scripthashToAddress[scripthash] ?: return Pair(0L, 0L)
-
         var confirmed = 0L
         var unconfirmed = 0L
 
-        // Use cached UTXO data (from single scantxoutset call)
-        synchronized(utxoCacheLock) {
-            for (addr in addresses) {
-                val utxos = utxoCache[addr] ?: continue
-                confirmed += utxos.sumOf { it.amountSats }
-            }
-        }
-
-        // Check mempool for unconfirmed (descriptor wallet)
         for (addr in addresses) {
             val result = walletRpc("listunspent", JSONArray().apply {
-                put(0); put(0); put(JSONArray().apply { put(addr) })
+                put(0)     // minconf (include unconfirmed)
+                put(9999999) // maxconf
+                put(JSONArray().apply { put(addr) })
             })
             val arr = result?.optJSONArray("value") ?: continue
             for (i in 0 until arr.length()) {
                 val utxo = arr.getJSONObject(i)
-                if (utxo.optInt("confirmations", 0) == 0) {
-                    unconfirmed += btcToSats(utxo.getDouble("amount"))
+                val sats = btcToSats(utxo.getDouble("amount"))
+                if (utxo.optInt("confirmations", 0) > 0) {
+                    confirmed += sats
+                } else {
+                    unconfirmed += sats
                 }
             }
         }
@@ -527,17 +462,8 @@ class AddressIndex(private val rpc: BitcoinRpcClient, private val context: Conte
         return Pair(confirmed, unconfirmed)
     }
 
-    /**
-     * Get transaction history for a scripthash.
-     * Returns list of (txid, height, fee?) entries.
-     */
     suspend fun getHistory(scripthash: String): JSONArray {
-        val addresses = scripthashToAddress[scripthash]
-        if (addresses == null) {
-            Log.d(TAG, "getHistory: scripthash $scripthash NOT in index (${scripthashToAddress.size} known)")
-            return JSONArray()
-        }
-        Log.d(TAG, "getHistory: scripthash $scripthash -> ${addresses.size} addresses: ${addresses.take(2)}")
+        val addresses = scripthashToAddress[scripthash] ?: return JSONArray()
         val seenTxids = mutableMapOf<String, Int>()  // txid -> height
 
         // Source 1: Persisted history (survives pruning)
@@ -549,7 +475,6 @@ class AddressIndex(private val rpc: BitcoinRpcClient, private val context: Conte
                     val txid = parts[0]
                     val height = parts[1].toIntOrNull() ?: 0
                     val existing = seenTxids[txid]
-                    // Prefer confirmed height over unconfirmed
                     if (existing == null || (height > 0 && existing == 0)) {
                         seenTxids[txid] = height
                     }
@@ -557,37 +482,18 @@ class AddressIndex(private val rpc: BitcoinRpcClient, private val context: Conte
             }
         }
 
-        Log.d(TAG, "getHistory: persisted=${persisted?.size ?: 0} entries for $scripthash")
-
-        // Source 2: Cached UTXO data (from single scantxoutset call at startup/block)
-        synchronized(utxoCacheLock) {
-            for (addr in addresses) {
-                val utxos = utxoCache[addr] ?: continue
-                for (utxo in utxos) {
-                    val existing = seenTxids[utxo.txid]
-                    if (existing == null || (utxo.height > 0 && existing == 0)) {
-                        seenTxids[utxo.txid] = utxo.height
-                    }
-                }
-            }
-        }
-
-        // Source 3: Descriptor wallet (catches mempool + recently confirmed)
+        // Source 2: Descriptor wallet (live data)
         for (addr in addresses) {
             val txResult = walletRpc("listtransactions", JSONArray().apply {
-                put("*")   // label (all)
-                put(100)   // count
-                put(0)     // skip
-                put(true)  // include_watchonly
+                put("*"); put(100); put(0); put(true)
             })
-
             val arr = txResult?.optJSONArray("value") ?: continue
             for (i in 0 until arr.length()) {
                 val tx = arr.getJSONObject(i)
-                val txid = tx.getString("txid")
                 val txAddr = tx.optString("address", "")
                 if (txAddr != addr) continue
 
+                val txid = tx.getString("txid")
                 val confirmations = tx.optInt("confirmations", 0)
                 val height = if (confirmations > 0) {
                     val blockHash = tx.optString("blockhash", "")
@@ -601,12 +507,10 @@ class AddressIndex(private val rpc: BitcoinRpcClient, private val context: Conte
                 if (existing == null || (height > 0 && existing == 0)) {
                     seenTxids[txid] = height
                 }
-                // Persist confirmed transactions
                 if (height > 0) persistTx(scripthash, txid, height)
             }
         }
 
-        // Build result sorted by height
         val result = JSONArray()
         for ((txid, height) in seenTxids.entries.sortedBy { it.value }) {
             result.put(JSONObject().apply {
@@ -617,48 +521,32 @@ class AddressIndex(private val rpc: BitcoinRpcClient, private val context: Conte
         return result
     }
 
-    /**
-     * Get unspent outputs for a scripthash.
-     */
     suspend fun listUnspent(scripthash: String): JSONArray {
         val addresses = scripthashToAddress[scripthash] ?: return JSONArray()
         val result = JSONArray()
-        val seen = mutableSetOf<String>()  // "txid:vout" dedup
+        val seen = mutableSetOf<String>()
 
         for (addr in addresses) {
-            // Confirmed UTXOs from cache
-            synchronized(utxoCacheLock) {
-                val utxos = utxoCache[addr]
-                if (utxos != null) {
-                    for (utxo in utxos) {
-                        val key = "${utxo.txid}:${utxo.vout}"
-                        if (key in seen) continue
-                        seen.add(key)
-                        result.put(JSONObject().apply {
-                            put("tx_hash", utxo.txid)
-                            put("tx_pos", utxo.vout)
-                            put("height", utxo.height)
-                            put("value", utxo.amountSats)
-                        })
-                    }
-                }
-            }
-
-            // Unconfirmed from mempool via descriptor wallet
-            val mempoolResult = walletRpc("listunspent", JSONArray().apply {
-                put(0); put(0); put(JSONArray().apply { put(addr) })
+            val rpcResult = walletRpc("listunspent", JSONArray().apply {
+                put(0); put(9999999); put(JSONArray().apply { put(addr) })
             })
-            val arr = mempoolResult?.optJSONArray("value") ?: continue
+            val arr = rpcResult?.optJSONArray("value") ?: continue
             for (i in 0 until arr.length()) {
                 val utxo = arr.getJSONObject(i)
-                if (utxo.optInt("confirmations", 0) > 0) continue  // already in cache
                 val key = "${utxo.getString("txid")}:${utxo.getInt("vout")}"
                 if (key in seen) continue
                 seen.add(key)
+                val confirmations = utxo.optInt("confirmations", 0)
                 result.put(JSONObject().apply {
                     put("tx_hash", utxo.getString("txid"))
                     put("tx_pos", utxo.getInt("vout"))
-                    put("height", 0)
+                    put("height", if (confirmations > 0) {
+                        val blockHash = utxo.optString("blockhash", "")
+                        if (blockHash.isNotEmpty()) {
+                            val blockInfo = rpc.call("getblockheader", JSONArray().apply { put(blockHash) })
+                            blockInfo?.optInt("height", 0) ?: 0
+                        } else 0
+                    } else 0)
                     put("value", btcToSats(utxo.getDouble("amount")))
                 })
             }
