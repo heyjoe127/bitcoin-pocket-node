@@ -97,8 +97,11 @@ object SetupChecker {
 
     private fun checkBinary(context: Context): Boolean {
         val nativeLibDir = File(context.applicationInfo.nativeLibraryDir)
-        val binary = File(nativeLibDir, "libbitcoind.so")
-        if (binary.exists() && binary.canExecute()) return true
+        // Check for any bitcoind binary (versioned or legacy)
+        val hasVersioned = nativeLibDir.listFiles()?.any {
+            it.name.startsWith("libbitcoind") && it.name.endsWith(".so") && it.canExecute()
+        } == true
+        if (hasVersioned) return true
         // Fallback: legacy location
         val legacy = File(context.filesDir, "bin/bitcoind")
         return legacy.exists() && legacy.canExecute()
