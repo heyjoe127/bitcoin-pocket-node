@@ -121,6 +121,7 @@ class ElectrumServer(
 
                     try {
                         val trimmed = line.trim()
+                        Log.d(TAG, "<<< ${trimmed.take(200)}")
                         if (trimmed.startsWith("[")) {
                             // Batch request: array of JSON-RPC calls
                             val batch = org.json.JSONArray(trimmed)
@@ -290,7 +291,9 @@ class ElectrumServer(
         @Synchronized
         private fun sendJson(json: JSONObject) {
             try {
-                writer?.println(json.toString())
+                val s = json.toString()
+                Log.d(TAG, ">>> ${s.take(200)}")
+                writer?.println(s)
             } catch (e: Exception) {
                 Log.d(TAG, "Send failed: ${e.message}")
             }
