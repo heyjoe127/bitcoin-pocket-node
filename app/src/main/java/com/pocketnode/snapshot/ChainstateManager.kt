@@ -273,12 +273,12 @@ class ChainstateManager private constructor(private val context: Context) {
                 if (hasFilters) {
                     tarComponents.add("indexes/blockfilter/basic/")
                 }
-                // xor.dat may or may not exist (Core 28+ / Knots)
+                // xor.dat and fee_estimates.dat may or may not exist
                 val tarCmd = buildString {
                     append("mkdir -p $destDir && cd $bitcoinDataDir && ")
                     append("tar cf $archivePath ${tarComponents.joinToString(" ")} ")
-                    // Include xor.dat if it exists (non-fatal if missing)
-                    append("$xorFile 2>/dev/null; ")
+                    // Include xor.dat and fee_estimates.dat if they exist (non-fatal if missing)
+                    append("$xorFile fee_estimates.dat 2>/dev/null; ")
                     append("chown $SFTP_USERNAME:$SFTP_USERNAME $archivePath 2>/dev/null; ")
                     append("chmod 644 $archivePath 2>/dev/null; ")
                     append("ls -lh $archivePath")
@@ -441,7 +441,7 @@ class ChainstateManager private constructor(private val context: Context) {
             // Delete old peers/banlist (fresh connections)
             dataDir.resolve("peers.dat").delete()
             dataDir.resolve("banlist.json").delete()
-            dataDir.resolve("fee_estimates.dat").delete()
+            // Keep fee_estimates.dat if present in archive (enables Lightning immediately)
 
             // Extract archive
             _state.value = _state.value.copy(progress = "Extracting archive...")

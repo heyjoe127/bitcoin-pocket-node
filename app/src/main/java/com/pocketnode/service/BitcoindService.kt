@@ -330,6 +330,7 @@ class BitcoindService : Service() {
      * foreground notification with live node stats.
      */
     private var electrumAutoStartedInService = false
+    private var feesPersisted = false
 
     private fun startNotificationUpdater(rpc: BitcoinRpcClient) {
         notificationJob?.cancel()
@@ -374,6 +375,25 @@ class BitcoindService : Service() {
                                     }.start()
                                 }
                             }
+                        }
+
+                        // One-time graceful restart to persist fee_estimates.dat
+                        if (synced && !feesPersisted) {
+                            try {
+                                val feeResult = rpc.call("estimatesmartfee", org.json.JSONArray().put(6))
+                                val feeRate = feeResult?.optDouble("feerate", -1.0) ?: -1.0
+                                if (feeRate > 0) {
+                                    feesPersisted = true
+                                    val prefs = getSharedPreferences("pocketnode_prefs", MODE_PRIVATE)
+                                    if (!prefs.getBoolean("fee_estimates_persisted", false)) {
+                                        Log.i(TAG, "Fee estimates available, graceful restart to persist fee_estimates.dat")
+                                        prefs.edit().putBoolean("fee_estimates_persisted", true).apply()
+                                        stopBitcoind()
+                                        delay(2000)
+                                        startBitcoind()
+                                    }
+                                }
+                            } catch (_: Exception) { }
                         }
 
                         // Read cached oracle price
