@@ -8,8 +8,8 @@ Turn any Android phone into a fully-validating Bitcoin full node. No server depe
 
 ## ✅ Proven
 
-- **Direct chainstate copy:** full node at chain tip in ~20 minutes (167M UTXOs, 4 peers, instant)
-- **AssumeUTXO alternative:** full node in ~3 hours via cryptographically verified UTXO snapshot
+- **Three bootstrap paths:** sync from home node (~30 min), copy from a nearby phone (~30 min), or download from internet (~3 hours)
+- **Phone-to-phone sharing:** scan a QR code, get a full node. No servers, no accounts
 - **3 Bitcoin implementations:** Core 28.1, Core 30, Knots 29.3 (with BIP 110 toggle). Switch with one tap, same chainstate
 - Phone stays cool, runs overnight without issues
 - ~26 GB total disk with Lightning (11 GB chainstate + 2 GB pruned blocks + 13 GB block filters), ~13 GB without
@@ -74,16 +74,22 @@ Turn any Android phone into a fully-validating Bitcoin full node. No server depe
 
 ## How It Works
 
-Two bootstrap paths. Choose speed or trustlessness:
+Three bootstrap paths. Pick whichever suits your situation:
 
-### ⚡ Path 1: Sync from Your Node (Direct Chainstate Copy) ~20 min
+### ⚡ Path 1: Sync from Your Home Node (~30 min)
 1. App connects to your home node (Umbrel, Start9, any Bitcoin node) via SSH
-2. Briefly stops bitcoind, copies chainstate + block index + xor.dat + tip blocks
-3. Creates stub files for historical blocks, starts bitcoind with `checklevel=0`
-4. **Instant full node at chain tip.** No background validation, no catch-up
+2. Briefly stops bitcoind, archives chainstate + block index + block filters
+3. Downloads the archive (~24 GB with Lightning filters), extracts, starts bitcoind
+4. **Full node at chain tip.** Includes block filters for Lightning if your node has them
 
-### 🔒 Path 2: Download from Internet (AssumeUTXO) ~3 hours
-1. Download a UTXO snapshot (~9 GB) from your home node over LAN or the internet
+### 📱 Path 2: Copy from a Nearby Phone (~30 min)
+1. A friend with Pocket Node opens Share, which shows a QR code
+2. You scan it (or visit the URL on any browser to download the app first)
+3. Chainstate + block filters transfer directly over WiFi, phone to phone
+4. **No home node needed.** Zero accounts, zero servers, just two phones on the same network
+
+### 🔒 Path 3: Download from Internet (AssumeUTXO) (~3 hours)
+1. Download a UTXO snapshot (~9 GB) from utxo.download
 2. App loads it via `loadtxoutset` (cryptographically verified by Bitcoin Core)
 3. Phone syncs forward from the snapshot height (~25 min to load, ~2 hours to reach tip)
 4. Background validation confirms everything independently from genesis
@@ -109,7 +115,7 @@ See [Version Selection Design](docs/VERSION-SELECTION.md) and [BIP 110 Research]
 ## Features
 
 - **3 Bitcoin implementations** with one-tap switching: Core 28.1, Core 30, Knots 29.3 (BIP 110 toggle)
-- **Two bootstrap paths:** direct chainstate copy (~20 min) or AssumeUTXO (~3 hours)
+- **Three bootstrap paths:** home node, nearby phone, or internet download
 - **Pure Kotlin Electrum server** so BlueWallet can query your own node (no native dependencies)
 - **Built-in Lightning node** powered by LDK (send, receive, channels, peer browser, seed backup/restore)
 - **LNDHub API** on localhost:3000 for external wallet connectivity (BlueWallet, Zeus)
