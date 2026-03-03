@@ -328,6 +328,7 @@ class AddressIndex(private val rpc: BitcoinRpcClient) {
     suspend fun listUnspent(scripthash: String): JSONArray {
         val addresses = scripthashToAddress[scripthash] ?: return JSONArray()
         val result = JSONArray()
+        val seen = mutableSetOf<String>()  // "txid:vout" dedup
 
         for (addr in addresses) {
             // Use scantxoutset for confirmed UTXOs (reads chainstate directly)
@@ -340,6 +341,9 @@ class AddressIndex(private val rpc: BitcoinRpcClient) {
                 if (unspents != null) {
                     for (i in 0 until unspents.length()) {
                         val utxo = unspents.getJSONObject(i)
+                        val key = "${utxo.getString("txid")}:${utxo.getInt("vout")}"
+                        if (key in seen) continue
+                        seen.add(key)
                         result.put(JSONObject().apply {
                             put("tx_hash", utxo.getString("txid"))
                             put("tx_pos", utxo.getInt("vout"))
@@ -359,6 +363,9 @@ class AddressIndex(private val rpc: BitcoinRpcClient) {
             val arr = mempoolResult?.optJSONArray("value") ?: continue
             for (i in 0 until arr.length()) {
                 val utxo = arr.getJSONObject(i)
+                val key = "${utxo.getString("txid")}:${utxo.getInt("vout")}"
+                if (key in seen) continue
+                seen.add(key)
                 result.put(JSONObject().apply {
                     put("tx_hash", utxo.getString("txid"))
                     put("tx_pos", utxo.getInt("vout"))
