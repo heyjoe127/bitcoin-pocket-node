@@ -267,6 +267,63 @@ class AddressIndex(private val rpc: BitcoinRpcClient, private val context: Conte
         }
 
         Log.i(TAG, "Index built: ${addressToScripthash.size} addresses, ${scripthashToAddress.size} scripthashes")
+
+        // Recover missing history in background
+        recoverMissingHistory()
+    }
+
+    /**
+     * Find addresses with UTXOs but incomplete history, and recover from mempool.space.
+     * Only runs once per address (results are persisted).
+     */
+    private suspend fun recoverMissingHistory() {
+        val prefs = context.getSharedPreferences("electrum_recovery", Context.MODE_PRIVATE)
+        val recoveredAddresses = prefs.getStringSet("recovered", emptySet())?.toMutableSet() ?: mutableSetOf()
+
+        // Find addresses that need recovery: have UTXOs but haven't been recovered yet
+        val needsRecovery = mutableSetOf<String>()
+        for (addr in addressToScripthash.keys) {
+            if (addr in recoveredAddresses) continue
+            // Check if this address has UTXOs in chainstate
+            val scanResult = rpc.call("scantxoutset", JSONArray().apply {
+                put("start")
+                put(JSONArray().apply { put("addr($addr)") })
+            })
+            if (scanResult != null && !scanResult.has("_rpc_error")) {
+                val total = scanResult.optDouble("total_amount", 0.0)
+                if (total > 0) {
+                    needsRecovery.add(addr)
+                }
+            }
+        }
+
+        if (needsRecovery.isEmpty()) return
+        Log.i(TAG, "Recovering history for ${needsRecovery.size} addresses with UTXOs")
+
+        // Count known transactions per address
+        val knownCounts = mutableMapOf<String, Int>()
+        for (addr in needsRecovery) {
+            val sh = addressToScripthash[addr] ?: continue
+            knownCounts[addr] = persistedHistory[sh]?.size ?: 0
+        }
+
+        val recovered = HistoryRecovery.recoverHistory(needsRecovery, knownCounts)
+
+        var newTxCount = 0
+        for ((addr, txs) in recovered) {
+            val sh = addressToScripthash[addr] ?: continue
+            for ((txid, height) in txs) {
+                persistTx(sh, txid, height)
+                newTxCount++
+            }
+            recoveredAddresses.add(addr)
+        }
+
+        // Mark addresses as recovered so we don't re-query
+        prefs.edit().putStringSet("recovered", recoveredAddresses).apply()
+        if (newTxCount > 0) {
+            Log.i(TAG, "Recovered $newTxCount transactions from mempool.space")
+        }
     }
 
     /**
