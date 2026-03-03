@@ -134,18 +134,17 @@ class AddressIndex(private val rpc: BitcoinRpcClient, private val context: Conte
         for (xpub in xpubs) {
             val prefix = xpub.take(4)
             when {
-                // zpub / xpub starting with certain prefixes -> native segwit
-                prefix.startsWith("zpub") || prefix.startsWith("xpub") -> {
-                    allDescriptors.add("wpkh($xpub/0/*)")  // receive
-                    allDescriptors.add("wpkh($xpub/1/*)")  // change
+                prefix.startsWith("zpub") -> {
+                    val converted = convertToXpub(xpub)
+                    allDescriptors.add("wpkh($converted/0/*)")
+                    allDescriptors.add("wpkh($converted/1/*)")
                 }
-                // ypub -> wrapped segwit
                 prefix.startsWith("ypub") -> {
-                    allDescriptors.add("sh(wpkh($xpub/0/*))")
-                    allDescriptors.add("sh(wpkh($xpub/1/*))")
+                    val converted = convertToXpub(xpub)
+                    allDescriptors.add("sh(wpkh($converted/0/*))")
+                    allDescriptors.add("sh(wpkh($converted/1/*))")
                 }
                 else -> {
-                    // Default to wpkh for unknown prefixes
                     allDescriptors.add("wpkh($xpub/0/*)")
                     allDescriptors.add("wpkh($xpub/1/*)")
                 }
@@ -197,7 +196,9 @@ class AddressIndex(private val rpc: BitcoinRpcClient, private val context: Conte
         }
 
         if (importArray.length() > 0) {
+            Log.d(TAG, "importdescriptors payload: ${importArray.toString().take(300)}")
             val result = walletRpc("importdescriptors", JSONArray().apply { put(importArray) })
+            Log.d(TAG, "importdescriptors result: ${result?.toString()?.take(300)}")
             if (result != null) {
                 Log.i(TAG, "Imported ${importArray.length()} new descriptors (${existingDescs.size} already tracked)")
             } else {
@@ -240,9 +241,11 @@ class AddressIndex(private val rpc: BitcoinRpcClient, private val context: Conte
         // Derive addresses from descriptors using deriveaddresses RPC
         // This generates the actual addresses BlueWallet will query
         val listResult = walletRpc("listdescriptors", JSONArray())
+        Log.d(TAG, "listdescriptors raw: ${listResult?.toString()?.take(200)}")
         if (listResult != null) {
             val descsArray = listResult.optJSONObject("value")?.optJSONArray("descriptors")
                 ?: listResult.optJSONArray("descriptors")
+            Log.d(TAG, "descsArray: ${descsArray?.length() ?: "null"} descriptors")
             if (descsArray != null) {
                 for (i in 0 until descsArray.length()) {
                     val descObj = descsArray.getJSONObject(i)
@@ -250,13 +253,18 @@ class AddressIndex(private val rpc: BitcoinRpcClient, private val context: Conte
                     if (desc.isEmpty()) continue
 
                     // Derive first 100 addresses from each descriptor (receive + change)
+                    Log.d(TAG, "Deriving addresses for: ${desc.take(40)}...")
                     val deriveResult = rpc.call("deriveaddresses", JSONArray().apply {
                         put(desc)
                         put(JSONArray().apply { put(0); put(99) })  // range [0, 99]
                     })
-                    if (deriveResult != null && !deriveResult.has("_rpc_error")) {
-                        // Result could be in "value" or directly an array
+                    if (deriveResult == null) {
+                        Log.w(TAG, "deriveaddresses returned null for ${desc.take(40)}")
+                    } else if (deriveResult.has("_rpc_error")) {
+                        Log.w(TAG, "deriveaddresses error: ${deriveResult.optString("message")}")
+                    } else {
                         val addrs = deriveResult.optJSONArray("value") ?: deriveResult.optJSONArray("result")
+                        Log.d(TAG, "deriveaddresses returned ${addrs?.length() ?: 0} addresses")
                         if (addrs != null) {
                             for (j in 0 until addrs.length()) {
                                 val addr = addrs.optString(j, "")
@@ -644,10 +652,7 @@ class AddressIndex(private val rpc: BitcoinRpcClient, private val context: Conte
      * Make an RPC call to the tracking wallet specifically.
      */
     private suspend fun walletRpc(method: String, params: Any = JSONArray()): JSONObject? {
-        // Use the /wallet/<name> endpoint
-        // For now, use the default wallet (we load it on startup)
-        // TODO: Use wallet-specific endpoint when BitcoinRpcClient supports it
-        return rpc.call(method, params)
+        return rpc.callWallet(WALLET_NAME, method, params)
     }
 
     /**
@@ -664,7 +669,71 @@ class AddressIndex(private val rpc: BitcoinRpcClient, private val context: Conte
      */
     private suspend fun addChecksum(descriptor: String): String? {
         val result = rpc.call("getdescriptorinfo", JSONArray().apply { put(descriptor) })
-        return result?.optString("descriptor")
+        if (result == null || result.has("_rpc_error")) {
+            Log.w(TAG, "getdescriptorinfo failed for ${descriptor.take(40)}: ${result?.optString("message")}")
+            return null
+        }
+        val desc = result.optString("descriptor", "")
+        return if (desc.isNotEmpty()) desc else null
+    }
+
+    /**
+     * Convert zpub/ypub to xpub by swapping the version bytes.
+     * zpub (0x04B24746) and ypub (0x049D7CB2) -> xpub (0x0488B21E)
+     * All are Base58Check-encoded 78-byte payloads; only the first 4 bytes differ.
+     */
+    private fun convertToXpub(key: String): String {
+        val decoded = base58CheckDecode(key) ?: return key
+        // Replace version bytes with xpub version (0x0488B21E)
+        decoded[0] = 0x04.toByte()
+        decoded[1] = 0x88.toByte()
+        decoded[2] = 0xB2.toByte()
+        decoded[3] = 0x1E.toByte()
+        return base58CheckEncode(decoded)
+    }
+
+    private fun base58CheckDecode(input: String): ByteArray? {
+        val alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+        var num = java.math.BigInteger.ZERO
+        for (c in input) {
+            val idx = alphabet.indexOf(c)
+            if (idx < 0) return null
+            num = num.multiply(java.math.BigInteger.valueOf(58)).add(java.math.BigInteger.valueOf(idx.toLong()))
+        }
+        val bytes = num.toByteArray()
+        // Count leading 1s (zero bytes)
+        val leadingZeros = input.takeWhile { it == '1' }.length
+        val stripped = if (bytes[0] == 0.toByte()) bytes.drop(1).toByteArray() else bytes
+        val result = ByteArray(leadingZeros) + stripped
+        // Verify checksum (last 4 bytes)
+        val payload = result.dropLast(4).toByteArray()
+        val checksum = result.takeLast(4).toByteArray()
+        val hash = MessageDigest.getInstance("SHA-256").digest(
+            MessageDigest.getInstance("SHA-256").digest(payload)
+        )
+        if (!hash.take(4).toByteArray().contentEquals(checksum)) return null
+        return payload
+    }
+
+    private fun base58CheckEncode(payload: ByteArray): String {
+        val alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+        val checksum = MessageDigest.getInstance("SHA-256").digest(
+            MessageDigest.getInstance("SHA-256").digest(payload)
+        )
+        val data = payload + checksum.take(4).toByteArray()
+        var num = java.math.BigInteger(1, data)
+        val sb = StringBuilder()
+        val base = java.math.BigInteger.valueOf(58)
+        while (num > java.math.BigInteger.ZERO) {
+            val (q, r) = num.divideAndRemainder(base)
+            sb.append(alphabet[r.toInt()])
+            num = q
+        }
+        // Leading zero bytes
+        for (b in data) {
+            if (b == 0.toByte()) sb.append('1') else break
+        }
+        return sb.reverse().toString()
     }
 
     private fun btcToSats(btc: Double): Long = (btc * 100_000_000L).toLong()

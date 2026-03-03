@@ -26,10 +26,17 @@ class BitcoinRpcClient(
     /**
      * Make a raw JSON-RPC call. Returns the "result" field, or null on error.
      */
-    suspend fun call(method: String, params: Any = JSONArray(), connectTimeoutMs: Int = 5_000, readTimeoutMs: Int = 30_000): JSONObject? =
+    /**
+     * Make a wallet-specific RPC call via /wallet/<name> endpoint.
+     */
+    suspend fun callWallet(walletName: String, method: String, params: Any = JSONArray()): JSONObject? =
+        call(method, params, walletPath = "/wallet/$walletName")
+
+    suspend fun call(method: String, params: Any = JSONArray(), connectTimeoutMs: Int = 5_000, readTimeoutMs: Int = 30_000, walletPath: String? = null): JSONObject? =
         withContext(Dispatchers.IO) {
             try {
-                val url = URL("http://$host:$port/")
+                val path = walletPath ?: "/"
+                val url = URL("http://$host:$port$path")
                 val conn = url.openConnection() as HttpURLConnection
                 conn.requestMethod = "POST"
                 conn.setRequestProperty("Content-Type", "application/json")
