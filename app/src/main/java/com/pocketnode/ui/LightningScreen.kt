@@ -1,5 +1,7 @@
 package com.pocketnode.ui
 
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -209,6 +211,44 @@ fun LightningScreen(
             if (effectiveState.status == LightningService.LightningState.Status.STOPPED ||
                 effectiveState.status == LightningService.LightningState.Status.ERROR) {
                 val isError = effectiveState.status == LightningService.LightningState.Status.ERROR
+
+                // Check if fee estimates are available
+                var feesAvailable by remember { mutableStateOf<Boolean?>(null) }
+                LaunchedEffect(Unit) {
+                    val rpc = com.pocketnode.rpc.BitcoinRpcClient(rpcUser, rpcPassword)
+                    while (isActive) {
+                        try {
+                            val result = rpc.call("estimatesmartfee", org.json.JSONArray().put(6))
+                            val feeRate = result?.optDouble("feerate", -1.0) ?: -1.0
+                            feesAvailable = feeRate > 0
+                        } catch (_: Exception) {
+                            feesAvailable = false
+                        }
+                        if (feesAvailable == true) break
+                        delay(10_000)
+                    }
+                }
+
+                val canStart = feesAvailable == true
+                if (feesAvailable == false) {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                            Text(
+                                "Waiting for fee estimates from bitcoind. This is normal after a fresh sync, just needs a few confirmed blocks.",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                }
+
                 Button(
                     onClick = {
                         scope.launch(kotlinx.coroutines.Dispatchers.IO) {
@@ -216,8 +256,10 @@ fun LightningScreen(
                         }
                     },
                     modifier = Modifier.fillMaxWidth().height(48.dp),
-                    enabled = true, // always tappable when shown (STOPPED or ERROR)
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800))
+                    enabled = canStart,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (canStart) Color(0xFFFF9800) else Color.Gray
+                    )
                 ) {
                     Text("⚡ Start Lightning Node")
                 }

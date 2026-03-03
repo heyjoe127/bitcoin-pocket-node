@@ -30,6 +30,18 @@ class NodeSetupManager(private val context: Context) {
         private const val SFTP_USERNAME = "pocketnode"
         private const val PASSWORD_LENGTH = 20
         private val PASSWORD_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789".toCharArray()
+
+        // In-memory only — never persisted to disk. Static so it survives across screen instances.
+        var adminPasswordInMemory: String = ""
+            private set
+
+        fun setAdminPasswordInMemory(password: String) {
+            adminPasswordInMemory = password
+        }
+
+        fun clearAdminPassword() {
+            adminPasswordInMemory = ""
+        }
     }
 
     data class SetupResult(

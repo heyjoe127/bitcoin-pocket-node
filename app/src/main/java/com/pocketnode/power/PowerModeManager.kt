@@ -3,8 +3,8 @@ package com.pocketnode.power
 import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
-import com.pocketnode.network.NetworkState
 import com.pocketnode.rpc.BitcoinRpcClient
+import com.pocketnode.network.NetworkState
 import com.pocketnode.service.BatteryMonitor
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -33,8 +33,8 @@ class PowerModeManager(private val context: Context) {
 
         // Peer counts during burst
         private const val MAX_PEERS = 8
-        private const val LOW_PEERS = 4
-        private const val AWAY_PEERS = 2
+        private const val LOW_PEERS = 8
+        private const val AWAY_PEERS = 8
 
         private const val PREF_KEY_AUTO_POWER = "power_mode_auto"
         private const val PREF_KEY_MANUAL_MODE = "power_mode_manual"
@@ -60,6 +60,14 @@ class PowerModeManager(private val context: Context) {
         /** True while a wallet is connected (persists 10s after disconnect) */
         private val _walletConnectedFlow = MutableStateFlow(false)
         val walletConnectedFlow: StateFlow<Boolean> = _walletConnectedFlow
+
+        /** True while initial block download is in progress — forces Max mode */
+        private val _initialSyncHold = MutableStateFlow(false)
+        val initialSyncHoldFlow: StateFlow<Boolean> = _initialSyncHold
+
+        fun releaseInitialSyncHold() {
+            _initialSyncHold.value = false
+        }
     }
 
     enum class Mode(val label: String, val emoji: String, val notificationLabel: String) {
@@ -91,13 +99,48 @@ class PowerModeManager(private val context: Context) {
         _autoEnabled.value = prefs.getBoolean(PREF_KEY_AUTO_POWER, false)
     }
 
+    private var initialSyncJob: Job? = null
+
     /** Set the RPC client once bitcoind is running */
     fun setRpc(client: BitcoinRpcClient) {
         rpc = client
     }
 
+    /**
+     * Hold Max mode until initial block download completes.
+     * Call after node starts if IBD is detected.
+     */
+    fun startInitialSyncHold(scope: CoroutineScope, rpcClient: BitcoinRpcClient) {
+        if (_initialSyncHold.value) return
+        _initialSyncHold.value = true
+        Log.i(TAG, "Initial sync hold: forcing Max mode until IBD completes")
+        setMode(Mode.MAX, scope, isAuto = true)
+
+        initialSyncJob?.cancel()
+        initialSyncJob = scope.launch(Dispatchers.IO) {
+            while (isActive) {
+                delay(30_000)
+                try {
+                    val info = rpcClient.call("getblockchaininfo") ?: continue
+                    val ibd = info.optBoolean("initialblockdownload", true)
+                    if (!ibd) {
+                        Log.i(TAG, "Initial sync hold: IBD complete, releasing Max hold")
+                        _initialSyncHold.value = false
+                        initialSyncJob = null
+                        return@launch
+                    }
+                } catch (_: Exception) {}
+            }
+        }
+    }
+
     /** Switch power mode. Applies immediately. */
     fun setMode(mode: Mode, scope: CoroutineScope, isAuto: Boolean = false) {
+        // Block non-Max changes during initial sync hold
+        if (_initialSyncHold.value && mode != Mode.MAX) {
+            Log.i(TAG, "Initial sync hold active — ignoring switch to $mode")
+            return
+        }
         val previous = _modeFlow.value
         _modeFlow.value = mode
         prefs.edit().putString(PREF_KEY_POWER_MODE, mode.name).apply()

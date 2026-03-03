@@ -152,8 +152,30 @@ fun BurstSyncBanner(
     burstState: PowerModeManager.BurstState,
     nextBurstMs: Long,
     walletConnected: Boolean = false,
+    peerCount: Int = 0,
     modifier: Modifier = Modifier
 ) {
+    // Initial sync hold takes highest priority
+    val initialSyncHold by PowerModeManager.initialSyncHoldFlow.collectAsState()
+    if (initialSyncHold) {
+        Row(
+            modifier = modifier
+                .fillMaxWidth()
+                .background(Color(0xFFFF9800))
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = "⚡ Max mode locked: syncing to chain tip",
+                color = Color.White,
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Bold
+            )
+        }
+        return
+    }
+
     // Wallet hold takes priority over burst state
     if (walletConnected) {
         Row(
@@ -165,7 +187,7 @@ fun BurstSyncBanner(
             horizontalArrangement = Arrangement.Center
         ) {
             Text(
-                text = "📱 Wallet connected — network active",
+                text = "📱 Wallet connected, network active",
                 color = Color.White,
                 style = MaterialTheme.typography.bodySmall,
                 fontWeight = FontWeight.Bold
@@ -182,13 +204,13 @@ fun BurstSyncBanner(
 
     val text = when (burstState) {
         PowerModeManager.BurstState.SYNCING -> "⏳ Burst sync in progress..."
-        PowerModeManager.BurstState.WAITING -> {
+        PowerModeManager.BurstState.WAITING -> if (peerCount > 0) return else {
             val remaining = nextBurstMs - System.currentTimeMillis()
             if (remaining > 0) {
                 val minutes = (remaining / 60_000).toInt()
-                "💤 Network paused — next sync in ${minutes}min"
+                "💤 Network paused, next sync in ${minutes}min"
             } else {
-                "💤 Network paused — syncing soon..."
+                "💤 Network paused, syncing soon..."
             }
         }
         PowerModeManager.BurstState.IDLE -> return

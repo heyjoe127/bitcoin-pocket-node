@@ -94,6 +94,41 @@ fun SeedBackupScreen(
                 }
             }
 
+            // What the seed covers
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        "What does my seed protect?",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        "Your seed words protect all your bitcoin. If you lose your phone " +
+                                "or the app is removed, your seed is all you need to recover your funds.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Text(
+                        "Lightning channels are not backed up separately. If your app data " +
+                                "is lost, your channel peers will eventually force-close and your " +
+                                "share of the balance settles back on-chain. Your seed recovers those funds automatically.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Text(
+                        "Channels lost = temporary inconvenience, not lost funds.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF4CAF50)
+                    )
+                }
+            }
+
             // View seed section
             Card {
                 Column(

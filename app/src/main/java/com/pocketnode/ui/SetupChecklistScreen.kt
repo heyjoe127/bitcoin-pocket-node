@@ -134,7 +134,7 @@ fun SetupChecklistScreen(
                     title = "Remote Node Access",
                     description = when {
                         state.remoteNodeConfigured -> "SFTP access configured on your node"
-                        else -> "Optional — connect to your home node for fast sync"
+                        else -> "Optional: connect to your home node for fast sync"
                     },
                     completed = state.remoteNodeConfigured,
                     optional = true,
@@ -146,7 +146,7 @@ fun SetupChecklistScreen(
                     step = 4,
                     title = "UTXO Snapshot",
                     description = when {
-                        state.snapshotLoaded -> "Chainstate loaded — node has blockchain data"
+                        state.snapshotLoaded -> "Chainstate loaded. Node has blockchain data"
                         else -> "Load a UTXO snapshot or copy chainstate from your node"
                     },
                     completed = state.snapshotLoaded,
@@ -160,7 +160,7 @@ fun SetupChecklistScreen(
                     description = when {
                         state.nodeSynced -> "Node is synced to chain tip"
                         state.nodeRunning && state.blockHeight > 0 ->
-                            "Syncing — block %,d (${"%.1f".format(state.syncProgress * 100)}%%)".format(state.blockHeight)
+                            "Syncing: block %,d (${"%.1f".format(state.syncProgress * 100)}%%)".format(state.blockHeight)
                         state.snapshotLoaded -> "Start node to begin syncing"
                         else -> "Complete previous steps first"
                     },

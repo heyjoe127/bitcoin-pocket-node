@@ -49,6 +49,11 @@ fun ChainstateCopyScreen(onBack: () -> Unit, onComplete: () -> Unit = {}) {
     var started by remember { mutableStateOf(false) }
     var showConfirm by remember { mutableStateOf(true) }
     var showAdminCreds by remember { mutableStateOf(false) }
+    // Remember last admin creds for retry
+    var lastAdminHost by remember { mutableStateOf("") }
+    var lastAdminPort by remember { mutableIntStateOf(22) }
+    var lastAdminUser by remember { mutableStateOf("") }
+    var lastAdminPass by remember { mutableStateOf("") }
     // Track the highest step reached for proper tick/cross display
     var highestStepReached by remember { mutableIntStateOf(0) }
 
@@ -61,6 +66,7 @@ fun ChainstateCopyScreen(onBack: () -> Unit, onComplete: () -> Unit = {}) {
 
     // Function to start with SFTP-only (no admin creds)
     fun startWithoutAdmin() {
+        android.util.Log.i("ChainstateCopyScreen", "startWithoutAdmin called")
         showConfirm = false
         started = true
         highestStepReached = 0
@@ -92,6 +98,10 @@ fun ChainstateCopyScreen(onBack: () -> Unit, onComplete: () -> Unit = {}) {
                 showConfirm = false
                 started = true
                 highestStepReached = 0
+                lastAdminHost = creds.host
+                lastAdminPort = creds.port
+                lastAdminUser = creds.username
+                lastAdminPass = creds.password
                 workScope.launch {
                     val user = setupManager.getSavedUser()
                     val pass = setupManager.getSavedPassword()
@@ -185,37 +195,39 @@ fun ChainstateCopyScreen(onBack: () -> Unit, onComplete: () -> Unit = {}) {
 
                 Button(
                     onClick = {
-                        // Check if chainstate archive already on phone or on node via SFTP
-                        workScope.launch {
-                            try {
-                                val dataDir = java.io.File(context.filesDir, "bitcoin")
-                                val localArchive = java.io.File(dataDir, "node-sync.tar")
-                                if (localArchive.exists() && localArchive.length() > 1_000_000_000) {
-                                    startWithoutAdmin()
-                                } else {
-                                    val host = setupManager.getSavedHost()
-                                    val user = setupManager.getSavedUser()
-                                    val pass = setupManager.getSavedPassword()
-                                    if (host.isNotEmpty() && user.isNotEmpty() && pass.isNotEmpty()) {
-                                        val exists = try {
-                                            chainstateManager.checkArchiveExists(host, setupManager.getSavedPort(), user, pass)
-                                        } catch (e: Exception) {
-                                            android.util.Log.e("ChainstateCopyScreen", "checkArchiveExists failed", e)
-                                            false
-                                        }
-                                        if (exists) {
-                                            startWithoutAdmin()
-                                        } else {
-                                            showAdminCreds = true
-                                        }
-                                    } else {
-                                        showAdminCreds = true
-                                    }
-                                }
-                            } catch (e: Exception) {
-                                android.util.Log.e("ChainstateCopyScreen", "Start check failed, showing admin dialog", e)
-                                showAdminCreds = true
+                        // Check if archive already downloaded to phone
+                        val dataDir = java.io.File(context.filesDir, "bitcoin")
+                        val localArchive = java.io.File(dataDir, "node-sync.tar")
+                        if (localArchive.exists() && localArchive.length() > 1_000_000_000) {
+                            android.util.Log.i("ChainstateCopyScreen", "Local archive valid, skipping admin dialog")
+                            startWithoutAdmin()
+                        } else if (NodeSetupManager.adminPasswordInMemory.isNotEmpty() && setupManager.getSavedAdminUser().isNotEmpty()) {
+                            // Admin creds carried over from NodeSetupScreen — start directly
+                            android.util.Log.i("ChainstateCopyScreen", "Using admin creds from setup, skipping dialog")
+                            val host = setupManager.getSavedHost()
+                            val port = setupManager.getSavedPort()
+                            val adminUser = setupManager.getSavedAdminUser()
+                            val adminPass = NodeSetupManager.adminPasswordInMemory
+                            lastAdminHost = host
+                            lastAdminPort = port
+                            lastAdminUser = adminUser
+                            lastAdminPass = adminPass
+                            showConfirm = false
+                            started = true
+                            highestStepReached = 0
+                            workScope.launch {
+                                chainstateManager.copyChainstate(
+                                    sshHost = host, sshPort = port,
+                                    sshUser = adminUser, sshPassword = adminPass,
+                                    sftpUser = setupManager.getSavedUser(),
+                                    sftpPassword = setupManager.getSavedPassword()
+                                )
+                                NodeSetupManager.clearAdminPassword()
                             }
+                        } else {
+                            // Ask for admin creds
+                            android.util.Log.i("ChainstateCopyScreen", "Showing admin dialog for fresh archive")
+                            showAdminCreds = true
                         }
                     },
                     modifier = Modifier
@@ -319,13 +331,32 @@ fun ChainstateCopyScreen(onBack: () -> Unit, onComplete: () -> Unit = {}) {
 
                     Spacer(Modifier.height(8.dp))
 
-                    // Retry button
+                    // Retry button — reuse saved admin creds if available
                     OutlinedButton(
                         onClick = {
                             chainstateManager.reset()
-                            showConfirm = true
-                            started = false
-                            highestStepReached = 0
+                            if (lastAdminUser.isNotEmpty()) {
+                                // Retry with same creds
+                                started = true
+                                showConfirm = false
+                                highestStepReached = 0
+                                workScope.launch {
+                                    val user = setupManager.getSavedUser()
+                                    val pass = setupManager.getSavedPassword()
+                                    chainstateManager.copyChainstate(
+                                        sshHost = lastAdminHost,
+                                        sshPort = lastAdminPort,
+                                        sshUser = lastAdminUser,
+                                        sshPassword = lastAdminPass,
+                                        sftpUser = user,
+                                        sftpPassword = pass
+                                    )
+                                }
+                            } else {
+                                showConfirm = true
+                                started = false
+                                highestStepReached = 0
+                            }
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {

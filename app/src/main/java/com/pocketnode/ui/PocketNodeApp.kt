@@ -125,7 +125,8 @@ fun PocketNodeApp(
                     onNavigateToBlockFilter = { navController.navigate("block_filter") },
                     onNavigateToWatchtower = { navController.navigate("watchtower") },
                     onNavigateToLightning = { navController.navigate("lightning") },
-                    onNavigateToShare = { navController.navigate("share") }
+                    onNavigateToShare = { navController.navigate("share") },
+                    onNavigateToMempool = { navController.navigate("mempool") }
                 )
                 }
             }
@@ -144,6 +145,12 @@ fun PocketNodeApp(
             }
             composable("node_access") {
                 NodeAccessScreen(
+                    onBack = { navController.popBackStack() }
+                )
+            }
+            composable("mempool") {
+                MempoolScreen(
+                    onNavigateToTransactionSearch = { navController.navigate("tx_search") },
                     onBack = { navController.popBackStack() }
                 )
             }
@@ -222,7 +229,9 @@ fun PocketNodeApp(
                 ChainstateCopyScreen(
                     onBack = { navController.popBackStack() },
                     onComplete = {
-                        navController.popBackStack("status", inclusive = false)
+                        navController.navigate("status") {
+                            popUpTo(0) { inclusive = true }
+                        }
                     }
                 )
             }

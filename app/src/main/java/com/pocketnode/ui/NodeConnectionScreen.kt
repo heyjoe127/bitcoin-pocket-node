@@ -150,7 +150,7 @@ fun NodeConnectionScreen(
                     }
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "Restart your node after saving. Your subnet depends on your router — most home networks use 192.168.1.0/24 or 10.0.1.0/24.",
+                        "Restart your node after saving. Your subnet depends on your router. Most home networks use 192.168.1.0/24 or 10.0.1.0/24.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -224,7 +224,7 @@ fun NodeConnectionScreen(
                             val result = node.testConnection()
                             if (result.success) {
                                 testSuccess = true
-                                testResult = "✓ Connected — ${result.chain} chain, block ${result.blocks}"
+                                testResult = "✓ Connected: ${result.chain} chain, block ${result.blocks}"
                             } else {
                                 testSuccess = false
                                 testResult = "✗ ${result.error}"
@@ -293,7 +293,7 @@ fun NodeConnectionScreen(
                 ) {
                     Icon(Icons.Filled.Check, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
-                    Text("Continue — Generate Snapshot")
+                    Text("Continue: Generate Snapshot")
                 }
             }
 

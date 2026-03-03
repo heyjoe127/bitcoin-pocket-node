@@ -70,7 +70,7 @@ fun NetworkStatusBar(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "Sync paused — on mobile data",
+                    "Sync paused: on mobile data",
                     color = AmberColor,
                     fontWeight = FontWeight.Medium,
                     fontSize = 14.sp,

@@ -115,7 +115,7 @@ fun ReceivePaymentScreen(
                     copied = false
                 },
                 label = {
-                    Text(if (useOffer) "Amount (sats) — optional for offers" else "Amount (sats)")
+                    Text(if (useOffer) "Amount (sats), optional for offers" else "Amount (sats)")
                 },
                 modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),

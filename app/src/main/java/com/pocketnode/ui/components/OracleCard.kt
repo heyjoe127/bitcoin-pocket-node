@@ -198,7 +198,11 @@ fun OracleCard(
             throw e
         } catch (e: Exception) {
             android.util.Log.e("OracleCard", "UTXOracle failed", e)
-            error = e.message ?: "Unknown error"
+            error = if (e.message?.contains("getblock", ignoreCase = true) == true) {
+                "Waiting for more blocks. Price data needs recent block history."
+            } else {
+                e.message ?: "Unknown error"
+            }
         } finally {
             isRunning = false
             progressText = ""
@@ -292,9 +296,9 @@ fun OracleCard(
                 }
                 error != null -> {
                     Text(
-                        "Error: ${error}",
+                        error!!,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 result != null -> {
@@ -383,7 +387,7 @@ fun OracleCard(
                     )
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        "Price derived entirely from your node's transaction data — " +
+                        "Price derived entirely from your node's transaction data. " +
                         "no external APIs, no third parties. The algorithm detects " +
                         "round fiat spending patterns in on-chain outputs to determine " +
                         "the Bitcoin/USD exchange rate.",

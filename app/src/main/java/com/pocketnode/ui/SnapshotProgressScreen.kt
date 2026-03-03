@@ -120,7 +120,7 @@ fun SnapshotProgressScreen(
                         onClick = { showDownloadUrlDialog = true },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Skip — I have a snapshot URL")
+                        Text("Skip: I have a snapshot URL")
                     }
                 }
             }
@@ -232,7 +232,7 @@ fun SnapshotProgressScreen(
                         onClick = onComplete,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Done — Return to Dashboard")
+                        Text("Done: Return to Dashboard")
                     }
                 }
             }

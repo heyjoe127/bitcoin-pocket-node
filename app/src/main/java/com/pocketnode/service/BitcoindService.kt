@@ -123,6 +123,16 @@ class BitcoindService : Service() {
             val dataDir = ConfigGenerator.ensureConfig(this)
             Log.i(TAG, "Data dir: $dataDir")
 
+            // Migrate maxconnections from 4 to 8
+            val confFile = dataDir.resolve("bitcoin.conf")
+            if (confFile.exists()) {
+                val content = confFile.readText()
+                if (content.contains("maxconnections=4")) {
+                    confFile.writeText(content.replace("maxconnections=4", "maxconnections=8"))
+                    Log.i(TAG, "Migrated maxconnections from 4 to 8")
+                }
+            }
+
             // Step 2.5: Detect orphan bitcoind from a previous app crash or service restart.
             // Android may kill our service without killing the child process, leaving
             // bitcoind running with a held lock file but no managing service.

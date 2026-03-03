@@ -4,6 +4,7 @@ import android.content.Intent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Switch
@@ -68,6 +69,7 @@ fun NodeStatusScreen(
     onNavigateToWatchtower: () -> Unit = {},
     onNavigateToLightning: () -> Unit = {},
     onNavigateToShare: () -> Unit = {},
+    onNavigateToMempool: () -> Unit = {},
     mempoolPaneVisible: Boolean = false
 ) {
     val context = LocalContext.current
@@ -84,8 +86,8 @@ fun NodeStatusScreen(
     var isRunning by remember { mutableStateOf(BitcoindService.isRunningFlow.value) }
     var assumeUtxoActive by remember { mutableStateOf(false) }
     val appPrefs = remember { context.getSharedPreferences("pocketnode_prefs", android.content.Context.MODE_PRIVATE) }
-    var showPrice by remember { mutableStateOf(appPrefs.getBoolean("show_price", false)) }
-    var showFairTrade by remember { mutableStateOf(appPrefs.getBoolean("show_fair_trade", false)) }
+    var showPrice by remember { mutableStateOf(appPrefs.getBoolean("show_price", true)) }
+    var showFairTrade by remember { mutableStateOf(appPrefs.getBoolean("show_fair_trade", true)) }
     var oraclePrice by remember { mutableStateOf<Int?>(null) }
     val dashboardScrollState = rememberScrollState()
     val scope = rememberCoroutineScope()
@@ -300,6 +302,14 @@ fun NodeStatusScreen(
                         bgValidationHeight = -1
                     }
 
+                    // Force Max mode during initial block download
+                    if (ibd && !PowerModeManager.initialSyncHoldFlow.value) {
+                        PowerModeManager(context).startInitialSyncHold(this, rpc)
+                    } else if (!ibd && PowerModeManager.initialSyncHoldFlow.value) {
+                        android.util.Log.i("NodeStatusScreen", "IBD complete, releasing initial sync hold")
+                        PowerModeManager.releaseInitialSyncHold()
+                    }
+
                     // Calculate sync speed (for non-assumeutxo or background validation display)
                     val newBlocks = if (assumeUtxoActive) bgValidationHeight else blockHeight
                     val now = System.currentTimeMillis()
@@ -401,7 +411,7 @@ fun NodeStatusScreen(
             val burstState by PowerModeManager.burstStateFlow.collectAsState()
             val nextBurst by PowerModeManager.nextBurstFlow.collectAsState()
             val walletConnected by PowerModeManager.walletConnectedFlow.collectAsState()
-            BurstSyncBanner(burstState = burstState, nextBurstMs = nextBurst, walletConnected = walletConnected)
+            BurstSyncBanner(burstState = burstState, nextBurstMs = nextBurst, walletConnected = walletConnected, peerCount = peerCount)
 
             Column(
                 modifier = Modifier
@@ -503,6 +513,8 @@ fun NodeStatusScreen(
                     )
 
                     // Stats grid
+                    var showPeerDialog by remember { mutableStateOf(false) }
+                    val rpcCreds = remember { com.pocketnode.util.ConfigGenerator.readCredentials(context) }
                     StatsGrid(
                         peerCount = peerCount,
                         sizeOnDisk = sizeOnDisk,
@@ -510,8 +522,17 @@ fun NodeStatusScreen(
                         mempoolBytes = mempoolBytes,
                         pruned = pruned,
                         lastBlockTime = lastBlockTime,
-                        ibd = ibd
+                        ibd = ibd,
+                        onPeersClick = { showPeerDialog = true },
+                        onMempoolClick = { if (!mempoolPaneVisible) onNavigateToMempool() }
                     )
+                    if (showPeerDialog && rpcCreds != null) {
+                        PeerDetailsDialog(
+                            rpcUser = rpcCreds.first,
+                            rpcPassword = rpcCreds.second,
+                            onDismiss = { showPeerDialog = false }
+                        )
+                    }
                 }
 
                 // UTXOracle price card — always processing, visibility controlled by toggle
@@ -870,7 +891,9 @@ private fun StatsGrid(
     mempoolBytes: Long,
     pruned: Boolean,
     lastBlockTime: Long,
-    ibd: Boolean
+    ibd: Boolean,
+    onPeersClick: () -> Unit = {},
+    onMempoolClick: () -> Unit = {}
 ) {
     Row(
         modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
@@ -879,7 +902,7 @@ private fun StatsGrid(
         StatCard(
             label = "Peers",
             value = peerCount.toString(),
-            modifier = Modifier.weight(1f).fillMaxHeight()
+            modifier = Modifier.weight(1f).fillMaxHeight().clickable { onPeersClick() }
         )
         StatCard(
             label = "Disk",
@@ -897,7 +920,7 @@ private fun StatsGrid(
             label = "Mempool",
             value = if (ibd) "—" else "%,d".format(mempoolSize),
             subtitle = if (ibd) "waiting for sync" else formatBytes(mempoolBytes),
-            modifier = Modifier.weight(1f).fillMaxHeight()
+            modifier = Modifier.weight(1f).fillMaxHeight().clickable { onMempoolClick() }
         )
         StatCard(
             label = "Last Block",
@@ -908,6 +931,103 @@ private fun StatsGrid(
             modifier = Modifier.weight(1f).fillMaxHeight()
         )
     }
+}
+
+@Composable
+private fun PeerDetailsDialog(rpcUser: String, rpcPassword: String, onDismiss: () -> Unit) {
+    var peers by remember { mutableStateOf<List<org.json.JSONObject>>(emptyList()) }
+    var loading by remember { mutableStateOf(true) }
+
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                val rpc = com.pocketnode.rpc.BitcoinRpcClient(rpcUser, rpcPassword)
+                val result = rpc.call("getpeerinfo")
+                if (result != null) {
+                    val arr = result.optJSONArray("result") ?: org.json.JSONArray().also {
+                        // Result might be wrapped differently
+                        for (key in result.keys()) {
+                            if (result.get(key) is org.json.JSONArray) {
+                                val a = result.getJSONArray(key)
+                                for (i in 0 until a.length()) peers = peers + a.getJSONObject(i)
+                            }
+                        }
+                    }
+                    if (peers.isEmpty()) {
+                        for (i in 0 until (result.optJSONArray("result")?.length() ?: 0)) {
+                            peers = peers + result.getJSONArray("result").getJSONObject(i)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("PeerDetails", "Failed to get peer info", e)
+            }
+            loading = false
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Connected Peers (${peers.size})") },
+        text = {
+            if (loading) {
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                }
+            } else if (peers.isEmpty()) {
+                Text("No peers connected", style = MaterialTheme.typography.bodyMedium)
+            } else {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    peers.forEach { peer ->
+                        val addr = peer.optString("addr", "unknown")
+                        val subver = peer.optString("subver", "").trim('/')
+                        val inbound = peer.optBoolean("inbound", false)
+                        val pingMs = (peer.optDouble("pingtime", 0.0) * 1000).toLong()
+                        val bytesRecv = peer.optLong("bytesrecv", 0)
+                        val bytesSent = peer.optLong("bytessent", 0)
+                        val syncedHeaders = peer.optLong("synced_headers", -1)
+                        val syncedBlocks = peer.optLong("synced_blocks", -1)
+
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                            )
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Text(
+                                    addr.substringBefore(":"),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                if (subver.isNotEmpty()) {
+                                    Text(subver, style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                Spacer(Modifier.height(4.dp))
+                                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                                    Text(
+                                        if (inbound) "↓ Inbound" else "↑ Outbound",
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                    Text("${pingMs}ms", style = MaterialTheme.typography.bodySmall)
+                                }
+                                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                                    Text("↓ ${formatBytes(bytesRecv)}", style = MaterialTheme.typography.bodySmall)
+                                    Text("↑ ${formatBytes(bytesSent)}", style = MaterialTheme.typography.bodySmall)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Close") }
+        }
+    )
 }
 
 @Composable
@@ -1662,7 +1782,7 @@ private fun AboutCard() {
                         )
                     }
                     Text(
-                        "Open source — contributions welcome",
+                        "Open source, contributions welcome",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )

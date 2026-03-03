@@ -379,7 +379,7 @@ fun ConnectWalletScreen(onBack: () -> Unit) {
             text = {
                 Column {
                     Text(
-                        "Paste your wallet's extended public key. BlueWallet uses zpub — find it in wallet settings. xpub and ypub are also supported.",
+                        "Paste your wallet's extended public key. BlueWallet uses zpub. Find it in wallet settings. xpub and ypub are also supported.",
                         style = MaterialTheme.typography.bodySmall
                     )
                     Spacer(Modifier.height(8.dp))

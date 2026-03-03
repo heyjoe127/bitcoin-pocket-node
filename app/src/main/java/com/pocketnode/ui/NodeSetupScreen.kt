@@ -75,7 +75,7 @@ fun NodeSetupScreen(
             )
             Text(
                 "Enter your node's SSH credentials to create a restricted SFTP account " +
-                "for snapshot transfers. This runs once — SSH credentials are used only " +
+                "for snapshot transfers. This runs once. SSH credentials are used only " +
                 "during setup and are NOT saved.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
@@ -183,7 +183,11 @@ fun NodeSetupScreen(
                             )
                             result = setupResult
                             isRunning = false
-                            // Clear SSH password from memory
+                            // Save admin password in memory for chainstate copy (cleared after use)
+                            if (setupResult.success) {
+                                NodeSetupManager.setAdminPasswordInMemory(sshPassword)
+                            }
+                            // Clear SSH password from UI state
                             sshPassword = ""
                         }
                     },

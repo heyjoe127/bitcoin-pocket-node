@@ -133,9 +133,25 @@ class LightningService(private val context: Context) {
             val seedPath = File(storageDir, "keys_seed").absolutePath
             val entropy = NodeEntropy.fromSeedPath(seedPath)
 
-            // Build and start
+            // Build and start (retry if fee estimates not yet available from auto-start)
             val ldkNode = builder.build(entropy)
-            ldkNode.start()
+            var lastError: Exception? = null
+            for (attempt in 1..10) {
+                try {
+                    ldkNode.start()
+                    lastError = null
+                    break
+                } catch (e: Exception) {
+                    lastError = e
+                    if (e.message?.contains("fee rate", ignoreCase = true) == true && attempt < 10) {
+                        Log.w(TAG, "Fee estimates not ready, retry $attempt/10 in 60s...")
+                        delay(60_000)
+                    } else {
+                        throw e
+                    }
+                }
+            }
+            if (lastError != null) throw lastError
 
             node = ldkNode
 

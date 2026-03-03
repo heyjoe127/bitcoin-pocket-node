@@ -47,7 +47,7 @@ object ConfigGenerator {
             listen=1
             bind=127.0.0.1
             listenonion=0
-            maxconnections=4
+            maxconnections=8
             whitelist=download@127.0.0.1
             
             # Storage — pruned to ~2GB

@@ -218,7 +218,7 @@ fun SendPaymentScreen(
                 OutlinedTextField(
                     value = offerAmountSats,
                     onValueChange = { offerAmountSats = it.filter { c -> c.isDigit() } },
-                    label = { Text("Amount (sats) — leave empty if offer has fixed amount") },
+                    label = { Text("Amount (sats). Leave empty if offer has fixed amount") },
                     modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true

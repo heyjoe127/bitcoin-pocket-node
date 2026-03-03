@@ -156,11 +156,26 @@ class ChainstateManager private constructor(private val context: Context) {
             val localArchiveValid = archiveFile.exists() && archiveFile.length() > 1_000_000_000
 
             if (!localArchiveValid) {
+                // If no admin creds, check if archive already exists via SFTP
                 if (sshUser.isNullOrEmpty()) {
-                    _state.value = _state.value.copy(step = Step.ERROR,
-                        error = "No archive found on node. Admin credentials required to create one.")
-                    return@withContext false
-                }
+                    val archiveAlreadyExists = try {
+                        checkArchiveExists(sshHost, sshPort, sftpUser, sftpPassword)
+                    } catch (_: Exception) { false }
+
+                    if (!archiveAlreadyExists) {
+                        _state.value = _state.value.copy(step = Step.ERROR,
+                            error = "No archive found on node. Admin credentials required to create one.")
+                        return@withContext false
+                    }
+                    // Archive exists, skip creation steps and tick through to download
+                    Log.i(TAG, "Archive exists on node, skipping creation (no admin creds)")
+                    _state.value = ChainstateState(step = Step.STOPPING_REMOTE,
+                        progress = "Archive found on node ✓")
+                    delay(300)
+                    _state.value = _state.value.copy(step = Step.ARCHIVING,
+                        progress = "Archive ready ✓")
+                    delay(300)
+                } else {
 
                 // Delete any old remote archive first
                 try {
@@ -311,11 +326,25 @@ class ChainstateManager private constructor(private val context: Context) {
                 archiveSession.disconnect()
                 Log.i(TAG, "Remote node restarted")
 
-                // Verify archive exists
-                if (!checkArchiveExists(sshHost, sshPort, sftpUser, sftpPassword)) {
-                    _state.value = _state.value.copy(step = Step.ERROR,
-                        error = "Archive creation failed — file not found on remote node")
-                    return@withContext false
+                // Verify archive exists (try SFTP first, fall back to SSH ls)
+                val archiveVerified = if (sftpUser.isNotEmpty() && sftpPassword.isNotEmpty()) {
+                    try { checkArchiveExists(sshHost, sshPort, sftpUser, sftpPassword) } catch (_: Exception) { false }
+                } else false
+                if (!archiveVerified) {
+                    // Fallback: check via admin SSH
+                    val verifySession = SshUtils.connectSsh(sshHost, sshPort, sshUser!!, sshPassword)
+                    val verifyResult = SshUtils.execSudo(verifySession, sshPassword,
+                        "test -f /home/$SFTP_USERNAME/snapshots/$ARCHIVE_NAME && stat -c%s /home/$SFTP_USERNAME/snapshots/$ARCHIVE_NAME")
+                        .trim().lines().lastOrNull()?.trim()
+                    verifySession.disconnect()
+                    val archiveSize = verifyResult?.toLongOrNull() ?: 0
+                    if (archiveSize < 1_000_000_000) {
+                        _state.value = _state.value.copy(step = Step.ERROR,
+                            error = "Archive creation failed — file not found on remote node")
+                        return@withContext false
+                    }
+                    Log.i(TAG, "Archive verified via SSH: $archiveSize bytes")
+                }
                 }
             } else if (localArchiveValid) {
                 // Already downloaded — skip to deploy
@@ -350,11 +379,14 @@ class ChainstateManager private constructor(private val context: Context) {
                     }
                 }
 
+                // Use SFTP user if available, otherwise fall back to admin SSH creds
+                val dlUser = if (sftpUser.isNotEmpty()) sftpUser else sshUser ?: ""
+                val dlPass = if (sftpPassword.isNotEmpty()) sftpPassword else sshPassword
                 val file = downloader.downloadSftp(
                     host = sshHost,
                     port = sshPort,
-                    username = sftpUser,
-                    password = sftpPassword,
+                    username = dlUser,
+                    password = dlPass,
                     remotePath = "/snapshots/$ARCHIVE_NAME",
                     destinationFile = archiveFile
                 )
