@@ -100,26 +100,50 @@ class AddressIndex(private val rpc: BitcoinRpcClient) {
             return
         }
 
-        // Build importdescriptors request
+        // Check which descriptors are already imported
+        val existingDescs = mutableSetOf<String>()
+        val listResult = walletRpc("listdescriptors", JSONArray())
+        if (listResult != null) {
+            val descsArray = listResult.optJSONArray("descriptors")
+                ?: listResult.optJSONObject("value")?.optJSONArray("descriptors")
+            if (descsArray != null) {
+                for (i in 0 until descsArray.length()) {
+                    val d = descsArray.getJSONObject(i).optString("desc", "")
+                    // Strip checksum for comparison
+                    existingDescs.add(d.substringBefore('#'))
+                }
+            }
+        }
+
+        // Only import new descriptors (with rescan), skip already-tracked ones
         val importArray = JSONArray()
         for (desc in allDescriptors) {
-            // Add checksum if not present
             val descWithChecksum = if (desc.contains('#')) desc else addChecksum(desc)
+            val bare = desc.substringBefore('#')
+            if (bare in existingDescs) {
+                Log.d(TAG, "Descriptor already imported, skipping: $bare")
+                continue
+            }
             importArray.put(JSONObject().apply {
                 put("desc", descWithChecksum ?: desc)
-                put("timestamp", "now")  // don't rescan, start tracking from now
+                put("timestamp", 0)  // rescan available blocks for existing transactions
                 put("watchonly", true)
                 put("active", true)
+                put("range", JSONArray().apply { put(0); put(100) })
                 if (desc.contains("/0/*")) put("internal", false)
                 if (desc.contains("/1/*")) put("internal", true)
             })
         }
 
-        val result = walletRpc("importdescriptors", JSONArray().apply { put(importArray) })
-        if (result != null) {
-            Log.i(TAG, "Imported ${allDescriptors.size} descriptors")
+        if (importArray.length() > 0) {
+            val result = walletRpc("importdescriptors", JSONArray().apply { put(importArray) })
+            if (result != null) {
+                Log.i(TAG, "Imported ${importArray.length()} new descriptors (${existingDescs.size} already tracked)")
+            } else {
+                Log.e(TAG, "Failed to import descriptors")
+            }
         } else {
-            Log.e(TAG, "Failed to import descriptors")
+            Log.i(TAG, "All ${allDescriptors.size} descriptors already imported, skipping rescan")
         }
 
         // Build scripthash index from derived addresses
@@ -136,7 +160,7 @@ class AddressIndex(private val rpc: BitcoinRpcClient) {
         for (addr in addresses) {
             importArray.put(JSONObject().apply {
                 put("desc", "addr($addr)")
-                put("timestamp", "now")
+                put("timestamp", 0)
                 put("watchonly", true)
             })
         }
