@@ -116,6 +116,16 @@ Pruned Bitcoin Core on the phone with BIP 157/158 block filters. Zeus with embed
 - [ ] F-Droid / APK distribution (no Google Play)
 - [ ] Clean up old snapshot files on Umbrel
 
+### Electrum Server: Pruned-Node Native
+- [x] scantxoutset for balance and UTXOs (reads chainstate directly)
+- [x] Persistent transaction history (survives block pruning)
+- [x] 3-source history merge (persisted + chainstate + descriptor wallet)
+- [x] History recovery from mempool.space for addresses with missing txs
+- [x] Skip rescan for already-imported descriptors (fast restarts)
+- [ ] Expose Arti SOCKS proxy from native lib for Java-side Tor routing
+- [ ] Route mempool.space history recovery through Tor (single Arti instance, shared SOCKS)
+- [ ] Periodic background rescan for new UTXOs on tracked addresses
+
 ### Version Selection Enhancements
 - [ ] Version compatibility matrix in UI
 - [ ] Chainstate backup before version switch (safety net for future incompatible versions)
