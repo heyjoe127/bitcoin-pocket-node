@@ -25,6 +25,7 @@ class AddressIndex(private val rpc: BitcoinRpcClient) {
     // Populated when descriptors are imported
     private val scripthashToAddress = mutableMapOf<String, MutableSet<String>>()
     private val addressToScripthash = mutableMapOf<String, String>()
+    private val rawDescriptors = mutableListOf<String>()  // for scantxoutset
 
     /**
      * Ensure the tracking wallet exists and load it.
@@ -99,6 +100,10 @@ class AddressIndex(private val rpc: BitcoinRpcClient) {
             Log.w(TAG, "No descriptors to import")
             return
         }
+
+        // Store raw descriptors for scantxoutset queries
+        rawDescriptors.clear()
+        rawDescriptors.addAll(allDescriptors)
 
         // Check which descriptors are already imported
         val existingDescs = mutableSetOf<String>()
@@ -236,19 +241,29 @@ class AddressIndex(private val rpc: BitcoinRpcClient) {
         var confirmed = 0L
         var unconfirmed = 0L
 
+        // Use scantxoutset for confirmed balance (reads chainstate directly, works on pruned nodes)
+        for (addr in addresses) {
+            val scanResult = rpc.call("scantxoutset", JSONArray().apply {
+                put("start")
+                put(JSONArray().apply { put("addr($addr)") })
+            })
+            if (scanResult != null && !scanResult.has("_rpc_error")) {
+                val totalAmount = scanResult.optDouble("total_amount", 0.0)
+                confirmed += btcToSats(totalAmount)
+            }
+        }
+
+        // Check mempool for unconfirmed (descriptor wallet still needed for this)
         for (addr in addresses) {
             val result = walletRpc("listunspent", JSONArray().apply {
                 put(0)  // minconf
-                put(9999999)  // maxconf
+                put(0)  // maxconf (unconfirmed only)
                 put(JSONArray().apply { put(addr) })
             })
-
             val arr = result?.optJSONArray("value") ?: continue
             for (i in 0 until arr.length()) {
                 val utxo = arr.getJSONObject(i)
-                val sats = btcToSats(utxo.getDouble("amount"))
-                val confirmations = utxo.optInt("confirmations", 0)
-                if (confirmations > 0) confirmed += sats else unconfirmed += sats
+                unconfirmed += btcToSats(utxo.getDouble("amount"))
             }
         }
 
@@ -315,26 +330,39 @@ class AddressIndex(private val rpc: BitcoinRpcClient) {
         val result = JSONArray()
 
         for (addr in addresses) {
-            val utxoResult = walletRpc("listunspent", JSONArray().apply {
-                put(0)
-                put(9999999)
+            // Use scantxoutset for confirmed UTXOs (reads chainstate directly)
+            val scanResult = rpc.call("scantxoutset", JSONArray().apply {
+                put("start")
+                put(JSONArray().apply { put("addr($addr)") })
+            })
+            if (scanResult != null && !scanResult.has("_rpc_error")) {
+                val unspents = scanResult.optJSONArray("unspents")
+                if (unspents != null) {
+                    for (i in 0 until unspents.length()) {
+                        val utxo = unspents.getJSONObject(i)
+                        result.put(JSONObject().apply {
+                            put("tx_hash", utxo.getString("txid"))
+                            put("tx_pos", utxo.getInt("vout"))
+                            put("height", utxo.optInt("height", 0))
+                            put("value", btcToSats(utxo.getDouble("amount")))
+                        })
+                    }
+                }
+            }
+
+            // Also include unconfirmed from mempool via descriptor wallet
+            val mempoolResult = walletRpc("listunspent", JSONArray().apply {
+                put(0)  // minconf
+                put(0)  // maxconf (unconfirmed only)
                 put(JSONArray().apply { put(addr) })
             })
-
-            val arr = utxoResult?.optJSONArray("value") ?: continue
+            val arr = mempoolResult?.optJSONArray("value") ?: continue
             for (i in 0 until arr.length()) {
                 val utxo = arr.getJSONObject(i)
-                val confirmations = utxo.optInt("confirmations", 0)
-
                 result.put(JSONObject().apply {
                     put("tx_hash", utxo.getString("txid"))
                     put("tx_pos", utxo.getInt("vout"))
-                    put("height", if (confirmations > 0) {
-                        // Calculate height from confirmations
-                        val tipResult = rpc.call("getblockchaininfo")
-                        val tipHeight = tipResult?.optInt("blocks", 0) ?: 0
-                        tipHeight - confirmations + 1
-                    } else 0)
+                    put("height", 0)
                     put("value", btcToSats(utxo.getDouble("amount")))
                 })
             }
