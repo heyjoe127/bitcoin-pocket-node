@@ -32,7 +32,7 @@ Turn any Android phone into a fully-validating Bitcoin full node. No server depe
 <td align="center" width="33%"><strong>Version picker</strong></td>
 </tr>
 <tr>
-<td><img src="docs/images/00-setup-screen.jpg" width="200" alt="Choose snapshot source"></td>
+<td><img src="docs/images/00-source-picker.jpg" width="200" alt="Choose snapshot source"></td>
 <td><img src="docs/images/01-checklist.jpg" width="200" alt="Setup checklist all green"></td>
 <td><img src="docs/images/11-version-picker.png" width="200" alt="Choose Bitcoin implementation"></td>
 </tr>
