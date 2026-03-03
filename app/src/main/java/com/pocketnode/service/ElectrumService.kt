@@ -93,7 +93,7 @@ class ElectrumService(private val context: Context) {
 
                 // Build components
                 val rpc = BitcoinRpcClient(creds.first, creds.second)
-                val addressIndex = AddressIndex(rpc)
+                val addressIndex = AddressIndex(rpc, context)
                 val methods = ElectrumMethods(rpc, addressIndex)
                 val subscriptions = SubscriptionManager(rpc, addressIndex)
 

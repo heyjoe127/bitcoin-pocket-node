@@ -1,20 +1,23 @@
 package com.pocketnode.electrum
 
+import android.content.Context
 import android.util.Log
 import com.pocketnode.rpc.BitcoinRpcClient
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 import java.security.MessageDigest
 
 /**
  * Tracks addresses/xpubs/descriptors via bitcoind's descriptor wallet.
  *
- * Uses importdescriptors to watch addresses, then queries the wallet
- * for history, balance, and UTXOs per scripthash.
+ * Uses scantxoutset for balance/UTXOs (reads chainstate directly, works on pruned nodes)
+ * and descriptor wallet for unconfirmed transactions and history.
+ * Discovered transactions are persisted to survive block pruning.
  *
  * Scripthash = SHA256(scriptPubKey) reversed (Electrum convention).
  */
-class AddressIndex(private val rpc: BitcoinRpcClient) {
+class AddressIndex(private val rpc: BitcoinRpcClient, private val context: Context) {
 
     companion object {
         private const val TAG = "AddressIndex"
@@ -26,6 +29,57 @@ class AddressIndex(private val rpc: BitcoinRpcClient) {
     private val scripthashToAddress = mutableMapOf<String, MutableSet<String>>()
     private val addressToScripthash = mutableMapOf<String, String>()
     private val rawDescriptors = mutableListOf<String>()  // for scantxoutset
+
+    // Persistent transaction history: survives block pruning
+    private val txHistoryFile = File(context.filesDir, "electrum_tx_history.json")
+    // scripthash -> set of "txid:height"
+    private val persistedHistory = mutableMapOf<String, MutableSet<String>>()
+
+    init {
+        loadPersistedHistory()
+    }
+
+    private fun loadPersistedHistory() {
+        try {
+            if (txHistoryFile.exists()) {
+                val json = JSONObject(txHistoryFile.readText())
+                for (key in json.keys()) {
+                    val arr = json.getJSONArray(key)
+                    val set = mutableSetOf<String>()
+                    for (i in 0 until arr.length()) set.add(arr.getString(i))
+                    persistedHistory[key] = set
+                }
+                Log.i(TAG, "Loaded persisted tx history: ${persistedHistory.size} scripthashes")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to load tx history: ${e.message}")
+        }
+    }
+
+    private fun savePersistedHistory() {
+        try {
+            val json = JSONObject()
+            for ((key, set) in persistedHistory) {
+                json.put(key, JSONArray(set.toList()))
+            }
+            txHistoryFile.writeText(json.toString())
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to save tx history: ${e.message}")
+        }
+    }
+
+    private fun persistTx(scripthash: String, txid: String, height: Int) {
+        val set = persistedHistory.getOrPut(scripthash) { mutableSetOf() }
+        val entry = "$txid:$height"
+        if (set.add(entry)) {
+            // Also update height if we had it at 0 (unconfirmed -> confirmed)
+            val unconfirmed = "$txid:0"
+            if (height > 0 && set.contains(unconfirmed)) {
+                set.remove(unconfirmed)
+            }
+            savePersistedHistory()
+        }
+    }
 
     /**
      * Ensure the tracking wallet exists and load it.
@@ -276,9 +330,50 @@ class AddressIndex(private val rpc: BitcoinRpcClient) {
      */
     suspend fun getHistory(scripthash: String): JSONArray {
         val addresses = scripthashToAddress[scripthash] ?: return JSONArray()
-        val result = JSONArray()
-        val seenTxids = mutableSetOf<String>()
+        val seenTxids = mutableMapOf<String, Int>()  // txid -> height
 
+        // Source 1: Persisted history (survives pruning)
+        val persisted = persistedHistory[scripthash]
+        if (persisted != null) {
+            for (entry in persisted) {
+                val parts = entry.split(":")
+                if (parts.size == 2) {
+                    val txid = parts[0]
+                    val height = parts[1].toIntOrNull() ?: 0
+                    val existing = seenTxids[txid]
+                    // Prefer confirmed height over unconfirmed
+                    if (existing == null || (height > 0 && existing == 0)) {
+                        seenTxids[txid] = height
+                    }
+                }
+            }
+        }
+
+        // Source 2: scantxoutset (current UTXOs from chainstate)
+        for (addr in addresses) {
+            val scanResult = rpc.call("scantxoutset", JSONArray().apply {
+                put("start")
+                put(JSONArray().apply { put("addr($addr)") })
+            })
+            if (scanResult != null && !scanResult.has("_rpc_error")) {
+                val unspents = scanResult.optJSONArray("unspents")
+                if (unspents != null) {
+                    for (i in 0 until unspents.length()) {
+                        val utxo = unspents.getJSONObject(i)
+                        val txid = utxo.getString("txid")
+                        val height = utxo.optInt("height", 0)
+                        val existing = seenTxids[txid]
+                        if (existing == null || (height > 0 && existing == 0)) {
+                            seenTxids[txid] = height
+                        }
+                        // Persist this discovery
+                        persistTx(scripthash, txid, height)
+                    }
+                }
+            }
+        }
+
+        // Source 3: Descriptor wallet (catches mempool + recently confirmed)
         for (addr in addresses) {
             val txResult = walletRpc("listtransactions", JSONArray().apply {
                 put("*")   // label (all)
@@ -291,16 +386,11 @@ class AddressIndex(private val rpc: BitcoinRpcClient) {
             for (i in 0 until arr.length()) {
                 val tx = arr.getJSONObject(i)
                 val txid = tx.getString("txid")
-                if (txid in seenTxids) continue
-
-                // Check if this tx involves our address
                 val txAddr = tx.optString("address", "")
                 if (txAddr != addr) continue
 
-                seenTxids.add(txid)
                 val confirmations = tx.optInt("confirmations", 0)
                 val height = if (confirmations > 0) {
-                    // Get actual block height
                     val blockHash = tx.optString("blockhash", "")
                     if (blockHash.isNotEmpty()) {
                         val blockInfo = rpc.call("getblockheader", JSONArray().apply { put(blockHash) })
@@ -308,17 +398,23 @@ class AddressIndex(private val rpc: BitcoinRpcClient) {
                     } else 0
                 } else 0
 
-                result.put(JSONObject().apply {
-                    put("tx_hash", txid)
-                    put("height", if (confirmations > 0) height else 0)
-                    if (confirmations == 0) {
-                        val fee = tx.optDouble("fee", 0.0)
-                        if (fee != 0.0) put("fee", btcToSats(Math.abs(fee)))
-                    }
-                })
+                val existing = seenTxids[txid]
+                if (existing == null || (height > 0 && existing == 0)) {
+                    seenTxids[txid] = height
+                }
+                // Persist confirmed transactions
+                if (height > 0) persistTx(scripthash, txid, height)
             }
         }
 
+        // Build result sorted by height
+        val result = JSONArray()
+        for ((txid, height) in seenTxids.entries.sortedBy { it.value }) {
+            result.put(JSONObject().apply {
+                put("tx_hash", txid)
+                put("height", height)
+            })
+        }
         return result
     }
 
