@@ -81,13 +81,8 @@ class ElectrumService(private val context: Context) {
                 val addresses = prefs.getStringSet("addresses", emptySet()) ?: emptySet()
                 val descriptors = prefs.getStringSet("descriptors", emptySet()) ?: emptySet()
 
-                if (xpubSet.isEmpty() && addresses.isEmpty() && descriptors.isEmpty()) {
-                    _state.value = ElectrumState(status = ElectrumState.Status.ERROR,
-                        error = "No xpubs, descriptors, or addresses configured. Add them in Electrum Tracked Wallets.")
-                    return@launch
-                }
-
                 val trackedCount = xpubSet.size + descriptors.size + addresses.size
+                val hasTracked = trackedCount > 0
                 Log.i(TAG, "Starting Electrum server with ${xpubSet.size} xpubs, ${descriptors.size} descriptors, ${addresses.size} addresses")
 
                 _state.value = ElectrumState(
@@ -102,43 +97,47 @@ class ElectrumService(private val context: Context) {
                 val methods = ElectrumMethods(rpc, addressIndex)
                 val subscriptions = SubscriptionManager(rpc, addressIndex)
 
-                // Ensure tracking wallet exists
-                _state.value = ElectrumState(
-                    status = ElectrumState.Status.SYNCING,
-                    trackedAddresses = trackedCount,
-                    syncProgress = 0.4f
-                )
+                if (hasTracked) {
+                    // Ensure tracking wallet exists
+                    _state.value = ElectrumState(
+                        status = ElectrumState.Status.SYNCING,
+                        trackedAddresses = trackedCount,
+                        syncProgress = 0.4f
+                    )
 
-                // Retry wallet creation — bitcoind may still be warming up at boot
-                var walletReady = false
-                for (attempt in 1..10) {
-                    if (addressIndex.ensureWallet()) {
-                        walletReady = true
-                        break
+                    // Retry wallet creation — bitcoind may still be warming up at boot
+                    var walletReady = false
+                    for (attempt in 1..10) {
+                        if (addressIndex.ensureWallet()) {
+                            walletReady = true
+                            break
+                        }
+                        Log.i(TAG, "Waiting for bitcoind RPC (attempt $attempt/10)...")
+                        kotlinx.coroutines.delay(3000)
                     }
-                    Log.i(TAG, "Waiting for bitcoind RPC (attempt $attempt/10)...")
-                    kotlinx.coroutines.delay(3000)
-                }
-                if (!walletReady) {
-                    _state.value = ElectrumState(status = ElectrumState.Status.ERROR,
-                        error = "Failed to create tracking wallet")
-                    return@launch
-                }
+                    if (!walletReady) {
+                        _state.value = ElectrumState(status = ElectrumState.Status.ERROR,
+                            error = "Failed to create tracking wallet")
+                        return@launch
+                    }
 
-                // Import descriptors and addresses
-                _state.value = ElectrumState(
-                    status = ElectrumState.Status.SYNCING,
-                    trackedAddresses = trackedCount,
-                    syncProgress = 0.6f
-                )
+                    // Import descriptors and addresses
+                    _state.value = ElectrumState(
+                        status = ElectrumState.Status.SYNCING,
+                        trackedAddresses = trackedCount,
+                        syncProgress = 0.6f
+                    )
 
-                addressIndex.importDescriptors(
-                    descriptors = descriptors.toList(),
-                    xpubs = xpubSet.toList()
-                )
+                    addressIndex.importDescriptors(
+                        descriptors = descriptors.toList(),
+                        xpubs = xpubSet.toList()
+                    )
 
-                if (addresses.isNotEmpty()) {
-                    addressIndex.importAddresses(addresses.toList())
+                    if (addresses.isNotEmpty()) {
+                        addressIndex.importAddresses(addresses.toList())
+                    }
+                } else {
+                    Log.i(TAG, "No tracked wallets configured. Server will accept connections but serve empty results.")
                 }
 
                 _state.value = ElectrumState(
