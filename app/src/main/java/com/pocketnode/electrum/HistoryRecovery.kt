@@ -56,16 +56,24 @@ object HistoryRecovery {
 
     /**
      * Fetch all transactions for an address from mempool.space.
+     * Paginates automatically (API returns 25 per page).
      * Returns list of (txid, block_height) pairs. Height=0 means unconfirmed.
      */
     private fun fetchAddressTransactions(address: String): List<Pair<String, Int>> {
         val results = mutableListOf<Pair<String, Int>>()
+        var lastTxid: String? = null
 
-        // Confirmed transactions
-        val confirmedUrl = "$API_BASE/address/$address/txs"
-        val confirmedJson = httpGet(confirmedUrl)
-        if (confirmedJson != null) {
-            val arr = JSONArray(confirmedJson)
+        while (true) {
+            val url = if (lastTxid == null) {
+                "$API_BASE/address/$address/txs"
+            } else {
+                "$API_BASE/address/$address/txs/chain/$lastTxid"
+            }
+
+            val json = httpGet(url) ?: break
+            val arr = JSONArray(json)
+            if (arr.length() == 0) break
+
             for (i in 0 until arr.length()) {
                 val tx = arr.getJSONObject(i)
                 val txid = tx.getString("txid")
@@ -75,6 +83,12 @@ object HistoryRecovery {
                 } else 0
                 results.add(Pair(txid, height))
             }
+
+            // API returns 25 per page; if less, we're done
+            if (arr.length() < 25) break
+            lastTxid = arr.getJSONObject(arr.length() - 1).getString("txid")
+
+            Log.i(TAG, "Paginating $address: ${results.size} txs so far")
         }
 
         return results
