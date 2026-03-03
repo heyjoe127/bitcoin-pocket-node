@@ -125,6 +125,7 @@ Pruned Bitcoin Core on the phone with BIP 157/158 block filters. Zeus with embed
 - [ ] Expose Arti SOCKS proxy from native lib for Java-side Tor routing
 - [ ] Route mempool.space history recovery through Tor (single Arti instance, shared SOCKS)
 - [ ] Periodic background rescan for new UTXOs on tracked addresses
+- [ ] Lightning recovery helper: scantxoutset + mempool.space to find force-close txs on pruned nodes, feed raw tx data to LDK for sweep (closes biggest risk in PRUNED-NODE-RISK-ANALYSIS.md)
 
 ### Version Selection Enhancements
 - [ ] Version compatibility matrix in UI
