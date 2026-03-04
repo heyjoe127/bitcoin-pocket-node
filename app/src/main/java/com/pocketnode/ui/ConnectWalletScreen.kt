@@ -201,6 +201,15 @@ fun ConnectWalletScreen(onBack: () -> Unit) {
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
 
+                    val lightningStatus by com.pocketnode.lightning.LightningService.stateFlow.collectAsState()
+                    if (lightningStatus.status != com.pocketnode.lightning.LightningService.LightningState.Status.STOPPED) {
+                        Text(
+                            "LDK Lightning wallet is already handled internally.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        )
+                    }
+
                     // Recovery status + manual recover button
                     if (recoveryStatus != null && (xpubs.isNotEmpty() || addresses.isNotEmpty())) {
                         Spacer(Modifier.height(8.dp))
