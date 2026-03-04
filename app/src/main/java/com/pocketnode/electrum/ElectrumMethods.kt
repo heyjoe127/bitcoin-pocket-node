@@ -175,9 +175,25 @@ class ElectrumMethods(
             }
         }
 
-        // If all sources exhausted, throw
+        // If all sources exhausted, return a minimal stub so wallets don't crash
         if (result != null && result.optBoolean("_rpc_error", false)) {
-            throw Exception("Transaction not available (pruned, not cached)")
+            if (verbose) {
+                Log.w(TAG, "Returning stub for unavailable tx $txid")
+                return@runBlocking JSONObject().apply {
+                    put("txid", txid)
+                    put("hash", txid)
+                    put("confirmations", 0)
+                    put("size", 0)
+                    put("vsize", 0)
+                    put("version", 2)
+                    put("locktime", 0)
+                    put("vin", JSONArray())
+                    put("vout", JSONArray())
+                } as Any
+            } else {
+                // Non-verbose: return empty hex
+                return@runBlocking "" as Any
+            }
         }
 
         if (verbose) {
