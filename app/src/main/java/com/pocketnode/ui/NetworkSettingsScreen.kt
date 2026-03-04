@@ -53,7 +53,7 @@ fun NetworkSettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Network Settings") },
+                title = { Text("Data Settings") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")

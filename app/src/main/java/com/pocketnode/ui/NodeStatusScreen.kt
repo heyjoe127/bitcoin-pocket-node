@@ -1518,7 +1518,7 @@ private fun ActionButtons(
                 onClick = onNavigateToNetworkSettings,
                 modifier = Modifier.weight(1f),
                 contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)
-            ) { Text("Network", maxLines = 1, style = MaterialTheme.typography.labelSmall) }
+            ) { Text("Data", maxLines = 1, style = MaterialTheme.typography.labelSmall) }
             OutlinedButton(
                 onClick = onNavigateToDataUsage,
                 modifier = Modifier.weight(1f),
