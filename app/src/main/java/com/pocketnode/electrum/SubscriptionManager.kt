@@ -111,16 +111,17 @@ class SubscriptionManager(
             Log.d(TAG, "Tx refresh failed: ${e.message}")
         }
 
-        // Check for scripthash changes (only for subscribed ones)
-        if (subscribedScripthashes.isNotEmpty()) {
-            for (scripthash in subscribedScripthashes.toSet()) {
-                val newHash = addressIndex.getStatusHash(scripthash)
-                val oldHash = lastStatusHashes[scripthash]
-                if (newHash != oldHash) {
-                    notifications.add(Notification.ScripthashChanged(scripthash, newHash))
-                    lastStatusHashes[scripthash] = newHash
-                    Log.d(TAG, "Scripthash changed: ${scripthash.take(16)}...")
-                }
+        // Check for scripthash changes on ALL tracked addresses
+        // Push unsolicited notifications so wallets like BlueWallet
+        // (which don't explicitly subscribe) still get notified
+        val allScripthashes = addressIndex.getAllTrackedScripthashes()
+        for (scripthash in allScripthashes) {
+            val newHash = addressIndex.getStatusHash(scripthash)
+            val oldHash = lastStatusHashes[scripthash]
+            if (newHash != oldHash) {
+                notifications.add(Notification.ScripthashChanged(scripthash, newHash))
+                lastStatusHashes[scripthash] = newHash
+                Log.i(TAG, "Scripthash changed: ${scripthash.take(16)}... (unsolicited notify)")
             }
         }
 

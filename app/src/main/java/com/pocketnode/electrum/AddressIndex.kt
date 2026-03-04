@@ -856,6 +856,12 @@ class AddressIndex(private val rpc: BitcoinRpcClient, private val context: Conte
      * Get all tracked scripthashes and their current status hashes.
      * Used by SubscriptionManager to detect changes.
      */
+    fun getAllTrackedScripthashes(): Set<String> {
+        // Only return scripthashes with known history (active addresses)
+        // to avoid checking all 200 every poll cycle
+        return persistedHistory.keys.toSet()
+    }
+
     suspend fun getAllStatusHashes(): Map<String, String?> {
         val result = mutableMapOf<String, String?>()
         for (scripthash in scripthashToAddress.keys) {
