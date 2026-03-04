@@ -19,8 +19,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import org.json.JSONArray
 
 /**
- * Controls Bitcoin sync based on network state.
- * Pauses sync on cellular (unless user overrides), resumes on WiFi.
+ * Tracks data usage and enforces MB budgets.
+ * Network control (connect/disconnect) is handled by PowerModeManager.
+ * SyncController only intervenes when a data budget is exceeded.
  */
 class SyncController(
     private val context: Context,
@@ -31,10 +32,8 @@ class SyncController(
         private const val TAG = "SyncController"
         private const val SYNC_CHANNEL_ID = "sync_status_channel"
         private const val SYNC_NOTIFICATION_ID = 2
-        const val PREF_KEY_ALLOW_CELLULAR = "allow_cellular_sync"
         const val PREF_KEY_CELLULAR_BUDGET_MB = "cellular_budget_mb"
         const val PREF_KEY_WIFI_BUDGET_MB = "wifi_budget_mb"
-        const val PREF_KEY_CELLULAR_CONFIRMED = "cellular_confirmed_once"
     }
 
     private val prefs: SharedPreferences =
@@ -47,14 +46,6 @@ class SyncController(
     private val notificationManager =
         context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-    var allowCellularSync: Boolean
-        get() = prefs.getBoolean(PREF_KEY_ALLOW_CELLULAR, false)
-        set(value) {
-            prefs.edit().putBoolean(PREF_KEY_ALLOW_CELLULAR, value).apply()
-            // Re-evaluate immediately
-            scope.launch { evaluateNetworkState(networkMonitor.networkState.value) }
-        }
-
     var cellularBudgetMb: Long
         get() = prefs.getLong(PREF_KEY_CELLULAR_BUDGET_MB, 0) // 0 = no limit
         set(value) = prefs.edit().putLong(PREF_KEY_CELLULAR_BUDGET_MB, value).apply()
@@ -63,18 +54,8 @@ class SyncController(
         get() = prefs.getLong(PREF_KEY_WIFI_BUDGET_MB, 0) // 0 = no limit
         set(value) = prefs.edit().putLong(PREF_KEY_WIFI_BUDGET_MB, value).apply()
 
-    private var cellularConfirmed: Boolean
-        get() = prefs.getBoolean(PREF_KEY_CELLULAR_CONFIRMED, false)
-        set(value) = prefs.edit().putBoolean(PREF_KEY_CELLULAR_CONFIRMED, value).apply()
-
     fun start() {
         createNotificationChannel()
-
-        scope.launch {
-            networkMonitor.networkState.collect { state ->
-                evaluateNetworkState(state)
-            }
-        }
 
         // Check budget periodically
         scope.launch {
@@ -90,76 +71,34 @@ class SyncController(
         notificationManager.cancel(SYNC_NOTIFICATION_ID)
     }
 
-    /** Allow sync on cellular for this session (one-time confirmation) */
-    fun confirmCellularSync() {
-        cellularConfirmed = true
-        allowCellularSync = true
-    }
-
-    private suspend fun evaluateNetworkState(state: NetworkState) {
-        when (state) {
-            NetworkState.WIFI -> {
-                resumeSync()
-                notificationManager.cancel(SYNC_NOTIFICATION_ID)
-            }
-            NetworkState.CELLULAR -> {
-                if (allowCellularSync) {
-                    resumeSync()
-                    notificationManager.cancel(SYNC_NOTIFICATION_ID)
-                } else {
-                    pauseSync()
-                    showPausedNotification()
-                }
-            }
-            NetworkState.OFFLINE -> {
-                // bitcoind handles offline gracefully, but mark as paused for UI
-                _syncPaused.value = true
-                notificationManager.cancel(SYNC_NOTIFICATION_ID)
-            }
-        }
-    }
-
-    // Pausing via setnetworkactive(false) disconnects all peers and prevents new connections.
-    // This is preferable to just lowering maxconnections because bitcoind would still
-    // accept inbound connections and consume mobile data in the background.
     private suspend fun pauseSync() {
         try {
             val params = JSONArray().apply { put(false) }
             rpcClient.call("setnetworkactive", params)
             _syncPaused.value = true
-            Log.i(TAG, "Sync paused — on mobile data")
+            Log.i(TAG, "Sync paused — data budget exceeded")
         } catch (e: Exception) {
             Log.w(TAG, "Failed to pause sync", e)
-        }
-    }
-
-    private suspend fun resumeSync() {
-        try {
-            val params = JSONArray().apply { put(true) }
-            rpcClient.call("setnetworkactive", params)
-            _syncPaused.value = false
-            Log.i(TAG, "Sync resumed")
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to resume sync", e)
         }
     }
 
     private fun checkBudget() {
         // Check cellular budget
         val cellBudget = cellularBudgetMb
-        if (cellBudget > 0) {
+        if (cellBudget > 0 && networkMonitor.networkState.value == NetworkState.CELLULAR) {
             val cellUsedMb = networkMonitor.getMonthCellularUsage() / (1024 * 1024)
-            if (cellUsedMb >= cellBudget && allowCellularSync) {
-                Log.i(TAG, "Cellular budget exceeded ($cellUsedMb MB / $cellBudget MB), pausing cellular")
-                allowCellularSync = false
+            if (cellUsedMb >= cellBudget) {
+                Log.i(TAG, "Cellular budget exceeded ($cellUsedMb MB / $cellBudget MB), pausing")
+                scope.launch { pauseSync() }
+                showBudgetExceededNotification("Cellular")
             }
         }
 
         // Check WiFi budget
         val wifiBudget = wifiBudgetMb
-        if (wifiBudget > 0) {
+        if (wifiBudget > 0 && networkMonitor.networkState.value == NetworkState.WIFI) {
             val wifiUsedMb = networkMonitor.getMonthWifiUsage() / (1024 * 1024)
-            if (wifiUsedMb >= wifiBudget && networkMonitor.networkState.value == NetworkState.WIFI) {
+            if (wifiUsedMb >= wifiBudget) {
                 Log.i(TAG, "WiFi budget exceeded ($wifiUsedMb MB / $wifiBudget MB), pausing")
                 scope.launch { pauseSync() }
                 showBudgetExceededNotification("WiFi")
@@ -180,24 +119,6 @@ class SyncController(
             .setContentIntent(pendingIntent)
             .setOngoing(false)
             .build()
-        notificationManager.notify(SYNC_NOTIFICATION_ID, notification)
-    }
-
-    private fun showPausedNotification() {
-        val pendingIntent = PendingIntent.getActivity(
-            context, 0,
-            Intent(context, MainActivity::class.java),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
-
-        val notification = Notification.Builder(context, SYNC_CHANNEL_ID)
-            .setContentTitle("₿ Pocket Node")
-            .setContentText("Sync paused — on mobile data")
-            .setSmallIcon(android.R.drawable.ic_menu_manage)
-            .setContentIntent(pendingIntent)
-            .setOngoing(false)
-            .build()
-
         notificationManager.notify(SYNC_NOTIFICATION_ID, notification)
     }
 

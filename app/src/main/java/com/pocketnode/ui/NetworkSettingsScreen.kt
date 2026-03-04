@@ -27,18 +27,15 @@ import com.pocketnode.ui.components.formatBytes
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NetworkSettingsScreen(
-    allowCellular: Boolean,
     cellularBudgetMb: Long,
     wifiBudgetMb: Long = 0,
     networkMonitor: NetworkMonitor? = null,
-    onAllowCellularChanged: (Boolean) -> Unit,
     onCellularBudgetChanged: (Long) -> Unit,
     onWifiBudgetChanged: (Long) -> Unit = {},
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("ui_prefs", android.content.Context.MODE_PRIVATE) }
-    var showCellularInfo by remember { mutableStateOf(prefs.getBoolean("info_cellular", true)) }
     var showCellularBudgetInfo by remember { mutableStateOf(prefs.getBoolean("info_cell_budget", true)) }
     var showWifiBudgetInfo by remember { mutableStateOf(prefs.getBoolean("info_wifi_budget", true)) }
     // Read persisted values directly from SharedPreferences as fallback
@@ -73,54 +70,6 @@ fun NetworkSettingsScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-            // Allow cellular sync
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                "Allow sync on cellular",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Medium
-                            )
-                            Text(
-                                "Sync blockchain over mobile data",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                            )
-                        }
-                        IconButton(onClick = {
-                            showCellularInfo = !showCellularInfo
-                            prefs.edit().putBoolean("info_cellular", showCellularInfo).apply()
-                        }) {
-                            Icon(
-                                Icons.Outlined.Info,
-                                contentDescription = "Info",
-                                tint = if (showCellularInfo) MaterialTheme.colorScheme.primary
-                                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
-                            )
-                        }
-                        Switch(
-                            checked = allowCellular,
-                            onCheckedChange = onAllowCellularChanged
-                        )
-                    }
-                    if (showCellularInfo) {
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            "Bitcoin initial block download can use significant data (300+ GB). " +
-                                "Once synced, ongoing usage is much lower (~150 MB/day). " +
-                                "Enable this only if you have an unlimited plan or are nearly synced.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                        )
-                    }
-                }
-            }
-
             // Monthly cellular budget
             BudgetCard(
                 title = "Monthly cellular budget",

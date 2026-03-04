@@ -60,7 +60,7 @@ fun NodeStatusScreen(
     networkState: NetworkState = NetworkState.OFFLINE,
     syncPaused: Boolean = false,
     todayUsage: DataUsageEntry? = null,
-    onAllowCellular: () -> Unit = {},
+
     onNavigateToDataUsage: () -> Unit = {},
     onNavigateToNetworkSettings: () -> Unit = {},
     onNavigateToNodeAccess: () -> Unit = {},
@@ -403,7 +403,7 @@ fun NodeStatusScreen(
                 networkState = networkState,
                 syncPaused = syncPaused,
                 todayUsage = todayUsage,
-                onAllowCellular = onAllowCellular
+
             )
 
 

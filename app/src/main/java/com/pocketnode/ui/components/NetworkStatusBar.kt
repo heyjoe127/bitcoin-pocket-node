@@ -29,8 +29,7 @@ private val GreenColor = Color(0xFF4CAF50)
 fun NetworkStatusBar(
     networkState: NetworkState,
     syncPaused: Boolean,
-    todayUsage: DataUsageEntry?,
-    onAllowCellular: () -> Unit
+    todayUsage: DataUsageEntry?
 ) {
     Column {
         // Offline banner
@@ -56,9 +55,9 @@ fun NetworkStatusBar(
             }
         }
 
-        // Cellular paused banner
+        // Data budget exceeded banner
         AnimatedVisibility(
-            visible = networkState == NetworkState.CELLULAR && syncPaused,
+            visible = syncPaused,
             enter = expandVertically(),
             exit = shrinkVertically()
         ) {
@@ -70,19 +69,12 @@ fun NetworkStatusBar(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "Sync paused: on mobile data",
+                    "Sync paused: data budget exceeded",
                     color = AmberColor,
                     fontWeight = FontWeight.Medium,
                     fontSize = 14.sp,
                     modifier = Modifier.weight(1f)
                 )
-                Spacer(Modifier.width(8.dp))
-                TextButton(
-                    onClick = onAllowCellular,
-                    colors = ButtonDefaults.textButtonColors(contentColor = AmberColor)
-                ) {
-                    Text("Allow", fontWeight = FontWeight.Bold)
-                }
             }
         }
 

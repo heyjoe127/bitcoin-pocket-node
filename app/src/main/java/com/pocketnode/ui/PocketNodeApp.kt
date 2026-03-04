@@ -85,7 +85,6 @@ fun PocketNodeApp(
                                 networkState = networkState,
                                 syncPaused = syncPaused,
                                 todayUsage = todayUsage,
-                                onAllowCellular = { syncController?.confirmCellularSync() },
                                 onNavigateToDataUsage = {}, // Greyed out in wide mode
                                 onNavigateToNetworkSettings = { navController.navigate("network_settings") },
                                 onNavigateToNodeAccess = { navController.navigate("node_access") },
@@ -117,7 +116,6 @@ fun PocketNodeApp(
                     networkState = networkState,
                     syncPaused = syncPaused,
                     todayUsage = todayUsage,
-                    onAllowCellular = { syncController?.confirmCellularSync() },
                     onNavigateToDataUsage = { navController.navigate("data_usage") },
                     onNavigateToNetworkSettings = { navController.navigate("network_settings") },
                     onNavigateToNodeAccess = { navController.navigate("node_access") },
@@ -168,19 +166,12 @@ fun PocketNodeApp(
             composable("network_settings") {
                 val ctx = LocalContext.current
                 val syncPrefs = remember { ctx.getSharedPreferences("sync_settings", android.content.Context.MODE_PRIVATE) }
-                var allowCellular by remember { mutableStateOf(syncPrefs.getBoolean("allow_cellular_sync", false)) }
                 var cellBudget by remember { mutableStateOf(syncPrefs.getLong("cellular_budget_mb", 0)) }
                 var wifiBudget by remember { mutableStateOf(syncPrefs.getLong("wifi_budget_mb", 0)) }
                 NetworkSettingsScreen(
-                    allowCellular = allowCellular,
                     cellularBudgetMb = cellBudget,
                     wifiBudgetMb = wifiBudget,
                     networkMonitor = networkMonitor,
-                    onAllowCellularChanged = {
-                        allowCellular = it
-                        syncPrefs.edit().putBoolean("allow_cellular_sync", it).apply()
-                        syncController?.allowCellularSync = it
-                    },
                     onCellularBudgetChanged = {
                         cellBudget = it
                         syncController?.cellularBudgetMb = it
