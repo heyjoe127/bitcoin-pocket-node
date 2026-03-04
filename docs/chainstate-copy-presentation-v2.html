@@ -520,7 +520,7 @@
   <p class="subtitle">Full node on your phone in <span class="highlight">under 20 minutes</span><br>No days-long sync. No trusted third parties.</p>
   <div class="stats" style="margin-top: 40px;">
     <div class="stat">
-      <div class="stat-value highlight">~13 GB</div>
+      <div class="stat-value highlight">~26 GB</div>
       <div class="stat-label">Total disk (11 GB chainstate + 2 GB blocks)</div>
     </div>
     <div class="stat">
@@ -790,7 +790,7 @@
       <div class="step-num" style="background: var(--orange);">★</div>
       <div class="step-content">
         <div class="step-title highlight">Pruning takes over</div>
-        <div class="step-desc">This is normal pruned node behaviour - bitcoind finds empty block files, recognises them as pruned, and continues forward keeping only recent blocks. With <span class="mono">prune=2048</span> it maintains ~2 GB of recent block data. Total disk usage is ~13 GB including the 11 GB chainstate (UTXO set).</div>
+        <div class="step-desc">This is normal pruned node behaviour - bitcoind finds empty block files, recognises them as pruned, and continues forward keeping only recent blocks. With <span class="mono">prune=2048</span> it maintains ~2 GB of recent block data. Total disk usage is ~26 GB including the chainstate (UTXO set), block index, and block filters for Lightning.</div>
         <div class="trick">We're deliberately creating the conditions that trigger standard pruning. No hacks - just giving bitcoind a valid chainstate and letting its built-in pruning logic do the rest.</div>
       </div>
     </div>
@@ -821,8 +821,8 @@
         <div class="step" style="animation-delay: 0.1s; border-left-color: var(--purple);">
           <div class="step-num" style="background: var(--purple);">4</div>
           <div class="step-content">
-            <div class="step-title">Why only 4 peers?</div>
-            <div class="step-desc">Default Bitcoin Core connects to 8-10 peers. On a phone, each peer costs battery and bandwidth. <span class="highlight">maxconnections=4</span> keeps the node fully validated while cutting resource use in half.</div>
+            <div class="step-title">Smart power modes</div>
+            <div class="step-desc">Three modes adapt to your situation: <span class="highlight">Max Data</span> (WiFi + charging, always connected), <span class="highlight">Low Data</span> (WiFi on battery, 15-min burst sync), <span class="highlight">Away</span> (cellular, 60-min burst sync). Auto-detects or set manually.</div>
           </div>
         </div>
         <div class="step" style="animation-delay: 0.3s; border-left-color: var(--purple);">
@@ -846,8 +846,8 @@
         <div class="step" style="animation-delay: 0.7s; border-left-color: var(--purple);">
           <div class="step-num" style="background: var(--purple);">📶</div>
           <div class="step-content">
-            <div class="step-title">Metered network detection</div>
-            <div class="step-desc">VPN over cellular looks like WiFi to Android. We detect <span class="highlight">metered connections</span> and warn before syncing over mobile data - blocks are ~2 MB each.</div>
+            <div class="step-title">VPN-aware networking</div>
+            <div class="step-desc">VPN over cellular looks like WiFi to Android. We detect the <span class="highlight">actual connection type</span> behind VPN and adjust the power mode automatically. Data budgets let you cap monthly cellular and WiFi usage.</div>
           </div>
         </div>
         <div class="step" style="animation-delay: 0.9s; border-left-color: var(--purple);">
@@ -879,8 +879,8 @@
       <div class="device-label" style="color: var(--green);">✅ Synced</div>
       <div class="device-detail">
         Block 937,162<br>
-        4 peers connected<br>
-        ~13 GB total
+        8 peers connected<br>
+        ~26 GB total
       </div>
     </div>
     <div style="font-size: 2em;">→</div>
@@ -899,7 +899,7 @@
       </div>
       <div>
         <span class="tag">Auto-start on boot</span>
-        <span class="tag">Metered network detection</span>
+        <span class="tag">Smart power modes</span>
       </div>
     </div>
   </div>
