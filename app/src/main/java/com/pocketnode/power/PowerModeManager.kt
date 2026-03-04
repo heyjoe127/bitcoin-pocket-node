@@ -150,10 +150,11 @@ class PowerModeManager(private val context: Context) {
         }
         Log.i(TAG, "Power mode: $previous -> $mode${if (isAuto) " (auto)" else ""}")
 
-        // Cancel existing burst cycle and wallet hold
+        // Cancel existing burst cycle
         burstJob?.cancel()
         burstJob = null
-        walletHoldingNetwork = false
+        // Only clear wallet hold on manual mode changes, not auto
+        if (!isAuto) walletHoldingNetwork = false
         _burstStateFlow.value = BurstState.IDLE
         _nextBurstFlow.value = 0L
 
@@ -204,6 +205,11 @@ class PowerModeManager(private val context: Context) {
                 }
                 val current = _modeFlow.value
                 if (suggested != current) {
+                    // Don't override if wallet is holding the network active
+                    if (walletHoldingNetwork && suggested != Mode.MAX) {
+                        Log.i(TAG, "Auto-detect suggests $suggested but wallet connected, staying $current")
+                        return@collect
+                    }
                     Log.i(TAG, "Auto-switching: $current -> $suggested")
                     setMode(suggested, scope, isAuto = true)
                 }
