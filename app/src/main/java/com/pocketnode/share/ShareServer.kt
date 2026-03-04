@@ -275,6 +275,16 @@ class ShareServer(private val context: Context) {
             totalSize += f.length()
         }
 
+        // Fee estimates (for fast Lightning startup)
+        val feeFile = File(bitcoinDir, "fee_estimates.dat")
+        if (feeFile.exists()) {
+            files.put(JSONObject().apply {
+                put("path", "fee_estimates.dat")
+                put("size", feeFile.length())
+            })
+            totalSize += feeFile.length()
+        }
+
         // Block filters (optional, for Lightning)
         val filterDir = File(bitcoinDir, "indexes/blockfilter/basic")
         if (filterDir.exists() && (filterDir.listFiles()?.size ?: 0) > 1) {
