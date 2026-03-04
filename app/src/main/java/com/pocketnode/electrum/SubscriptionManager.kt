@@ -100,15 +100,15 @@ class SubscriptionManager(
                 }
             }
             lastTipHeight = currentHeight
-
-            // Refresh persisted history on new blocks (captures newly confirmed txs)
-            try {
-                addressIndex.refreshOnNewBlock()
-            } catch (e: Exception) {
-                Log.w(TAG, "Block refresh failed: ${e.message}")
-            }
         } else if (lastTipHeight < 0) {
             lastTipHeight = currentHeight
+        }
+
+        // Refresh wallet transactions every poll (catches unconfirmed txs between blocks)
+        try {
+            addressIndex.refreshOnNewBlock()
+        } catch (e: Exception) {
+            Log.d(TAG, "Tx refresh failed: ${e.message}")
         }
 
         // Check for scripthash changes (only for subscribed ones)
