@@ -257,7 +257,7 @@ fun ConnectWalletScreen(onBack: () -> Unit) {
                                     )
                                 ) {
                                     Text(
-                                        if (recoveryStatus.isComplete) "Refresh" else "Recover History",
+                                        if (recoveryStatus.isComplete) "Refresh from mempool.space" else "Recover from mempool.space",
                                         style = MaterialTheme.typography.labelSmall
                                     )
                                 }
