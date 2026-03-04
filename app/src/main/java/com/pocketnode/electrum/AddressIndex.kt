@@ -364,6 +364,60 @@ class AddressIndex(private val rpc: BitcoinRpcClient, private val context: Conte
     }
 
     /**
+     * Called by SubscriptionManager when a new block is detected.
+     * Refreshes wallet transactions and persists any new ones.
+     */
+    suspend fun refreshOnNewBlock() {
+        // Query wallet for recent transactions (picks up newly confirmed + new incoming)
+        val txResult = walletRpc("listtransactions", JSONArray().apply {
+            put("*"); put(50); put(0); put(true)  // last 50 txs, include watchonly
+        })
+        val txArr = txResult?.optJSONArray("value") ?: return
+
+        var newTxCount = 0
+        for (i in 0 until txArr.length()) {
+            val tx = txArr.getJSONObject(i)
+            val txid = tx.optString("txid", "")
+            val addr = tx.optString("address", "")
+            val confs = tx.optInt("confirmations", 0)
+            val height = if (confs > 0) tx.optInt("blockheight", 0) else 0
+
+            if (txid.isEmpty() || addr.isEmpty()) continue
+            val scripthash = addressToScripthash[addr] ?: continue
+
+            val entry = "$txid:$height"
+            val existing = persistedHistory[scripthash]
+            if (existing != null) {
+                // Check if we need to update (new tx or height changed from 0 to confirmed)
+                val hasExact = existing.contains(entry)
+                val hasUnconfirmed = existing.contains("$txid:0")
+                if (!hasExact) {
+                    if (hasUnconfirmed && height > 0) {
+                        // Tx confirmed, update height
+                        existing.remove("$txid:0")
+                        existing.add(entry)
+                        newTxCount++
+                    } else if (!hasUnconfirmed) {
+                        existing.add(entry)
+                        newTxCount++
+                    }
+                }
+            } else {
+                persistedHistory[scripthash] = mutableSetOf(entry)
+                newTxCount++
+            }
+
+            // Cache tx hex if available
+            proactivelyCacheTx(txid)
+        }
+
+        if (newTxCount > 0) {
+            savePersistedHistory()
+            Log.i(TAG, "Block refresh: $newTxCount new/updated transactions persisted")
+        }
+    }
+
+    /**
      * Find addresses with UTXOs but incomplete history, and recover from mempool.space.
      * Only runs once per address (results are persisted).
      */

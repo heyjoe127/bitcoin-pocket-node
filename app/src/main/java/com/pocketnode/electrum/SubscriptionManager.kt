@@ -100,6 +100,13 @@ class SubscriptionManager(
                 }
             }
             lastTipHeight = currentHeight
+
+            // Refresh persisted history on new blocks (captures newly confirmed txs)
+            try {
+                addressIndex.refreshOnNewBlock()
+            } catch (e: Exception) {
+                Log.w(TAG, "Block refresh failed: ${e.message}")
+            }
         } else if (lastTipHeight < 0) {
             lastTipHeight = currentHeight
         }
