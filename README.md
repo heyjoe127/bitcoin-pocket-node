@@ -13,7 +13,7 @@ Turn any Android phone into a fully-validating Bitcoin full node. No server depe
 - **3 Bitcoin implementations:** Core 28.1, Core 30, Knots 29.3 (with BIP 110 toggle). Switch with one tap, same chainstate
 - Phone stays cool, runs overnight without issues
 - ~26 GB total disk with Lightning (11 GB chainstate + 2 GB pruned blocks + 13 GB block filters), ~13 GB without
-- **Pure Kotlin Electrum server** for BlueWallet on-chain connectivity to your own node
+- **Pure Kotlin Electrum server** with wallet tracking: balance, transactions, UTXOs all served from your own pruned node
 - **Built-in Lightning wallet** powered by LDK: send, receive, BOLT12 offers, open/close channels, peer browser, QR codes
 - **LNDHub API** for external Lightning wallets (BlueWallet, Zeus)
 - **Proactive prune recovery** re-downloads missed blocks on startup when node was offline
@@ -116,7 +116,7 @@ See [Version Selection Design](docs/VERSION-SELECTION.md) and [BIP 110 Research]
 
 - **3 Bitcoin implementations** with one-tap switching: Core 28.1, Core 30, Knots 29.3 (BIP 110 toggle)
 - **Three bootstrap paths:** home node, nearby phone, or internet download
-- **Pure Kotlin Electrum server** so BlueWallet can query your own node (no native dependencies)
+- **Pure Kotlin Electrum server** with pruned-node wallet tracking: BlueWallet balances, transactions, and UTXOs served from your own node (tested and working)
 - **Built-in Lightning node** powered by LDK (send, receive, channels, peer browser, seed backup/restore)
 - **LNDHub API** on localhost:3000 for external wallet connectivity (BlueWallet, Zeus)
 - **Home node watchtower** with automatic channel protection via LDK-to-LND bridge (direct Tor .onion or SSH fallback)
@@ -124,7 +124,8 @@ See [Version Selection Design](docs/VERSION-SELECTION.md) and [BIP 110 Research]
 - **QR codes:** generate on receive, scan with camera on send (CameraX + ZXing, no Google Play)
 - **Sovereign price discovery** using UTXOracle (BTC/USD from on-chain data, no exchange APIs)
 - **Mempool viewer** with fee estimates, projected blocks, and transaction search
-- **Wallet setup guide** for BlueWallet connection
+- **Wallet tracking** with history recovery from mempool.space, transaction hex caching, and gap limit discovery
+- **BlueWallet integration** tested: balance display, transaction history, pull-to-refresh all working on pruned node
 - **Snapshot validation** checks block hash before loading, auto-redownloads if wrong
 - **Non-blocking snapshot load** with progress tracking
 - **Network-aware sync** that auto-pauses on cellular and resumes on WiFi
@@ -132,7 +133,6 @@ See [Version Selection Design](docs/VERSION-SELECTION.md) and [BIP 110 Research]
 - **Data budgets** for WiFi and cellular
 - **Power modes:** Max Data, Low Data, Away Mode with burst sync for mobile efficiency
 - **Auto data mode:** detects WiFi/cellular and charging state, adjusts automatically
-- **Battery saver** pauses sync when unplugged below 50%
 - **Auto-start on boot**
 - **Secure node pairing** with restricted SFTP account (no access to your bitcoin data)
 - **Setup checklist** with auto-detection of completed steps
@@ -304,9 +304,10 @@ app/src/main/java/com/pocketnode/
 │   ├── LightningService.kt     # ldk-node wrapper (start/stop, channels, payments)
 │   └── LndHubServer.kt         # LNDHub-compatible API server on localhost:3000
 ├── electrum/
-│   ├── ElectrumServer.kt       # Electrum protocol TCP server
-│   ├── ElectrumMethods.kt      # Electrum RPC method handlers
-│   ├── AddressIndex.kt         # Descriptor wallet + address tracking
+│   ├── ElectrumServer.kt       # Electrum protocol TCP server (batch JSON array responses)
+│   ├── ElectrumMethods.kt      # Electrum RPC method handlers (pruned-node tx fallbacks)
+│   ├── AddressIndex.kt         # Descriptor wallet, UTXO cache, tx hex cache, recovery
+│   ├── HistoryRecovery.kt      # mempool.space history recovery with gap limit + backoff
 │   └── SubscriptionManager.kt  # Address/header subscription notifications
 ├── power/
 │   └── PowerModeManager.kt     # Max/Low/Away power modes with burst sync

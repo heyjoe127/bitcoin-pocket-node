@@ -120,11 +120,20 @@ Pruned Bitcoin Core on the phone with BIP 157/158 block filters. Zeus with embed
 - [x] scantxoutset for balance and UTXOs (reads chainstate directly)
 - [x] Persistent transaction history (survives block pruning)
 - [x] 3-source history merge (persisted + chainstate + descriptor wallet)
-- [x] History recovery from mempool.space for addresses with missing txs
+- [x] History recovery from mempool.space with gap limit discovery (20 address gap)
 - [x] Skip rescan for already-imported descriptors (fast restarts)
+- [x] Batch JSON-RPC responses as JSON array (BlueWallet compatibility)
+- [x] Transaction hex caching: proactive cache while blocks available, mempool.space fallback for pruned
+- [x] Block hash retry for getrawtransaction on pruned nodes
+- [x] zpub/ypub to xpub conversion for descriptor wallet import
+- [x] Wallet-specific RPC endpoint (/wallet/pocketnode_electrum)
+- [x] Prevent double ElectrumService start (EADDRINUSE fix)
+- [x] Recovery UI: progress counter, rate limit backoff display, instant cancel
+- [x] Exponential backoff on mempool.space rate limits (2s-30s, retry same address)
+- [x] **BlueWallet tested:** balance, transactions, pull-to-refresh all working
 - [ ] Expose Arti SOCKS proxy from native lib for Java-side Tor routing
 - [ ] Route mempool.space history recovery through Tor (single Arti instance, shared SOCKS)
-- [ ] Periodic background rescan for new UTXOs on tracked addresses
+- [ ] Refresh UTXO cache on new blocks (currently only on startup)
 - [ ] Lightning recovery helper: scantxoutset + mempool.space to find force-close txs on pruned nodes, feed raw tx data to LDK for sweep (closes biggest risk in PRUNED-NODE-RISK-ANALYSIS.md)
 
 ### Version Selection Enhancements
@@ -271,7 +280,7 @@ Compose Multiplatform targets iOS (same shared UI as desktop port). bitcoind cro
 - [ ] Rust GBT native lib for mempool block projection performance
 
 ### Electrum Server / Wallet
-- [ ] Descriptor wallet support: replace `importmulti` with `importdescriptors`
+- [x] Descriptor wallet support: zpub/ypub/xpub import with `importdescriptors`
 - [ ] Taproot/P2TR output recognition
 - [ ] Multisig support (comes with descriptor wallets)
 - [ ] Remove `deprecatedrpc=create_bdb` dependency
