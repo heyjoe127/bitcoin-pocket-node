@@ -167,6 +167,25 @@ class ElectrumMethods(
                 if (verbose) {
                     val decoded = rpc.call("decoderawtransaction", JSONArray().apply { put(cachedHex) })
                     if (decoded != null && !decoded.optBoolean("_rpc_error", false)) {
+                        // decoderawtransaction doesn't include confirmations/blockhash/blocktime
+                        // Add them from persisted history so wallets don't crash
+                        val height = addressIndex.getTxHeight(txid)
+                        if (height > 0) {
+                            val blockHash = getBlockHash(height)
+                            val chainInfo = rpc.call("getblockchaininfo")
+                            val tipHeight = chainInfo?.optInt("blocks", 0) ?: 0
+                            decoded.put("confirmations", if (tipHeight > 0) tipHeight - height + 1 else 1)
+                            if (blockHash.isNotEmpty()) {
+                                decoded.put("blockhash", blockHash)
+                                val header = rpc.call("getblockheader", JSONArray().apply { put(blockHash); put(true) })
+                                if (header != null) {
+                                    decoded.put("blocktime", header.optLong("time", 0))
+                                    decoded.put("time", header.optLong("time", 0))
+                                }
+                            }
+                        } else {
+                            decoded.put("confirmations", 0)
+                        }
                         result = decoded
                     }
                 } else {
