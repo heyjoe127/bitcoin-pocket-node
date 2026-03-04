@@ -136,17 +136,53 @@ class ElectrumMethods(
     // -- Transaction methods --
 
     fun transactionGet(txid: String, verbose: Boolean): Any = runBlocking {
+        // Try bitcoind directly first
         val params = JSONArray().apply {
             put(txid)
             put(if (verbose) 1 else 0)
         }
-        val result = rpc.call("getrawtransaction", params)
+        var result = rpc.call("getrawtransaction", params)
+
+        // On pruned nodes without txindex, retry with block hash
+        if (result != null && result.optBoolean("_rpc_error", false) && result.optInt("code") == -5) {
+            val height = addressIndex.getTxHeight(txid)
+            if (height > 0) {
+                val blockHash = getBlockHash(height)
+                if (blockHash.isNotEmpty()) {
+                    val retryParams = JSONArray().apply {
+                        put(txid)
+                        put(if (verbose) 1 else 0)
+                        put(blockHash)
+                    }
+                    result = rpc.call("getrawtransaction", retryParams)
+                }
+            }
+        }
+
+        // If still failing, check the local hex cache (populated during recovery)
+        if (result != null && result.optBoolean("_rpc_error", false)) {
+            val cachedHex = addressIndex.getCachedTxHex(txid)
+            if (cachedHex != null) {
+                Log.d(TAG, "Using cached hex for $txid (${cachedHex.length} chars)")
+                if (verbose) {
+                    val decoded = rpc.call("decoderawtransaction", JSONArray().apply { put(cachedHex) })
+                    if (decoded != null && !decoded.optBoolean("_rpc_error", false)) {
+                        result = decoded
+                    }
+                } else {
+                    result = JSONObject().put("value", cachedHex)
+                }
+            }
+        }
+
+        // If all sources exhausted, throw
+        if (result != null && result.optBoolean("_rpc_error", false)) {
+            throw Exception("Transaction not available (pruned, not cached)")
+        }
 
         if (verbose) {
-            // Return the full JSON object for verbose mode
             result ?: JSONObject()
         } else {
-            // Return raw hex string
             result?.optString("value", "") ?: ""
         }
     }

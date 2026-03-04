@@ -43,8 +43,17 @@ class AddressIndex(private val rpc: BitcoinRpcClient, private val context: Conte
     // scripthash -> set of "txid:height"
     private val persistedHistory = mutableMapOf<String, MutableSet<String>>()
 
+    // Cached raw tx hex: txid -> hex (for pruned blocks we can't fetch from bitcoind)
+    private val txHexCacheFile = File(context.filesDir, "electrum_tx_hex_cache.json")
+    private val txHexCache = mutableMapOf<String, String>()
+
     init {
         loadPersistedHistory()
+        loadTxHexCache()
+        // Load saved mempool API URL
+        val savedUrl = context.getSharedPreferences("electrum_prefs", android.content.Context.MODE_PRIVATE)
+            .getString("mempool_api_url", null)
+        if (savedUrl != null) HistoryRecovery.apiBase = savedUrl
     }
 
     private fun loadPersistedHistory() {
@@ -76,6 +85,43 @@ class AddressIndex(private val rpc: BitcoinRpcClient, private val context: Conte
         }
     }
 
+    private fun loadTxHexCache() {
+        try {
+            if (txHexCacheFile.exists()) {
+                val json = JSONObject(txHexCacheFile.readText())
+                for (key in json.keys()) {
+                    txHexCache[key] = json.getString(key)
+                }
+                Log.i(TAG, "Loaded tx hex cache: ${txHexCache.size} transactions")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to load tx hex cache: ${e.message}")
+        }
+    }
+
+    private fun saveTxHexCache() {
+        try {
+            val json = JSONObject()
+            for ((k, v) in txHexCache) json.put(k, v)
+            txHexCacheFile.writeText(json.toString())
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to save tx hex cache: ${e.message}")
+        }
+    }
+
+    /**
+     * Get cached raw hex for a transaction. Returns null if not cached.
+     */
+    fun getCachedTxHex(txid: String): String? = txHexCache[txid]
+
+    /**
+     * Cache raw hex for a transaction.
+     */
+    fun cacheTxHex(txid: String, hex: String) {
+        txHexCache[txid] = hex
+        saveTxHexCache()
+    }
+
     private fun persistTx(scripthash: String, txid: String, height: Int) {
         val set = persistedHistory.getOrPut(scripthash) { mutableSetOf() }
         val entry = "$txid:$height"
@@ -87,6 +133,21 @@ class AddressIndex(private val rpc: BitcoinRpcClient, private val context: Conte
             }
             savePersistedHistory()
         }
+    }
+
+    /**
+     * Look up a transaction's block height from persisted history.
+     */
+    fun getTxHeight(txid: String): Int {
+        for ((_, set) in persistedHistory) {
+            for (entry in set) {
+                val parts = entry.split(":")
+                if (parts.size == 2 && parts[0] == txid) {
+                    return parts[1].toIntOrNull() ?: 0
+                }
+            }
+        }
+        return 0
     }
 
     /**
@@ -298,9 +359,8 @@ class AddressIndex(private val rpc: BitcoinRpcClient, private val context: Conte
 
         Log.i(TAG, "Index built: ${addressToScripthash.size} addresses, ${scripthashToAddress.size} scripthashes")
 
-        // Check initial recovery status, then recover missing history
+        // Check initial recovery status (don't auto-scan, user taps Refresh)
         checkRecoveryStatus()
-        recoverMissingHistory()
     }
 
     /**
@@ -312,11 +372,20 @@ class AddressIndex(private val rpc: BitcoinRpcClient, private val context: Conte
         val recoveredAddresses: Int = 0,
         val totalTxFound: Int = 0,
         val isRecovering: Boolean = false,
-        val isComplete: Boolean = false
+        val isComplete: Boolean = false,
+        val scanProgress: Int = 0,       // addresses scanned so far
+        val scanTotal: Int = 0,          // total addresses to scan
+        val phase: String = ""           // "Scanning mempool.space...", "Caching transactions...", etc.
     )
 
     private val _recoveryStatus = MutableStateFlow(RecoveryStatus())
     val recoveryStatus: StateFlow<RecoveryStatus> = _recoveryStatus
+    @Volatile private var recoveryCancelled = false
+
+    fun cancelRecovery() {
+        recoveryCancelled = true
+        HistoryRecovery.interruptConnection()
+    }
 
     /**
      * Check if all tracked addresses have been recovered.
@@ -348,22 +417,11 @@ class AddressIndex(private val rpc: BitcoinRpcClient, private val context: Conte
             prefs.getStringSet("recovered", emptySet())?.toMutableSet() ?: mutableSetOf()
         }
 
-        // Find addresses that need recovery
+        // Scan all tracked addresses sequentially
         val needsRecovery = mutableSetOf<String>()
         for (addr in addressToScripthash.keys) {
             if (addr in recoveredAddresses) continue
-            if (force) {
-                needsRecovery.add(addr)
-                continue
-            }
-            // Only auto-recover addresses that have received transactions
-            val txResult = walletRpc("listunspent", JSONArray().apply {
-                put(0); put(9999999); put(JSONArray().apply { put(addr) })
-            })
-            val arr = txResult?.optJSONArray("value")
-            if (arr != null && arr.length() > 0) {
-                needsRecovery.add(addr)
-            }
+            needsRecovery.add(addr)
         }
 
         if (needsRecovery.isEmpty()) {
@@ -372,9 +430,13 @@ class AddressIndex(private val rpc: BitcoinRpcClient, private val context: Conte
         }
 
         Log.i(TAG, "Recovering history for ${needsRecovery.size} addresses")
+        recoveryCancelled = false
         _recoveryStatus.value = _recoveryStatus.value.copy(
             isRecovering = true,
-            totalAddresses = addressToScripthash.keys.size
+            totalAddresses = addressToScripthash.keys.size,
+            scanProgress = 0,
+            scanTotal = needsRecovery.size,
+            phase = "Scanning mempool.space (${needsRecovery.size} addresses)..."
         )
 
         val knownCounts = mutableMapOf<String, Int>()
@@ -383,7 +445,25 @@ class AddressIndex(private val rpc: BitcoinRpcClient, private val context: Conte
             knownCounts[addr] = persistedHistory[sh]?.size ?: 0
         }
 
-        val recovered = HistoryRecovery.recoverHistory(needsRecovery, knownCounts)
+        val recovered = HistoryRecovery.recoverHistory(
+            needsRecovery, knownCounts,
+            onProgress = { scanned, total, addr ->
+                val displayAddr = if (addr.contains("\n")) {
+                    // Rate limit message already formatted
+                    val parts = addr.split("\n", limit = 2)
+                    val shortAddr = parts[0].take(8) + "..." + parts[0].takeLast(6)
+                    "$shortAddr\n${parts[1]}"
+                } else {
+                    addr.take(8) + "..." + addr.takeLast(6)
+                }
+                _recoveryStatus.value = _recoveryStatus.value.copy(
+                    scanProgress = scanned,
+                    scanTotal = total,
+                    phase = "${scanned + 1}/$total $displayAddr"
+                )
+            },
+            isCancelled = { recoveryCancelled }
+        )
 
         var newTxCount = 0
         for ((addr, txs) in recovered) {
@@ -405,6 +485,14 @@ class AddressIndex(private val rpc: BitcoinRpcClient, private val context: Conte
             Log.i(TAG, "Recovered $newTxCount transactions from mempool.space")
         }
 
+        // Fetch raw hex for all known txids + their vin txids
+        if (!recoveryCancelled) {
+            _recoveryStatus.value = _recoveryStatus.value.copy(
+                phase = "Caching transaction data..."
+            )
+            fetchAndCacheTxHex()
+        }
+
         _recoveryStatus.value = RecoveryStatus(
             totalAddresses = addressToScripthash.keys.size,
             recoveredAddresses = recoveredAddresses.size,
@@ -412,6 +500,130 @@ class AddressIndex(private val rpc: BitcoinRpcClient, private val context: Conte
             isRecovering = false,
             isComplete = true
         )
+    }
+
+    /**
+     * Fetch raw hex for all known txids and their vin (input) txids.
+     * Stores in txHexCache so transactionGet can serve them without network calls.
+     */
+    private suspend fun fetchAndCacheTxHex() {
+        // Collect all txids from persisted history
+        val allTxids = mutableSetOf<String>()
+        for ((_, set) in persistedHistory) {
+            for (entry in set) {
+                val txid = entry.split(":").firstOrNull() ?: continue
+                allTxids.add(txid)
+            }
+        }
+
+        if (allTxids.isEmpty()) return
+
+        // Find which txids we don't have cached yet
+        val needed = allTxids.filter { it !in txHexCache }.toMutableSet()
+        if (needed.isEmpty()) {
+            Log.i(TAG, "All ${allTxids.size} tx hex already cached")
+            return
+        }
+
+        Log.i(TAG, "Fetching hex for ${needed.size} transactions from mempool.space")
+        val vinTxids = mutableSetOf<String>()
+
+        for (txid in needed.toList()) {
+            try {
+                // Fetch full tx JSON to discover vin txids
+                val txJson = HistoryRecovery.httpGetPublic("${HistoryRecovery.apiBase}/tx/$txid")
+                if (txJson != null) {
+                    val tx = JSONObject(txJson)
+                    // Extract vin txids
+                    val vin = tx.optJSONArray("vin")
+                    if (vin != null) {
+                        for (i in 0 until vin.length()) {
+                            val vinTxid = vin.getJSONObject(i).optString("txid", "")
+                            if (vinTxid.isNotEmpty()) vinTxids.add(vinTxid)
+                        }
+                    }
+                }
+
+                // Fetch raw hex
+                val hex = HistoryRecovery.httpGetPublic("${HistoryRecovery.apiBase}/tx/$txid/hex")
+                if (hex != null && hex.matches(Regex("[0-9a-fA-F]+"))) {
+                    txHexCache[txid] = hex
+                }
+                Thread.sleep(200) // rate limit
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to fetch tx $txid: ${e.message}")
+            }
+        }
+
+        // Now fetch hex for vin txids we don't have
+        val vinNeeded = vinTxids.filter { it !in txHexCache }
+        if (vinNeeded.isNotEmpty()) {
+            Log.i(TAG, "Fetching hex for ${vinNeeded.size} input transactions")
+            for (txid in vinNeeded) {
+                try {
+                    val hex = HistoryRecovery.httpGetPublic("${HistoryRecovery.apiBase}/tx/$txid/hex")
+                    if (hex != null && hex.matches(Regex("[0-9a-fA-F]+"))) {
+                        txHexCache[txid] = hex
+                    }
+                    Thread.sleep(200) // rate limit
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to fetch vin tx $txid: ${e.message}")
+                }
+            }
+        }
+
+        saveTxHexCache()
+        Log.i(TAG, "Tx hex cache now has ${txHexCache.size} transactions")
+    }
+
+    /**
+     * Proactively cache a tx's raw hex + its vin txids' hex from local bitcoind.
+     * Called when we first discover a new tx (block is still available, not yet pruned).
+     */
+    private suspend fun proactivelyCacheTx(txid: String) {
+        try {
+            // Get the raw hex from bitcoind
+            val height = getTxHeight(txid)
+            if (height <= 0) return
+
+            val blockHash = rpc.call("getblockhash", JSONArray().apply { put(height) })
+                ?.optString("value", "") ?: return
+            if (blockHash.isEmpty()) return
+
+            // Get raw hex
+            val hexResult = rpc.call("getrawtransaction", JSONArray().apply {
+                put(txid); put(0); put(blockHash)
+            })
+            val hex = hexResult?.optString("value", "") ?: return
+            if (hex.isEmpty()) return
+
+            txHexCache[txid] = hex
+
+            // Decode to find vin txids
+            val decoded = rpc.call("decoderawtransaction", JSONArray().apply { put(hex) })
+            val vin = decoded?.optJSONArray("vin")
+            if (vin != null) {
+                for (i in 0 until vin.length()) {
+                    val vinTxid = vin.getJSONObject(i).optString("txid", "")
+                    if (vinTxid.isNotEmpty() && vinTxid !in txHexCache) {
+                        // Try to get vin tx from bitcoind (might be in a recent block)
+                        val vinHexResult = rpc.call("getrawtransaction", JSONArray().apply {
+                            put(vinTxid); put(0)
+                        })
+                        val vinHex = vinHexResult?.optString("value", "")
+                        if (!vinHex.isNullOrEmpty() && !vinHexResult.optBoolean("_rpc_error", false)) {
+                            txHexCache[vinTxid] = vinHex
+                        }
+                        // If vin tx is also pruned, it'll get fetched during next Recover History
+                    }
+                }
+            }
+
+            saveTxHexCache()
+            Log.d(TAG, "Proactively cached tx $txid + vin txids")
+        } catch (e: Exception) {
+            Log.w(TAG, "Proactive cache failed for $txid: ${e.message}")
+        }
     }
 
     /**
@@ -447,7 +659,13 @@ class AddressIndex(private val rpc: BitcoinRpcClient, private val context: Conte
                 put(9999999) // maxconf
                 put(JSONArray().apply { put(addr) })
             })
+            if (addr == "bc1q3tndgvlx66w95l3lahugqgfd08zwupdqqvxtds") {
+                Log.d(TAG, "getBalance DEBUG addr=$addr result=${result?.toString()?.take(500)}")
+            }
             val arr = result?.optJSONArray("value") ?: continue
+            if (addr == "bc1q3tndgvlx66w95l3lahugqgfd08zwupdqqvxtds") {
+                Log.d(TAG, "getBalance DEBUG arr.length=${arr.length()}")
+            }
             for (i in 0 until arr.length()) {
                 val utxo = arr.getJSONObject(i)
                 val sats = btcToSats(utxo.getDouble("amount"))
@@ -459,6 +677,7 @@ class AddressIndex(private val rpc: BitcoinRpcClient, private val context: Conte
             }
         }
 
+        Log.d(TAG, "getBalance scripthash=${scripthash.take(12)} confirmed=$confirmed unconfirmed=$unconfirmed")
         return Pair(confirmed, unconfirmed)
     }
 
@@ -507,7 +726,13 @@ class AddressIndex(private val rpc: BitcoinRpcClient, private val context: Conte
                 if (existing == null || (height > 0 && existing == 0)) {
                     seenTxids[txid] = height
                 }
-                if (height > 0) persistTx(scripthash, txid, height)
+                if (height > 0) {
+                    persistTx(scripthash, txid, height)
+                    // Proactively cache hex while block is still available
+                    if (txid !in txHexCache) {
+                        proactivelyCacheTx(txid)
+                    }
+                }
             }
         }
 

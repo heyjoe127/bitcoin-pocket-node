@@ -210,6 +210,8 @@ fun ConnectWalletScreen(onBack: () -> Unit) {
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 val statusText = when {
+                                    recoveryStatus.isRecovering && recoveryStatus.phase.isNotEmpty() ->
+                                        recoveryStatus.phase
                                     recoveryStatus.isRecovering -> "Recovering history..."
                                     recoveryStatus.isComplete -> "${recoveryStatus.totalTxFound} transactions tracked"
                                     else -> "History may be incomplete"
@@ -219,8 +221,30 @@ fun ConnectWalletScreen(onBack: () -> Unit) {
                                     style = MaterialTheme.typography.bodySmall,
                                     color = if (recoveryStatus.isComplete) Color(0xFF4CAF50) else Color(0xFFFF9800)
                                 )
+                                if (recoveryStatus.isRecovering && recoveryStatus.scanTotal > 0) {
+                                    Spacer(Modifier.height(4.dp))
+                                    LinearProgressIndicator(
+                                        progress = { recoveryStatus.scanProgress.toFloat() / recoveryStatus.scanTotal.toFloat() },
+                                        modifier = Modifier.fillMaxWidth().height(4.dp),
+                                        color = Color(0xFFF7931A),
+                                        trackColor = Color(0xFFF7931A).copy(alpha = 0.2f)
+                                    )
+                                }
                             }
-                            if (!recoveryStatus.isRecovering) {
+                            Spacer(Modifier.width(8.dp))
+                            if (recoveryStatus.isRecovering) {
+                                OutlinedButton(
+                                    onClick = {
+                                        ElectrumService.addressIndex?.cancelRecovery()
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                    colors = ButtonDefaults.outlinedButtonColors(
+                                        contentColor = Color(0xFFFF5722)
+                                    )
+                                ) {
+                                    Text("Cancel", style = MaterialTheme.typography.labelSmall)
+                                }
+                            } else {
                                 OutlinedButton(
                                     onClick = {
                                         coroutineScope.launch {

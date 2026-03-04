@@ -20,8 +20,8 @@ import java.net.URL
 object HistoryRecovery {
 
     private const val TAG = "HistoryRecovery"
-    private const val API_BASE = "https://mempool.space/api"
-    private const val TIMEOUT_MS = 15_000
+    private const val DEFAULT_API_BASE = "https://mempool.space/api"
+    var apiBase: String = DEFAULT_API_BASE
 
     /**
      * Recover missing transaction history for a set of addresses.
@@ -30,25 +30,88 @@ object HistoryRecovery {
      * Only queries addresses that have UTXOs (from scantxoutset) but
      * fewer history entries than expected.
      */
+    // Active connection that can be interrupted by cancel
+    @Volatile private var activeConnection: HttpURLConnection? = null
+
+    fun interruptConnection() {
+        try { activeConnection?.disconnect() } catch (_: Exception) {}
+    }
+
     suspend fun recoverHistory(
         addresses: Set<String>,
-        knownTxCount: Map<String, Int>  // address -> known tx count
+        knownTxCount: Map<String, Int>,  // address -> known tx count
+        onProgress: ((scanned: Int, total: Int, addr: String) -> Unit)? = null,
+        isCancelled: (() -> Boolean)? = null
     ): Map<String, List<Pair<String, Int>>> = withContext(Dispatchers.IO) {
         val recovered = mutableMapOf<String, List<Pair<String, Int>>>()
+        val total = addresses.size
+        var scanned = 0
 
-        for (addr in addresses) {
+        var backoffMs = 0L
+        var consecutive429s = 0
+        var consecutiveEmpty = 0
+        val addrList = addresses.toList()
+        var index = 0
+
+        while (index < addrList.size) {
+            if (isCancelled?.invoke() == true) {
+                Log.i(TAG, "Recovery cancelled at $scanned/$total")
+                break
+            }
+
+            val addr = addrList[index]
+            onProgress?.invoke(scanned, total, addr)
+
+            if (backoffMs > 200) {
+                onProgress?.invoke(scanned, total, "$addr\n⏳ Rate limited, retrying in ${backoffMs/1000}s...")
+                val chunks = (backoffMs / 200).toInt()
+                for (i in 0 until chunks) {
+                    if (isCancelled?.invoke() == true) break
+                    Thread.sleep(200)
+                }
+                if (isCancelled?.invoke() == true) break
+            } else if (backoffMs > 0) {
+                Thread.sleep(backoffMs)
+            }
+
+            var success = false
+            var txs: List<Pair<String, Int>>? = null
             try {
-                val txs = fetchAddressTransactions(addr)
-                if (txs.isNotEmpty()) {
-                    val known = knownTxCount[addr] ?: 0
-                    if (txs.size > known) {
-                        Log.i(TAG, "Recovered ${txs.size - known} missing txs for $addr")
+                txs = fetchAddressTransactions(addr)
+                if (txs == null) {
+                    consecutive429s++
+                    backoffMs = minOf(2000L * (1L shl minOf(consecutive429s - 1, 4)), 30000L)
+                    Log.w(TAG, "Rate limited on $addr, backoff ${backoffMs}ms")
+                } else {
+                    consecutive429s = 0
+                    backoffMs = 200
+                    success = true
+                    if (txs.isNotEmpty()) {
+                        val known = knownTxCount[addr] ?: 0
+                        if (txs.size > known) {
+                            Log.i(TAG, "Recovered ${txs.size - known} missing txs for $addr")
+                        }
+                        recovered[addr] = txs
                     }
-                    recovered[addr] = txs
                 }
             } catch (e: Exception) {
-                Log.w(TAG, "Failed to recover history for $addr: ${e.message}")
+                if (isCancelled?.invoke() == true) break
+                consecutive429s++
+                backoffMs = minOf(2000L * (1L shl minOf(consecutive429s - 1, 4)), 30000L)
             }
+
+            if (success) {
+                index++
+                scanned++
+                consecutiveEmpty++
+                if (txs != null && txs.isNotEmpty()) consecutiveEmpty = 0
+                // Gap limit: stop if 20 consecutive addresses have no history
+                if (consecutiveEmpty >= 20) {
+                    Log.i(TAG, "Gap limit reached at $scanned/$total, stopping scan")
+                    break
+                }
+            }
+            // On failure, retry same address after backoff
         }
 
         recovered
@@ -59,18 +122,25 @@ object HistoryRecovery {
      * Paginates automatically (API returns 25 per page).
      * Returns list of (txid, block_height) pairs. Height=0 means unconfirmed.
      */
-    private fun fetchAddressTransactions(address: String): List<Pair<String, Int>> {
+    private fun fetchAddressTransactions(address: String): List<Pair<String, Int>>? {
         val results = mutableListOf<Pair<String, Int>>()
         var lastTxid: String? = null
+        var firstPage = true
 
         while (true) {
             val url = if (lastTxid == null) {
-                "$API_BASE/address/$address/txs"
+                "$apiBase/address/$address/txs"
             } else {
-                "$API_BASE/address/$address/txs/chain/$lastTxid"
+                "$apiBase/address/$address/txs/chain/$lastTxid"
             }
 
-            val json = httpGet(url) ?: break
+            val json = httpGet(url)
+            if (json == null) {
+                // First page failed = rate limited, return null
+                if (firstPage) return null
+                break
+            }
+            firstPage = false
             val arr = JSONArray(json)
             if (arr.length() == 0) break
 
@@ -94,19 +164,30 @@ object HistoryRecovery {
         return results
     }
 
+    /**
+     * Public HTTP GET for use by AddressIndex tx hex caching.
+     */
+    fun httpGetPublic(url: String): String? = httpGet(url)
+
     private fun httpGet(url: String): String? {
         val conn = URL(url).openConnection() as HttpURLConnection
-        conn.connectTimeout = TIMEOUT_MS
-        conn.readTimeout = TIMEOUT_MS
+        activeConnection = conn
+        conn.connectTimeout = 3000
+        conn.readTimeout = 3000
         conn.setRequestProperty("User-Agent", "PocketNode/1.0")
         return try {
             if (conn.responseCode == 200) {
                 conn.inputStream.bufferedReader().readText()
+            } else if (conn.responseCode == 429) {
+                null
             } else {
                 Log.w(TAG, "HTTP ${conn.responseCode} for $url")
                 null
             }
+        } catch (e: Exception) {
+            null
         } finally {
+            activeConnection = null
             conn.disconnect()
         }
     }

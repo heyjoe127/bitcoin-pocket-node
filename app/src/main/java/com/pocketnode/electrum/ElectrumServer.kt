@@ -123,13 +123,17 @@ class ElectrumServer(
                         val trimmed = line.trim()
                         Log.d(TAG, "<<< ${trimmed.take(200)}")
                         if (trimmed.startsWith("[")) {
-                            // Batch request: array of JSON-RPC calls
+                            // Batch request: respond with a single JSON array
                             val batch = org.json.JSONArray(trimmed)
+                            val responses = JSONArray()
                             for (i in 0 until batch.length()) {
                                 val request = batch.getJSONObject(i)
                                 val response = handleRequest(request)
-                                sendJson(response)
+                                responses.put(response)
                             }
+                            val s = responses.toString()
+                            Log.d(TAG, ">>> batch(${batch.length()}) ${s.take(200)}")
+                            writer?.println(s)
                         } else {
                             val request = JSONObject(trimmed)
                             val response = handleRequest(request)

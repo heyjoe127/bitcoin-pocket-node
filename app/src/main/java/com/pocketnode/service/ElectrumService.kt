@@ -57,6 +57,12 @@ class ElectrumService(private val context: Context) {
      * the TCP server on localhost:50001.
      */
     fun start(saveState: Boolean = true) {
+        // Don't restart if already running
+        if (_isRunning.value && server != null) {
+            Log.d(TAG, "Electrum server already running, skipping start")
+            return
+        }
+
         // Shut down any existing instance
         server?.stop()
         server = null
