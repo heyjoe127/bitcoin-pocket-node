@@ -11,6 +11,7 @@ Turn any Android phone into a fully-validating Bitcoin full node. No server depe
 - **Two proven bootstrap paths:** sync from home node (~30 min) or download from internet (~3 hours)
 - **Phone-to-phone sharing (built, untested on second device):** scan a QR code, get a full node. No servers, no accounts
 - **3 Bitcoin implementations:** Core 28.1, Core 30, Knots 29.3 (with BIP 110 toggle). Switch with one tap, same chainstate
+- Phone shows no sign of load or overheat during normal operation
 - ~26 GB total disk with Lightning (11 GB chainstate + 2 GB pruned blocks + 13 GB block filters), ~13 GB without
 - **Pure Kotlin Electrum server** with wallet tracking: balance, transactions, UTXOs all served from your own pruned node
 - **Built-in Lightning wallet** powered by LDK: send, receive, BOLT12 offers, open/close channels, peer browser, QR codes
