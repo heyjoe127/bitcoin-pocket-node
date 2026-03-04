@@ -116,7 +116,7 @@ See [Version Selection Design](docs/VERSION-SELECTION.md) and [BIP 110 Research]
 
 - **3 Bitcoin implementations** with one-tap switching: Core 28.1, Core 30, Knots 29.3 (BIP 110 toggle)
 - **Two proven bootstrap paths:** home node or internet download (phone-to-phone built, untested)
-- **Pure Kotlin Electrum server** with pruned-node wallet tracking: BlueWallet balances, transactions, and UTXOs served from your own node (tested and working)
+- **Pure Kotlin Electrum server** purpose-built for pruned nodes: the only Electrum server that works with `prune=2048`. Balances from the UTXO set, transaction history persisted forever (survives pruning), unsolicited notifications push new transactions to BlueWallet in real time
 - **Built-in Lightning node** powered by LDK (send, receive, channels, peer browser, seed backup/restore)
 - **LNDHub API** on localhost:3000 for external wallet connectivity (BlueWallet, Zeus)
 - **Home node watchtower** with automatic channel protection via LDK-to-LND bridge (direct Tor .onion or SSH fallback)
@@ -128,7 +128,7 @@ See [Version Selection Design](docs/VERSION-SELECTION.md) and [BIP 110 Research]
 - **BlueWallet integration** tested: balance display, transaction history, pull-to-refresh all working on pruned node
 - **Snapshot validation** checks block hash before loading, auto-redownloads if wrong
 - **Non-blocking snapshot load** with progress tracking
-- **Network-aware sync** that auto-pauses on cellular and resumes on WiFi
+- **Network-aware sync** with automatic power mode detection
 - **VPN-aware networking:** Detects actual connection type behind VPN (cellular vs WiFi)
 - **Data budgets** for WiFi and cellular
 - **Power modes:** Max Data, Low Data, Away Mode with burst sync for mobile efficiency
@@ -391,6 +391,7 @@ app/src/main/java/com/pocketnode/
 - **Phone-to-phone node sharing:** Share your validated node with nearby phones over WiFi. Scan a QR code, download the chainstate, full node in ~20 minutes. Works for people who don't have the app yet: the QR opens a landing page where they download the APK first. Up to 2 concurrent transfers. See [design doc](docs/PHONE-TO-PHONE.md)
 - **iOS port:** Burst sync + watchtower + in-process LDK make iOS viable. No one has shipped a full node on iOS because everyone assumed continuous background execution was required. Burst sync removes that assumption. See [feasibility analysis](docs/IOS-PORT.md)
 - **LDK upstream contribution:** improving watchtower API in rust-lightning ChannelMonitor ([#813](https://github.com/lightningdevkit/ldk-node/issues/813)). Draft PR submitted.
+- **Standalone Electrum server:** Extract the pruned-node Electrum server into a standalone JVM application. Connect to any Bitcoin Core node over RPC and serve BlueWallet. No full archival node required.
 - **Desktop port:** Same app on Linux, macOS, Windows via Compose Multiplatform. See [design doc](docs/DESKTOP-PORT.md)
 - **Tor for RGS and peer connections:** route Lightning gossip and peer traffic through embedded Arti
 
