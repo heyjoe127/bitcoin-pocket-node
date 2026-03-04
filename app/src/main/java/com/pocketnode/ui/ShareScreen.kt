@@ -76,7 +76,7 @@ fun ShareScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Share My Node") },
+                title = { Text("Share The Freedom") },
                 navigationIcon = {
                     IconButton(onClick = {
                         shareServer.stop()

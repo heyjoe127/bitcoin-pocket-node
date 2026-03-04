@@ -329,7 +329,7 @@ fun NearbyNodeScreen(
                 )
 
                 Text(
-                    "Ask the sender to open \"Share My Node\" and scan their QR code, or enter the IP address manually.",
+                    "Ask the sender to open \"Share The Freedom\" and scan their QR code, or enter the IP address manually.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                 )

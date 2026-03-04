@@ -1548,7 +1548,7 @@ private fun ActionButtons(
             }
         }
 
-        // Share My Node button — only when synced
+        // Share The Freedom button — only when synced
         if (isRunning && isSynced) {
             OutlinedButton(
                 onClick = onNavigateToShare,
@@ -1556,7 +1556,7 @@ private fun ActionButtons(
                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)
             ) {
                 Text(
-                    "📡 Share My Node",
+                    "📡 Share The Freedom",
                     style = MaterialTheme.typography.labelSmall
                 )
             }
