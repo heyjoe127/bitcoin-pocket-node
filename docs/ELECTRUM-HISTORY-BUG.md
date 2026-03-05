@@ -84,7 +84,7 @@ The bug required a specific sequence that no longer applies:
 | `43cfe27` | Periodic Lightning state refresh every 10s | Yes |
 | `6f997bc` | Track spends to external addresses in history | Yes |
 | `385a639` | Use decoderawtransaction for input resolution | Yes |
-| `49d6ccf` | Scripthash notification blast on connect + ConcurrentHashMap + cleanup debug logging | Yes (blast is harmless, ConcurrentHashMap is good practice) |
+| `49d6ccf` | Scripthash notification blast on connect + ConcurrentHashMap + cleanup debug logging | Yes (blast is inert: fires after first batch which is server.version/headers.subscribe, before BW registers scripthash listeners. BW silently drops the notifications. Kept because harmless, and ConcurrentHashMap is good practice.) |
 
 ## Lessons Learned
 
