@@ -106,7 +106,6 @@ class ElectrumServer(
         private var writer: PrintWriter? = null
         private val subscribedScripthashes = mutableSetOf<String>()
         private var subscribedHeaders = false
-        private var hasSentInitialNotifications = false
 
         override fun run() {
             Log.d(TAG, "Client connected: ${socket.remoteSocketAddress}")
@@ -135,37 +134,6 @@ class ElectrumServer(
                             val s = responses.toString()
                             Log.d(TAG, ">>> batch(${batch.length()}) sent")
                             writer?.println(s)
-
-                            // After first batch, send unsolicited scripthash notifications
-                            // for all addresses with activity to force client cache refresh
-                            if (!hasSentInitialNotifications) {
-                                hasSentInitialNotifications = true
-                                val addrIndex = com.pocketnode.service.ElectrumService.addressIndex
-                                if (addrIndex != null) {
-                                    val tracked = addrIndex.getAllTrackedScripthashes()
-                                    var notifCount = 0
-                                    for (sh in tracked) {
-                                        val statusHash = kotlinx.coroutines.runBlocking {
-                                            addrIndex.getStatusHash(sh)
-                                        }
-                                        if (statusHash != null) {
-                                            val notification = JSONObject().apply {
-                                                put("jsonrpc", "2.0")
-                                                put("method", "blockchain.scripthash.subscribe")
-                                                put("params", JSONArray().apply {
-                                                    put(sh)
-                                                    put(statusHash)
-                                                })
-                                            }
-                                            writer?.println(notification.toString())
-                                            notifCount++
-                                        }
-                                    }
-                                    if (notifCount > 0) {
-                                        Log.i(TAG, "Sent initial scripthash notifications for $notifCount addresses")
-                                    }
-                                }
-                            }
                         } else {
                             val request = JSONObject(trimmed)
                             val response = handleRequest(request)
