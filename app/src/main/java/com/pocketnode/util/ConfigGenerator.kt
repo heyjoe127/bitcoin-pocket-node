@@ -68,6 +68,9 @@ object ConfigGenerator {
             rpcuser=$user
             rpcpassword=$password
             
+            # REST API — used by LDK for block sync (avoids RPC HTTP client issues)
+            rest=1
+            
             # Wallet enabled for BWT (Electrum server) address tracking
             # disablewallet=0
             deprecatedrpc=create_bdb
@@ -145,6 +148,11 @@ object ConfigGenerator {
             // Disable Tor listener so 8333 stays a normal port (Lightning whitelist works)
             if (!content.contains("listenonion=0")) {
                 additions.add("listenonion=0")
+            }
+
+            // REST API for LDK block sync
+            if (!content.contains("rest=1")) {
+                additions.add("rest=1")
             }
 
             if (additions.isNotEmpty()) {

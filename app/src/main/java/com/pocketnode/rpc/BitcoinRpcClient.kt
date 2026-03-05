@@ -23,16 +23,90 @@ class BitcoinRpcClient(
 ) {
     private val idCounter = AtomicInteger(0)
 
+    // -------------------------------------------------------------------------
+    // Synchronous API — plain blocking HttpURLConnection, zero coroutine machinery.
+    // Use these from plain Java Threads (e.g. the ldk-start thread) where no
+    // coroutine context must exist before node.start() is called.
+    // -------------------------------------------------------------------------
+
     /**
-     * Make a raw JSON-RPC call. Returns the "result" field, or null on error.
+     * Blocking RPC call. Safe to call from a plain Java Thread with no
+     * coroutine context. Uses HttpURLConnection directly — no Dispatchers.IO,
+     * no runBlocking, no coroutine event loop attached to the calling thread.
      */
+    fun callSync(
+        method: String,
+        params: Any = JSONArray(),
+        connectTimeoutMs: Int = 5_000,
+        readTimeoutMs: Int = 30_000,
+        walletPath: String? = null
+    ): JSONObject? {
+        return try {
+            val path = walletPath ?: "/"
+            val url = URL("http://$host:$port$path")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "POST"
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.setRequestProperty("Authorization", basicAuth())
+            conn.connectTimeout = connectTimeoutMs
+            conn.readTimeout = readTimeoutMs
+            conn.doOutput = true
+
+            val payload = JSONObject().apply {
+                put("jsonrpc", "1.0")
+                put("id", idCounter.incrementAndGet())
+                put("method", method)
+                put("params", params)
+            }
+
+            OutputStreamWriter(conn.outputStream).use { it.write(payload.toString()) }
+
+            val response = try {
+                conn.inputStream.bufferedReader().readText()
+            } catch (_: java.io.IOException) {
+                conn.errorStream?.bufferedReader()?.readText()
+            }
+
+            if (response == null) return null
+            val json = JSONObject(response)
+
+            if (json.isNull("error")) {
+                val result = json.get("result")
+                if (result is JSONObject) result else JSONObject().put("value", result)
+            } else {
+                val err = json.optJSONObject("error")
+                if (err != null) {
+                    JSONObject().put("_rpc_error", true)
+                        .put("code", err.optInt("code"))
+                        .put("message", err.optString("message"))
+                } else null
+            }
+        } catch (e: Exception) {
+            android.util.Log.d("BitcoinRpc", "callSync($method): ${e.javaClass.simpleName}: ${e.message}")
+            null
+        }
+    }
+
+    /** Blocking getblockchaininfo — safe from ldk-start plain thread. */
+    fun getBlockchainInfoSync(): JSONObject? = callSync("getblockchaininfo")
+
+    // -------------------------------------------------------------------------
+    // Suspend API — for use from coroutines only.
+    // -------------------------------------------------------------------------
+
     /**
-     * Make a wallet-specific RPC call via /wallet/<name> endpoint.
+     * Make a wallet-specific RPC call via /wallet/<n> endpoint.
      */
     suspend fun callWallet(walletName: String, method: String, params: Any = JSONArray()): JSONObject? =
         call(method, params, walletPath = "/wallet/$walletName")
 
-    suspend fun call(method: String, params: Any = JSONArray(), connectTimeoutMs: Int = 5_000, readTimeoutMs: Int = 30_000, walletPath: String? = null): JSONObject? =
+    suspend fun call(
+        method: String,
+        params: Any = JSONArray(),
+        connectTimeoutMs: Int = 5_000,
+        readTimeoutMs: Int = 30_000,
+        walletPath: String? = null
+    ): JSONObject? =
         withContext(Dispatchers.IO) {
             try {
                 val path = walletPath ?: "/"
@@ -88,9 +162,6 @@ class BitcoinRpcClient(
     /** Get connected peer count */
     suspend fun getPeerCount(): Int {
         return try {
-            val result = call("getpeerinfo")
-            // getpeerinfo returns an array — we wrapped it, so unwrap
-            // Actually, let's do a direct getconnectioncount instead
             val countResult = call("getconnectioncount")
             countResult?.optInt("value", 0) ?: 0
         } catch (_: Exception) {
@@ -112,7 +183,11 @@ class BitcoinRpcClient(
     /**
      * Long-running RPC call with extended timeout (for loadtxoutset, dumptxoutset, etc.)
      */
-    suspend fun callLongRunning(method: String, params: Any = JSONArray(), timeoutMs: Int = 3_600_000): JSONObject? =
+    suspend fun callLongRunning(
+        method: String,
+        params: Any = JSONArray(),
+        timeoutMs: Int = 3_600_000
+    ): JSONObject? =
         withContext(Dispatchers.IO) {
             try {
                 val url = URL("http://$host:$port/")

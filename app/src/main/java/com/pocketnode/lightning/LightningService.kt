@@ -60,13 +60,27 @@ class LightningService(private val context: Context) {
     private var stateRefreshJob: kotlinx.coroutines.Job? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
-    /**
-     * Start the Lightning node, connecting to local bitcoind via RPC.
-     * Sets STARTING on Main thread and yields a frame so Compose renders it,
-     * then performs heavy init on IO dispatcher.
-     */
     @Volatile private var starting = false
 
+    /**
+     * Start the Lightning node on a bare Java Thread.
+     *
+     * CRITICAL: Must NOT use Dispatchers.IO, runBlocking, or any coroutine
+     * dispatcher before node.start() is called.
+     *
+     * Root cause: UniFFI's JNI bridge attaches a tokio runtime to every
+     * Dispatchers.IO thread. runBlocking() on a plain Thread installs a
+     * Kotlin BlockingEventLoop, and any withContext(Dispatchers.IO) call
+     * inside it briefly runs on a tokio-bearing thread. This causes
+     * tokio::runtime::Handle::try_current() to succeed in LDK's Runtime::new(),
+     * so LDK borrows UniFFI's runtime handle instead of creating its own.
+     * The background sync task then runs on a JNI thread with no active
+     * reactor, and header_cache.lock().await hangs forever.
+     *
+     * Fix: startInternal is a plain fun with zero coroutine machinery.
+     * All RPC calls before node.start() use callSync() / getBlockchainInfoSync()
+     * which are plain blocking HttpURLConnection — no coroutine context attached.
+     */
     fun start(rpcUser: String, rpcPassword: String, rpcPort: Int = 8332) {
         synchronized(this) {
             if (node != null || starting) {
@@ -77,65 +91,96 @@ class LightningService(private val context: Context) {
         }
 
         scope.launch {
-            // Set STARTING on Main thread where Compose collects
             _state.value = _state.value.copy(status = LightningState.Status.STARTING, error = null)
-            // Yield to let Compose render the Starting state
             delay(100)
-
-            // Heavy init on IO thread
-            startInternal(rpcUser, rpcPassword, rpcPort)
         }
+
+        Thread({
+            startInternal(rpcUser, rpcPassword, rpcPort)
+        }, "ldk-start").start()
     }
 
-    private suspend fun startInternal(rpcUser: String, rpcPassword: String, rpcPort: Int): Unit = withContext(Dispatchers.IO) {
-
+    // Plain fun — no suspend, no coroutine context, no runBlocking.
+    // Every call in this function that happens before node.start() must be
+    // coroutine-free. After node.start() returns, tokio's runtime is fully
+    // initialised and it's safe to touch coroutine machinery again.
+    private fun startInternal(rpcUser: String, rpcPassword: String, rpcPort: Int) {
         try {
-            // Check for pruned blocks that LDK will need.
-            // ldk-node retries internally on pruned block errors (never throws),
-            // so we must detect and recover before starting the node.
+            val rpc = BitcoinRpcClient(rpcUser, rpcPassword, port = rpcPort)
+
+            // --- Prune check (sync, no coroutines) ---
             val lastLdkHeight = context.getSharedPreferences("pocketnode_prefs", MODE_PRIVATE)
                 .getLong("last_ldk_sync_height", 0)
             if (lastLdkHeight > 0) {
-                val rpc = BitcoinRpcClient(rpcUser, rpcPassword, port = rpcPort)
-                val chainInfo = rpc.getBlockchainInfo()
+                val chainInfo = rpc.getBlockchainInfoSync()
                 if (chainInfo != null && !chainInfo.has("_rpc_error")) {
                     val pruneHeight = chainInfo.optLong("pruneheight", 0)
                     if (pruneHeight > lastLdkHeight) {
                         Log.w(TAG, "Pruned blocks detected: LDK last synced at $lastLdkHeight but prune height is $pruneHeight")
-                        recoverPrunedBlocks(rpcUser, rpcPassword, rpcPort)
-                        return@withContext
+                        starting = false
+                        // recoverPrunedBlocks is suspend — hand off to coroutine scope
+                        scope.launch { recoverPrunedBlocks(rpcUser, rpcPassword, rpcPort) }
+                        return
                     }
                 }
             }
 
+            // --- Wait for bitcoind RPC ready (sync, no coroutines) ---
+            var rpcReady = false
+            for (attempt in 1..30) {
+                val info = rpc.getBlockchainInfoSync()
+                if (info != null && !info.has("_rpc_error")) {
+                    Log.i(TAG, "bitcoind RPC ready (attempt $attempt), height=${info.optLong("blocks")}")
+                    rpcReady = true
+                    break
+                }
+                Log.d(TAG, "Waiting for bitcoind RPC (attempt $attempt/30)...")
+                Thread.sleep(2_000)
+            }
+            if (!rpcReady) throw Exception("bitcoind RPC not reachable after 60 seconds")
+
+            // --- Build LDK node ---
             val storageDir = File(context.filesDir, STORAGE_DIR)
             if (!storageDir.exists()) storageDir.mkdirs()
 
             val builder = Builder()
-
-            // Storage
             builder.setStorageDirPath(storageDir.absolutePath)
 
-            // Network
+            // Route LDK internal Rust logs to Android logcat
+            builder.setCustomLogger(object : LogWriter {
+                override fun log(record: LogRecord) {
+                    val tag = "LDK"
+                    when (record.level) {
+                        LogLevel.ERROR -> Log.e(tag, record.args)
+                        LogLevel.WARN  -> Log.w(tag, record.args)
+                        LogLevel.INFO  -> Log.i(tag, record.args)
+                        LogLevel.DEBUG -> Log.d(tag, record.args)
+                        LogLevel.TRACE -> Log.v(tag, record.args)
+                        LogLevel.GOSSIP -> Log.v(tag, "[gossip] ${record.args}")
+                    }
+                }
+            })
+
             builder.setNetwork(Network.BITCOIN)
 
-            // Chain source: local bitcoind RPC
-            builder.setChainSourceBitcoindRpc(
+            builder.setChainSourceBitcoindRest(
+                "127.0.0.1",
+                8332.toUShort(),  // REST port
                 "127.0.0.1",
                 rpcPort.toUShort(),
                 rpcUser,
                 rpcPassword
             )
 
-            // Gossip: Rapid Gossip Sync for mobile efficiency
             builder.setGossipSourceRgs(RGS_URL)
 
-            // Entropy: read or generate seed in storage dir
             val seedPath = File(storageDir, "keys_seed").absolutePath
             val entropy = NodeEntropy.fromSeedPath(seedPath)
-
-            // Build and start (retry if fee estimates not yet available from auto-start)
             val ldkNode = builder.build(entropy)
+
+            // --- Start LDK (sync, blocks until tokio runtime is running) ---
+            // After this point, LDK owns its tokio runtime. Coroutine machinery
+            // is safe to use again.
             var lastError: Exception? = null
             for (attempt in 1..10) {
                 try {
@@ -146,7 +191,7 @@ class LightningService(private val context: Context) {
                     lastError = e
                     if (e.message?.contains("fee rate", ignoreCase = true) == true && attempt < 10) {
                         Log.w(TAG, "Fee estimates not ready, retry $attempt/10 in 60s...")
-                        delay(60_000)
+                        Thread.sleep(60_000)
                     } else {
                         throw e
                     }
@@ -169,12 +214,10 @@ class LightningService(private val context: Context) {
                 Log.w(TAG, "Could not get LDK status: ${e.message}")
             }
 
-            // Initialize watchtower bridge and set sweep address
+            // Watchtower sweep address
             watchtowerBridge = WatchtowerBridge(context)
             try {
                 val prefs = context.getSharedPreferences("watchtower_prefs", MODE_PRIVATE)
-                // Key sweep address to this node's identity so a seed change
-                // invalidates the old address automatically
                 val sweepKey = "sweep_address_${nodeId.take(16)}"
                 var sweepAddr = prefs.getString(sweepKey, null)
                 if (sweepAddr == null) {
@@ -185,25 +228,21 @@ class LightningService(private val context: Context) {
                     Log.i(TAG, "Reusing watchtower sweep address: $sweepAddr")
                 }
                 val scriptPubKey = bech32ToScriptPubKey(sweepAddr)
-                if (scriptPubKey != null) {
-                    ldkNode.watchtowerSetSweepAddress(scriptPubKey)
-                }
+                if (scriptPubKey != null) ldkNode.watchtowerSetSweepAddress(scriptPubKey)
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to set watchtower sweep address: ${e.message}")
             }
 
-            // Start LNDHub API server for external wallet apps
             lndHubServer = LndHubServer(context).also { it.start() }
             Log.i(TAG, "LNDHub server started on localhost:${LndHubServer.PORT}")
 
-            // Save running state for auto-start on next boot
             context.getSharedPreferences("pocketnode_prefs", Context.MODE_PRIVATE)
                 .edit().putBoolean("lightning_was_running", true).apply()
 
             starting = false
             updateState()
 
-            // Periodic state refresh (balance, channels) every 10 seconds
+            // Periodic state refresh — safe to use coroutines here, LDK is running
             stateRefreshJob = scope.launch {
                 while (isActive) {
                     delay(10_000)
@@ -213,20 +252,17 @@ class LightningService(private val context: Context) {
 
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start Lightning node", e)
-
             starting = false
             val errorMsg = e.message ?: "Unknown error"
 
-            // Auto-recover from bad seed: restore most recent backup
-            if (errorMsg.contains("WalletSetupFailed") ||
-                errorMsg.contains("wallet")) {
+            if (errorMsg.contains("WalletSetupFailed") || errorMsg.contains("wallet")) {
                 val recovered = tryRestoreSeedBackup()
                 if (recovered) {
                     _state.value = _state.value.copy(
                         status = LightningState.Status.ERROR,
                         error = "Wallet seed restored from backup. Please try starting again."
                     )
-                    return@withContext
+                    return
                 }
             }
 
@@ -246,7 +282,6 @@ class LightningService(private val context: Context) {
         val seedFile = File(storageDir, "keys_seed")
         val currentSeed = if (seedFile.exists()) seedFile.readBytes() else return false
 
-        // Find backups, sorted newest first
         val backups = storageDir.listFiles()?.filter {
             it.name.startsWith("keys_seed.bak.")
         }?.sortedByDescending { it.lastModified() } ?: return false
@@ -264,24 +299,11 @@ class LightningService(private val context: Context) {
 
     // === Prune Recovery ===
 
-    /**
-     * Recover pruned blocks by invalidating the chain at the prune height and
-     * letting bitcoind re-download from peers. Requires WiFi (blocks are large).
-     *
-     * Flow:
-     * 1. Check we're on WiFi (wait if not)
-     * 2. Get pruneheight from getblockchaininfo
-     * 3. invalidateblock at pruneheight to force re-download
-     * 4. reconsiderblock to resume validation
-     * 5. Poll until blocks are re-downloaded
-     * 6. Retry Lightning start
-     */
     private suspend fun recoverPrunedBlocks(
         rpcUser: String, rpcPassword: String, rpcPort: Int
     ) = withContext(Dispatchers.IO) {
         val rpc = BitcoinRpcClient(rpcUser, rpcPassword, port = rpcPort)
 
-        // Get current prune height and chain tip
         val chainInfo = rpc.getBlockchainInfo() ?: run {
             Log.e(TAG, "Prune recovery: can't reach bitcoind")
             _state.value = _state.value.copy(
@@ -302,12 +324,9 @@ class LightningService(private val context: Context) {
             return@withContext
         }
 
-        // Estimate blocks to recover (pruneheight is the lowest block still on disk,
-        // so blocks below it are gone -- but we need at most a few hundred recent ones)
         val blocksNeeded = (currentHeight - pruneHeight).toInt().coerceAtLeast(1)
         Log.i(TAG, "Prune recovery: need to re-download ~$blocksNeeded blocks (prune height: $pruneHeight, tip: $currentHeight)")
 
-        // Wait for WiFi if on cellular
         val networkMonitor = NetworkMonitor(context)
         if (networkMonitor.networkState.value != NetworkState.WIFI) {
             Log.i(TAG, "Prune recovery: waiting for WiFi...")
@@ -318,11 +337,8 @@ class LightningService(private val context: Context) {
                 recoveryWaitingForWifi = true,
                 error = null
             )
-
-            // Poll for WiFi every 5 seconds
             while (networkMonitor.networkState.value != NetworkState.WIFI) {
                 delay(5000)
-                // Check if user stopped Lightning while we're waiting
                 if (!starting) {
                     Log.i(TAG, "Prune recovery: cancelled while waiting for WiFi")
                     return@withContext
@@ -340,7 +356,6 @@ class LightningService(private val context: Context) {
         )
 
         try {
-            // Step 1: Get the block hash at prune height
             val hashResult = rpc.call("getblockhash", JSONArray().apply { put(pruneHeight) })
             val pruneHash = hashResult?.optString("value") ?: run {
                 Log.e(TAG, "Prune recovery: can't get block hash at height $pruneHeight")
@@ -351,48 +366,36 @@ class LightningService(private val context: Context) {
                 return@withContext
             }
 
-            // Step 2: Invalidate the block to force re-download
             Log.i(TAG, "Prune recovery: invalidating block $pruneHash at height $pruneHeight")
             rpc.call("invalidateblock", JSONArray().apply { put(pruneHash) })
 
-            // Step 3: Reconsider it immediately -- bitcoind will re-download from peers
             Log.i(TAG, "Prune recovery: reconsidering block to trigger re-download")
             rpc.call("reconsiderblock", JSONArray().apply { put(pruneHash) })
 
-            // Step 4: Poll until chain catches up
             var lastHeight = 0L
             var stallCount = 0
             while (true) {
-                delay(2000) // poll every 2 seconds
-
+                delay(2000)
                 if (!starting) {
                     Log.i(TAG, "Prune recovery: cancelled during re-download")
                     return@withContext
                 }
-
                 val info = rpc.getBlockchainInfo() ?: continue
                 val height = info.optLong("blocks", 0)
-                val headers = info.optLong("headers", 0)
 
                 if (height >= currentHeight) {
-                    // Caught up -- recovery complete
                     val done = (height - pruneHeight).toInt().coerceAtLeast(0)
-                    _state.value = _state.value.copy(
-                        recoveryBlocksDone = done.coerceAtMost(blocksNeeded)
-                    )
+                    _state.value = _state.value.copy(recoveryBlocksDone = done.coerceAtMost(blocksNeeded))
                     Log.i(TAG, "Prune recovery: complete! Chain at $height")
                     break
                 }
 
                 val done = (height - pruneHeight).toInt().coerceAtLeast(0)
-                _state.value = _state.value.copy(
-                    recoveryBlocksDone = done.coerceAtMost(blocksNeeded)
-                )
+                _state.value = _state.value.copy(recoveryBlocksDone = done.coerceAtMost(blocksNeeded))
 
-                // Stall detection
                 if (height == lastHeight) {
                     stallCount++
-                    if (stallCount > 30) { // 60 seconds with no progress
+                    if (stallCount > 30) {
                         Log.w(TAG, "Prune recovery: stalled at $height for 60s")
                         _state.value = _state.value.copy(
                             status = LightningState.Status.ERROR,
@@ -406,7 +409,6 @@ class LightningService(private val context: Context) {
                 lastHeight = height
             }
 
-            // Step 5: Retry Lightning start
             Log.i(TAG, "Prune recovery: retrying Lightning start...")
             _state.value = _state.value.copy(
                 status = LightningState.Status.STARTING,
@@ -414,8 +416,9 @@ class LightningService(private val context: Context) {
                 recoveryBlocksDone = 0,
                 error = null
             )
-            delay(100) // yield frame for UI
-            startInternal(rpcUser, rpcPassword, rpcPort)
+            delay(100)
+            // Hand back to a plain thread for the retry — same rule applies
+            Thread({ startInternal(rpcUser, rpcPassword, rpcPort) }, "ldk-start").start()
 
         } catch (e: Exception) {
             Log.e(TAG, "Prune recovery failed", e)
@@ -426,9 +429,6 @@ class LightningService(private val context: Context) {
         }
     }
 
-    /**
-     * Stop the Lightning node gracefully.
-     */
     fun stop() {
         try {
             stateRefreshJob?.cancel()
@@ -436,7 +436,6 @@ class LightningService(private val context: Context) {
             lndHubServer?.stop()
             lndHubServer = null
             node?.stop()
-            // Clear auto-start flag
             context.getSharedPreferences("pocketnode_prefs", MODE_PRIVATE)
                 .edit().putBoolean("lightning_was_running", false).apply()
             Log.i(TAG, "Lightning node stopped")
@@ -448,16 +447,12 @@ class LightningService(private val context: Context) {
         }
     }
 
-    /**
-     * Update the observable state from ldk-node.
-     */
     fun updateState() {
         val n = node ?: return
         try {
             val channels = n.listChannels()
             val balances = n.listBalances()
 
-            // Track LDK's chain tip for prune recovery detection on next startup
             try {
                 val bestBlock = n.status().currentBestBlock
                 val height = bestBlock.height.toLong()
@@ -465,7 +460,7 @@ class LightningService(private val context: Context) {
                     context.getSharedPreferences("pocketnode_prefs", MODE_PRIVATE)
                         .edit().putLong("last_ldk_sync_height", height).apply()
                 }
-            } catch (_: Exception) { /* non-critical */ }
+            } catch (_: Exception) {}
 
             val bestBlock = n.status().currentBestBlock
             Log.d(TAG, "updateState: onchain=${balances.totalOnchainBalanceSats} lightning=${balances.totalLightningBalanceSats} spendable=${balances.spendableOnchainBalanceSats} channels=${channels.size} ldkHeight=${bestBlock.height}")
@@ -487,38 +482,20 @@ class LightningService(private val context: Context) {
         }
     }
 
-    /**
-     * Process pending LDK events. Call this periodically.
-     */
     fun handleEvents() {
         val n = node ?: return
         try {
             val event = n.nextEvent() ?: return
             when (event) {
-                is Event.PaymentSuccessful -> {
-                    Log.i(TAG, "Payment successful: ${event.paymentId}")
-                }
-                is Event.PaymentFailed -> {
-                    Log.w(TAG, "Payment failed: ${event.paymentId}")
-                }
-                is Event.PaymentReceived -> {
-                    Log.i(TAG, "Payment received: ${event.amountMsat} msat")
-                }
-                is Event.ChannelReady -> {
-                    Log.i(TAG, "Channel ready: ${event.channelId}")
-                }
-                is Event.ChannelClosed -> {
-                    Log.i(TAG, "Channel closed: ${event.channelId}")
-                }
-                else -> {
-                    Log.d(TAG, "Event: $event")
-                }
+                is Event.PaymentSuccessful -> Log.i(TAG, "Payment successful: ${event.paymentId}")
+                is Event.PaymentFailed     -> Log.w(TAG, "Payment failed: ${event.paymentId}")
+                is Event.PaymentReceived   -> Log.i(TAG, "Payment received: ${event.amountMsat} msat")
+                is Event.ChannelReady      -> Log.i(TAG, "Channel ready: ${event.channelId}")
+                is Event.ChannelClosed     -> Log.i(TAG, "Channel closed: ${event.channelId}")
+                else -> Log.d(TAG, "Event: $event")
             }
             n.eventHandled()
             updateState()
-
-            // Drain watchtower blobs after any channel state change.
-            // Every payment creates a new commitment tx that needs tower backup.
             if (event is Event.ChannelReady || event is Event.ChannelClosed
                 || event is Event.PaymentSuccessful || event is Event.PaymentReceived) {
                 drainWatchtowerBlobs()
@@ -528,22 +505,13 @@ class LightningService(private val context: Context) {
         }
     }
 
-    // === Watchtower ===
-
-    /**
-     * Drain pending justice blobs from ldk-node and encrypt for tower push.
-     * Called automatically after channel state changes.
-     */
     private fun drainWatchtowerBlobs() {
         val n = node ?: return
         val bridge = watchtowerBridge ?: return
-        // Run on background thread -- involves SSH tunnel + network I/O
         Thread {
             try {
                 val count = bridge.drainAndPush(n)
-                if (count > 0) {
-                    Log.i(TAG, "Watchtower: pushed $count justice blob(s) to tower")
-                }
+                if (count > 0) Log.i(TAG, "Watchtower: pushed $count justice blob(s) to tower")
             } catch (e: Exception) {
                 Log.e(TAG, "Watchtower drain failed: ${e.message}")
             }
@@ -555,15 +523,8 @@ class LightningService(private val context: Context) {
     fun openChannel(nodeId: String, address: String, amountSats: Long): Result<String> {
         val n = node ?: return Result.failure(Exception("Node not running"))
         return try {
-            // Connect to peer first, then open channel
             n.connect(nodeId, address, true)
-            val userChannelId = n.openChannel(
-                nodeId,
-                address,
-                amountSats.toULong(),
-                null, // push amount
-                null  // channel config
-            )
+            val userChannelId = n.openChannel(nodeId, address, amountSats.toULong(), null, null)
             updateState()
             Result.success(userChannelId)
         } catch (e: Exception) {
@@ -596,9 +557,7 @@ class LightningService(private val context: Context) {
         }
     }
 
-    fun listChannels(): List<ChannelDetails> {
-        return node?.listChannels() ?: emptyList()
-    }
+    fun listChannels(): List<ChannelDetails> = node?.listChannels() ?: emptyList()
 
     // === Payment operations ===
 
@@ -618,11 +577,7 @@ class LightningService(private val context: Context) {
         val n = node ?: return Result.failure(Exception("Node not running"))
         return try {
             val desc = Bolt11InvoiceDescription.Direct(description)
-            val invoice = n.bolt11Payment().receive(
-                amountMsat.toULong(),
-                desc,
-                expirySecs.toUInt()
-            )
+            val invoice = n.bolt11Payment().receive(amountMsat.toULong(), desc, expirySecs.toUInt())
             Result.success(invoice.toString())
         } catch (e: Exception) {
             Log.e(TAG, "Failed to create invoice", e)
@@ -630,60 +585,42 @@ class LightningService(private val context: Context) {
         }
     }
 
-    /**
-     * Create a reusable BOLT 12 offer with a fixed amount.
-     */
     fun createOffer(amountMsat: Long, description: String): Result<String> {
         val n = node ?: return Result.failure(Exception("Node not running"))
         return try {
-            val offer = n.bolt12Payment().receive(
-                amountMsat.toULong(),
-                description,
-                null, // no expiry
-                null  // no quantity
-            )
+            val offer = n.bolt12Payment().receive(amountMsat.toULong(), description, null, null)
             Result.success(offer.toString())
         } catch (e: Exception) {
             Log.e(TAG, "Failed to create offer", e)
-            val msg = if (e.javaClass.simpleName.contains("OfferCreationFailed") == true)
+            val msg = if (e.javaClass.simpleName.contains("OfferCreationFailed"))
                 "BOLT12 offers are linked to channels. A channel is required to create an offer."
             else e.message ?: "Failed to create offer"
             Result.failure(Exception(msg))
         }
     }
 
-    /**
-     * Create a reusable BOLT 12 offer with variable amount (payer chooses).
-     */
     fun createVariableOffer(description: String): Result<String> {
         val n = node ?: return Result.failure(Exception("Node not running"))
         return try {
-            val offer = n.bolt12Payment().receiveVariableAmount(
-                description,
-                null // no expiry
-            )
+            val offer = n.bolt12Payment().receiveVariableAmount(description, null)
             Result.success(offer.toString())
         } catch (e: Exception) {
             Log.e(TAG, "Failed to create variable offer", e)
-            val msg = if (e.javaClass.simpleName.contains("OfferCreationFailed") == true)
+            val msg = if (e.javaClass.simpleName.contains("OfferCreationFailed"))
                 "BOLT12 offers are linked to channels. A channel is required to create an offer."
             else e.message ?: "Failed to create offer"
             Result.failure(Exception(msg))
         }
     }
 
-    /**
-     * Pay a BOLT 12 offer.
-     */
     fun payOffer(offerStr: String, amountMsat: Long? = null): Result<String> {
         val n = node ?: return Result.failure(Exception("Node not running"))
         return try {
             val offer = Offer.fromStr(offerStr)
-            val paymentId = if (amountMsat != null) {
+            val paymentId = if (amountMsat != null)
                 n.bolt12Payment().sendUsingAmount(offer, amountMsat.toULong(), null, null, null)
-            } else {
+            else
                 n.bolt12Payment().send(offer, null, null, null)
-            }
             Result.success(paymentId.toString())
         } catch (e: Exception) {
             Log.e(TAG, "Failed to pay offer", e)
@@ -691,9 +628,7 @@ class LightningService(private val context: Context) {
         }
     }
 
-    fun listPayments(): List<PaymentDetails> {
-        return node?.listPayments() ?: emptyList()
-    }
+    fun listPayments(): List<PaymentDetails> = node?.listPayments() ?: emptyList()
 
     fun removePayment(id: String): Result<Unit> {
         val n = node ?: return Result.failure(Exception("Node not running"))
@@ -711,8 +646,7 @@ class LightningService(private val context: Context) {
     fun getOnchainAddress(): Result<String> {
         val n = node ?: return Result.failure(Exception("Node not running"))
         return try {
-            val address = n.onchainPayment().newAddress()
-            Result.success(address)
+            Result.success(n.onchainPayment().newAddress())
         } catch (e: Exception) {
             Log.e(TAG, "Failed to get address", e)
             Result.failure(e)
@@ -723,8 +657,7 @@ class LightningService(private val context: Context) {
         val n = node ?: return Result.failure(Exception("Node not running"))
         return try {
             val rate = feeRate ?: FeeRate.fromSatPerVbUnchecked(4u.toULong())
-            val txid = n.onchainPayment().sendToAddress(address, amountSats.toULong(), rate)
-            Result.success(txid)
+            Result.success(n.onchainPayment().sendToAddress(address, amountSats.toULong(), rate))
         } catch (e: Exception) {
             Log.e(TAG, "Failed to send on-chain", e)
             Result.failure(e)
@@ -735,8 +668,7 @@ class LightningService(private val context: Context) {
         val n = node ?: return Result.failure(Exception("Node not running"))
         return try {
             val rate = feeRate ?: FeeRate.fromSatPerVbUnchecked(4u.toULong())
-            val txid = n.onchainPayment().sendAllToAddress(address, false, rate)
-            Result.success(txid)
+            Result.success(n.onchainPayment().sendAllToAddress(address, false, rate))
         } catch (e: Exception) {
             Log.e(TAG, "Failed to send all on-chain", e)
             Result.failure(e)
@@ -747,24 +679,16 @@ class LightningService(private val context: Context) {
 
     // === Seed Backup & Restore ===
 
-    /**
-     * Get the 24-word BIP39 mnemonic for the current Lightning wallet seed.
-     * Returns null if no seed file exists.
-     */
     fun getSeedWords(): List<String>? {
         val seedFile = File(context.filesDir, "$STORAGE_DIR/keys_seed")
         Log.d(TAG, "getSeedWords: checking ${seedFile.absolutePath}, exists=${seedFile.exists()}")
         if (!seedFile.exists()) return null
         val rawBytes = seedFile.readBytes()
         Log.d(TAG, "getSeedWords: read ${rawBytes.size} bytes")
-        // ldk-node stores 64-byte seed; use first 32 bytes as entropy for BIP39
         val entropy = when (rawBytes.size) {
             32 -> rawBytes
             64 -> rawBytes.sliceArray(0 until 32)
-            else -> {
-                Log.e(TAG, "Unexpected seed size: ${rawBytes.size}")
-                return null
-            }
+            else -> { Log.e(TAG, "Unexpected seed size: ${rawBytes.size}"); return null }
         }
         return try {
             Bip39.entropyToMnemonic(entropy, context)
@@ -774,34 +698,16 @@ class LightningService(private val context: Context) {
         }
     }
 
-    /**
-     * Check if a Lightning wallet seed already exists.
-     */
-    fun hasSeed(): Boolean {
-        return File(context.filesDir, "$STORAGE_DIR/keys_seed").exists()
-    }
+    fun hasSeed(): Boolean = File(context.filesDir, "$STORAGE_DIR/keys_seed").exists()
 
-    /**
-     * Restore wallet from a 24-word BIP39 mnemonic.
-     * Must be called BEFORE start() -- overwrites the existing seed file.
-     *
-     * @throws IllegalArgumentException if the mnemonic is invalid
-     * @throws IllegalStateException if the node is currently running
-     */
     fun restoreFromMnemonic(words: List<String>) {
-        if (node != null) {
-            throw IllegalStateException("Cannot restore while Lightning node is running. Stop it first.")
-        }
+        if (node != null) throw IllegalStateException("Cannot restore while Lightning node is running. Stop it first.")
 
-        // Validate and convert (returns 32 bytes)
         val entropy32 = Bip39.mnemonicToEntropy(words, context)
-
         val storageDir = File(context.filesDir, STORAGE_DIR)
         if (!storageDir.exists()) storageDir.mkdirs()
         val seedFile = File(storageDir, "keys_seed")
 
-        // Check if the current seed matches (same first 32 bytes).
-        // If so, no change needed.
         if (seedFile.exists()) {
             val existing = seedFile.readBytes()
             if (existing.size >= 32 && existing.sliceArray(0 until 32).contentEquals(entropy32)) {
@@ -810,7 +716,6 @@ class LightningService(private val context: Context) {
             }
         }
 
-        // Check backups for matching seed (preserves original ldk-node second 32 bytes)
         val matchingBackup = storageDir.listFiles()?.filter {
             it.name.startsWith("keys_seed.bak.")
         }?.find { bak ->
@@ -820,25 +725,21 @@ class LightningService(private val context: Context) {
 
         val seed64: ByteArray
         if (matchingBackup != null) {
-            // Restore exact original file (preserves ldk-node's second 32 bytes)
             seed64 = matchingBackup.readBytes()
             Log.i(TAG, "Found matching backup: ${matchingBackup.name}")
         } else {
-            // New seed: first 32 from mnemonic, second 32 via SHA256
-            // Note: this creates a NEW wallet, not compatible with existing ldk-node state
             val digest = java.security.MessageDigest.getInstance("SHA-256")
             seed64 = entropy32 + digest.digest(entropy32)
             Log.i(TAG, "Creating new wallet from seed (no matching backup found)")
-
-            // Wipe existing ldk-node state since it won't match the new seed
             val lightningDir = File(context.filesDir, STORAGE_DIR)
-            lightningDir.listFiles()?.filter { it.name != "keys_seed" && !it.name.startsWith("keys_seed.bak.") }?.forEach {
+            lightningDir.listFiles()?.filter {
+                it.name != "keys_seed" && !it.name.startsWith("keys_seed.bak.")
+            }?.forEach {
                 it.deleteRecursively()
                 Log.d(TAG, "Removed stale state: ${it.name}")
             }
         }
 
-        // Back up existing seed
         if (seedFile.exists()) {
             val backup = File(storageDir, "keys_seed.bak.${System.currentTimeMillis()}")
             seedFile.copyTo(backup)
@@ -847,37 +748,22 @@ class LightningService(private val context: Context) {
 
         seedFile.writeBytes(seed64)
         Log.i(TAG, "Wallet seed restored from mnemonic (${words.size} words)")
-
-        // Clear cached sweep address since node identity will change
-        context.getSharedPreferences("watchtower_prefs", MODE_PRIVATE)
-            .edit().clear().apply()
+        context.getSharedPreferences("watchtower_prefs", MODE_PRIVATE).edit().clear().apply()
     }
 
-    /**
-     * Convert a bech32/bech32m address to its witness scriptPubKey.
-     * Supports p2wpkh (bc1q..., 20 bytes) and p2tr (bc1p..., 32 bytes).
-     */
     private fun bech32ToScriptPubKey(address: String): ByteArray? {
         return try {
             val lower = address.lowercase()
             val hrpEnd = lower.lastIndexOf('1')
             if (hrpEnd < 1) return null
-
             val data = lower.substring(hrpEnd + 1)
-            // Decode bech32 data part to 5-bit values
             val charset = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
             val values = data.map { charset.indexOf(it) }.filter { it >= 0 }
-            if (values.size < 8) return null // too short (need checksum + data)
-
-            // Strip the 6-char checksum
+            if (values.size < 8) return null
             val payload = values.dropLast(6)
             if (payload.isEmpty()) return null
-
             val witnessVersion = payload[0]
-            // Convert remaining 5-bit values to 8-bit
             val program = convertBits(payload.drop(1), 5, 8, false) ?: return null
-
-            // Build scriptPubKey: [witness_version] [push_length] [program]
             val script = ByteArray(2 + program.size)
             script[0] = if (witnessVersion == 0) 0x00 else (0x50 + witnessVersion).toByte()
             script[1] = program.size.toByte()
@@ -890,23 +776,15 @@ class LightningService(private val context: Context) {
     }
 
     private fun convertBits(data: List<Int>, fromBits: Int, toBits: Int, pad: Boolean): ByteArray? {
-        var acc = 0
-        var bits = 0
+        var acc = 0; var bits = 0
         val result = mutableListOf<Byte>()
         val maxv = (1 shl toBits) - 1
         for (value in data) {
-            acc = (acc shl fromBits) or value
-            bits += fromBits
-            while (bits >= toBits) {
-                bits -= toBits
-                result.add(((acc shr bits) and maxv).toByte())
-            }
+            acc = (acc shl fromBits) or value; bits += fromBits
+            while (bits >= toBits) { bits -= toBits; result.add(((acc shr bits) and maxv).toByte()) }
         }
-        if (pad && bits > 0) {
-            result.add(((acc shl (toBits - bits)) and maxv).toByte())
-        } else if (bits >= fromBits || ((acc shl (toBits - bits)) and maxv) != 0) {
-            return null
-        }
+        if (pad && bits > 0) result.add(((acc shl (toBits - bits)) and maxv).toByte())
+        else if (bits >= fromBits || ((acc shl (toBits - bits)) and maxv) != 0) return null
         return result.toByteArray()
     }
 }
