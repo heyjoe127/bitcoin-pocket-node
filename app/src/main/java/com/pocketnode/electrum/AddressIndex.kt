@@ -382,8 +382,49 @@ class AddressIndex(private val rpc: BitcoinRpcClient, private val context: Conte
             val confs = tx.optInt("confirmations", 0)
             val height = if (confs > 0) tx.optInt("blockheight", 0) else 0
 
-            if (txid.isEmpty() || addr.isEmpty()) continue
-            val scripthash = addressToScripthash[addr] ?: continue
+            if (txid.isEmpty()) continue
+            val category = tx.optString("category", "")
+
+            // For sends to external addresses, find which tracked addresses were spent
+            val scripthash = addressToScripthash[addr]
+            if (scripthash == null) {
+                if (category == "send" && addr.isNotEmpty()) {
+                    // Get the full tx to find input addresses
+                    try {
+                        val txDetail = walletRpc("gettransaction", JSONArray().apply {
+                            put(txid); put(true)  // verbose
+                        })
+                        val decoded = txDetail?.optJSONObject("value")?.optJSONObject("decoded")
+                        val vin = decoded?.optJSONArray("vin")
+                        if (vin != null) {
+                            for (v in 0 until vin.length()) {
+                                val input = vin.getJSONObject(v)
+                                val prevTxid = input.optString("txid", "")
+                                val prevVout = input.optInt("vout", -1)
+                                if (prevTxid.isEmpty()) continue
+                                // Find which tracked address owned this input
+                                for ((trackedAddr, sh) in addressToScripthash) {
+                                    val addrHistory = persistedHistory[sh] ?: continue
+                                    if (addrHistory.any { it.startsWith(prevTxid) } || addrHistory.any { it.startsWith("$txid:") }) {
+                                        val entry = "$txid:$height"
+                                        if (!addrHistory.contains(entry) && !addrHistory.contains("$txid:0")) {
+                                            addrHistory.add(entry)
+                                            newTxCount++
+                                        } else if (addrHistory.contains("$txid:0") && height > 0) {
+                                            addrHistory.remove("$txid:0")
+                                            addrHistory.add(entry)
+                                            newTxCount++
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to resolve spend inputs for $txid: ${e.message}")
+                    }
+                }
+                continue
+            }
 
             val entry = "$txid:$height"
             val existing = persistedHistory[scripthash]
