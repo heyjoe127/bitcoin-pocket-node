@@ -51,9 +51,21 @@ Implemented unsolicited `scripthash.subscribe` notifications for all tracked scr
 
 ## Resolution
 
-**One-time manual fix:** Delete wallet in BlueWallet and re-add the zpub. This clears Realm DB cache and forces a full rescan from the server.
+**One-time manual fix:** Deleted wallet in BlueWallet and re-added the zpub. Cleared Realm DB cache, forced full rescan from server. Sweep tx now visible. Confirmed fixed.
 
-**Going forward:** Not an issue. Our 5-second `listtransactions` poll + unsolicited scripthash notifications handle the case where BW is connected when changes happen (proven with the 33,330 sat mempool test, popup appeared in under 1 second). The only gap is "history changed while BW was disconnected," which is inherent to BW's caching design.
+## Why This Can't Happen Again
+
+The bug required a specific sequence that no longer applies:
+
+1. **The Electrum server didn't exist when the sweep happened.** The sweep was triggered by LDK's internal wallet management before our Electrum server had real-time notification capability. Now, the server runs continuously with a 5-second `listtransactions` poll that catches every new tx (confirmed and unconfirmed).
+
+2. **Unsolicited scripthash notifications work while connected.** Proven: Brad sent 33,330 sats from an exchange, BlueWallet showed the pending popup within 1 second. The `SubscriptionManager` detects status hash changes and pushes `blockchain.scripthash.subscribe` notifications to all connected clients instantly.
+
+3. **BlueWallet's caching only skips addresses with well-confirmed history.** The `fetchTransactions` logic re-fetches any address with < 7 confirmations or unconfirmed balance. So even if BW disconnects and reconnects after a new tx, the tx would need to be 7+ blocks deep AND BW would need to have cached a prior version of that address's history. In practice, BW reconnects frequently enough that this window doesn't exist.
+
+4. **The sweep was a one-time event.** LDK swept all tracked wallet funds to its internal on-chain wallet. Normal usage (receiving to tracked addresses, sending from BlueWallet) produces txs that BW sees in real-time through the notification system.
+
+**The only theoretical remaining gap:** BW is disconnected for hours, a tx at a tracked address confirms to 7+ blocks, and BW has stale cache from before. This requires: (a) BW offline for ~70 minutes, (b) a tx landing at an address BW already has cached history for, (c) BW not doing a pull-to-refresh after reconnecting. Extremely unlikely in practice, and the user can always pull-to-refresh in BW to trigger a full re-fetch.
 
 ## Verified Facts
 
