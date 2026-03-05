@@ -26,8 +26,8 @@
 - [x] Download from HTTPS URL (utxo.download)
 
 ### Phase 3: Smart Syncing ✅
-- [x] Network-aware sync: auto-pauses on cellular, resumes on WiFi
-- [x] VPN support: WireGuard/VPN treated as connected
+- [x] Network-aware sync with automatic power mode detection
+- [x] VPN-aware networking: detects actual connection type behind VPN
 - [x] Foreground service with persistent notification
 - [x] Data usage tracking with WiFi/cellular budgets
 - [x] Auto-start on app launch (SharedPreferences flag)
@@ -81,7 +81,7 @@ Pruned Bitcoin Core on the phone with BIP 157/158 block filters. Zeus with embed
 - [x] Auto-restart detection in foreground service (orphan bitcoind attach via RPC)
 - [x] Foldable/landscape dual-pane mode (BoxWithConstraints 550dp threshold)
 - [x] UTXOracle sovereign price discovery (BTC/USD from on-chain data)
-- [x] Battery saver (pauses sync when unplugged below 50%)
+- [x] Power modes: Max Data, Low Data, Away Mode with burst sync
 - [x] Auto-start on boot (BootReceiver)
 - [x] Live foreground notification (block height, peers, sync %, oracle price)
 - [x] Persistent mempool across restarts (survives nightly reboot)
@@ -92,8 +92,13 @@ Pruned Bitcoin Core on the phone with BIP 157/158 block filters. Zeus with embed
 - [x] Unified Knots binary with BIP 110 toggle (3 binaries, ~72 MB APK)
 - [x] First-run setup screen
 - [x] HTTPS download from utxo.download
-- [x] Battery saver banner on dashboard
 - [x] Electrum server retry on boot (waits for bitcoind RPC)
+- [x] Phone-to-phone node sharing (ShareServer, QR code, landing page, up to 2 concurrent)
+- [x] In-app update checker (GitHub Releases API, APK download + install)
+- [x] Release signing keystore
+- [x] Seed backup info card ("What does my seed protect?")
+- [x] IBD hold: forces Max mode during initial block download
+- [x] Wallet hold: network stays active while Electrum client connected
 
 ### Technical Risks (Resolved)
 - [x] **bitcoind ARM64 compilation**: Works with NDK r27 clang wrappers
@@ -117,9 +122,9 @@ Pruned Bitcoin Core on the phone with BIP 157/158 block filters. Zeus with embed
 - [ ] Clean up old snapshot files on Umbrel
 
 ### Electrum Server: Pruned-Node Native
-- [x] scantxoutset for balance and UTXOs (reads chainstate directly)
+- [x] Descriptor wallet RPCs for balance and UTXOs (listunspent, getbalances, listtransactions)
 - [x] Persistent transaction history (survives block pruning)
-- [x] 3-source history merge (persisted + chainstate + descriptor wallet)
+- [x] 3-source history merge (persisted + descriptor wallet + mempool.space)
 - [x] History recovery from mempool.space with gap limit discovery (20 address gap)
 - [x] Skip rescan for already-imported descriptors (fast restarts)
 - [x] Batch JSON-RPC responses as JSON array (BlueWallet compatibility)
@@ -130,10 +135,14 @@ Pruned Bitcoin Core on the phone with BIP 157/158 block filters. Zeus with embed
 - [x] Prevent double ElectrumService start (EADDRINUSE fix)
 - [x] Recovery UI: progress counter, rate limit backoff display, instant cancel
 - [x] Exponential backoff on mempool.space rate limits (2s-30s, retry same address)
-- [x] **BlueWallet tested:** balance, transactions, pull-to-refresh all working
+- [x] **BlueWallet tested:** balance, send, receive, confirm all working end-to-end
+- [x] Unsolicited scripthash.subscribe notifications: push tx changes to BlueWallet in real time
+- [x] 5-second tx poll: catches unconfirmed txs between blocks
+- [x] Stub response for pruned/uncached vin txids (prevents BlueWallet crash)
+- [x] Enriched decoderawtransaction with confirmations/blockhash/blocktime from history
 - [ ] Expose Arti SOCKS proxy from native lib for Java-side Tor routing
 - [ ] Route mempool.space history recovery through Tor (single Arti instance, shared SOCKS)
-- [ ] Refresh UTXO cache on new blocks (currently only on startup)
+- [x] Refresh wallet transactions on new blocks and every 5s poll cycle
 - [ ] Lightning recovery helper: scantxoutset + mempool.space to find force-close txs on pruned nodes, feed raw tx data to LDK for sweep (closes biggest risk in PRUNED-NODE-RISK-ANALYSIS.md)
 
 ### Version Selection Enhancements
@@ -296,7 +305,7 @@ Compose Multiplatform targets iOS (same shared UI as desktop port). bitcoind cro
 ### Infrastructure
 - **Dev machine:** 2014 MacBook Pro 15" (i7-4870HQ, 16GB, Big Sur)
 - **Test node:** Umbrel VM on Mac Mini (Bitcoin Knots 29.2.0, full unpruned, 820GB chain) at 10.0.1.127:9332
-- **Target hardware:** Google Pixel 7 Pro with GrapheneOS
+- **Target hardware:** Google Pixel 9 with GrapheneOS
 - **Repo:** github.com/FreeOnlineUser/bitcoin-pocket-node
 
 ### bitcoind Configuration (Mobile)
@@ -306,7 +315,7 @@ server=1
 prune=2048
 listen=1
 bind=127.0.0.1
-maxconnections=4
+maxconnections=8
 maxmempool=50
 persistmempool=1
 blockreconstructionextratxn=10
