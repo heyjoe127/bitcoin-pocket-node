@@ -392,9 +392,11 @@ class AddressIndex(private val rpc: BitcoinRpcClient, private val context: Conte
                     // Get the full tx to find input addresses
                     try {
                         val txDetail = walletRpc("gettransaction", JSONArray().apply {
-                            put(txid); put(true)  // verbose
+                            put(txid); put(true)
                         })
-                        val decoded = txDetail?.optJSONObject("value")?.optJSONObject("decoded")
+                        val hex = txDetail?.optString("hex", "") ?: txDetail?.optJSONObject("value")?.optString("hex", "") ?: ""
+                        if (hex.isEmpty()) { continue }
+                        val decoded = rpc.call("decoderawtransaction", JSONArray().apply { put(hex) })
                         val vin = decoded?.optJSONArray("vin")
                         if (vin != null) {
                             for (v in 0 until vin.length()) {
