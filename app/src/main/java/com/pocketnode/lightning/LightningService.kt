@@ -57,6 +57,7 @@ class LightningService(private val context: Context) {
     private var node: Node? = null
     private var watchtowerBridge: WatchtowerBridge? = null
     private var lndHubServer: LndHubServer? = null
+    private var stateRefreshJob: kotlinx.coroutines.Job? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     /**
@@ -191,6 +192,14 @@ class LightningService(private val context: Context) {
 
             starting = false
             updateState()
+
+            // Periodic state refresh (balance, channels) every 10 seconds
+            stateRefreshJob = scope.launch {
+                while (isActive) {
+                    delay(10_000)
+                    try { updateState() } catch (_: Exception) {}
+                }
+            }
 
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start Lightning node", e)
@@ -412,6 +421,8 @@ class LightningService(private val context: Context) {
      */
     fun stop() {
         try {
+            stateRefreshJob?.cancel()
+            stateRefreshJob = null
             lndHubServer?.stop()
             lndHubServer = null
             node?.stop()
