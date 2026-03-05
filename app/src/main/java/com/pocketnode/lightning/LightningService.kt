@@ -205,17 +205,7 @@ class LightningService(private val context: Context) {
                         Log.i(TAG, "Recovery scan found ${scanResult.totalSats} sats in ${scanResult.utxos.size} UTXOs")
                         if (scanResult.canResync) {
                             Log.i(TAG, "Blocks available. Setting wallet birthday to ${scanResult.birthdayHeight}")
-                            // Use reflection until wallet-recovery AAR is built
-                            try {
-                                val method = builder.javaClass.getMethod("setWalletBirthdayHeight", UInt::class.java)
-                                method.invoke(builder, scanResult.birthdayHeight.toUInt())
-                                Log.i(TAG, "Wallet birthday set successfully via AAR")
-                            } catch (e: NoSuchMethodException) {
-                                Log.w(TAG, "setWalletBirthdayHeight not in current AAR. Recovery will use sweep fallback.")
-                                // Mark for sweep instead
-                                context.getSharedPreferences("pocketnode_prefs", MODE_PRIVATE)
-                                    .edit().putBoolean("recovery_needs_sweep", true).apply()
-                            }
+                            builder.setWalletBirthdayHeight(scanResult.birthdayHeight.toUInt())
                             // Save recovery info for UI
                             context.getSharedPreferences("pocketnode_prefs", MODE_PRIVATE)
                                 .edit()
