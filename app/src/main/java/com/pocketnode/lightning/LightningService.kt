@@ -157,7 +157,17 @@ class LightningService(private val context: Context) {
             node = ldkNode
 
             val nodeId = ldkNode.nodeId()
+            val initBalances = ldkNode.listBalances()
             Log.i(TAG, "Lightning node started. Node ID: $nodeId")
+            Log.i(TAG, "Initial balances: onchain=${initBalances.totalOnchainBalanceSats} spendable=${initBalances.spendableOnchainBalanceSats} lightning=${initBalances.totalLightningBalanceSats}")
+            try {
+                val bestBlock = ldkNode.status().currentBestBlock
+                Log.i(TAG, "LDK best block: height=${bestBlock.height} hash=${bestBlock.blockHash}")
+                val newAddr = ldkNode.onchainPayment().newAddress()
+                Log.i(TAG, "LDK new deposit address (for verification): $newAddr")
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not get LDK status: ${e.message}")
+            }
 
             // Initialize watchtower bridge and set sweep address
             watchtowerBridge = WatchtowerBridge(context)
@@ -456,6 +466,9 @@ class LightningService(private val context: Context) {
                         .edit().putLong("last_ldk_sync_height", height).apply()
                 }
             } catch (_: Exception) { /* non-critical */ }
+
+            val bestBlock = n.status().currentBestBlock
+            Log.d(TAG, "updateState: onchain=${balances.totalOnchainBalanceSats} lightning=${balances.totalLightningBalanceSats} spendable=${balances.spendableOnchainBalanceSats} channels=${channels.size} ldkHeight=${bestBlock.height}")
 
             _state.value = LightningState(
                 status = LightningState.Status.RUNNING,
