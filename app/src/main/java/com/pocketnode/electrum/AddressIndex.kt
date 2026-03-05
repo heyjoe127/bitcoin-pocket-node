@@ -67,9 +67,6 @@ class AddressIndex(private val rpc: BitcoinRpcClient, private val context: Conte
                     persistedHistory[key] = set
                 }
                 Log.i(TAG, "Loaded persisted tx history: ${persistedHistory.size} scripthashes")
-                for (key in persistedHistory.keys) {
-                    Log.d(TAG, "  persisted key: ${key.take(16)}... txs=${persistedHistory[key]?.size}")
-                }
             }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to load tx history: ${e.message}")
@@ -361,13 +358,6 @@ class AddressIndex(private val rpc: BitcoinRpcClient, private val context: Conte
         }
 
         Log.i(TAG, "Index built: ${addressToScripthash.size} addresses, ${scripthashToAddress.size} scripthashes")
-        // Log first 5 address-to-scripthash mappings for debugging
-        addressToScripthash.entries.take(5).forEach { (addr, sh) ->
-            Log.d(TAG, "  computed: ${addr.take(20)}... -> ${sh.take(16)}...")
-        }
-        // Check if persisted keys match computed keys
-        val matched = persistedHistory.keys.count { scripthashToAddress.containsKey(it) }
-        Log.i(TAG, "Persisted history key match: $matched/${persistedHistory.size} match computed scripthashes")
 
         // Check initial recovery status (don't auto-scan, user taps Refresh)
         checkRecoveryStatus()
@@ -405,11 +395,9 @@ class AddressIndex(private val rpc: BitcoinRpcClient, private val context: Conte
                             put(txid); put(true)
                         })
                         val hex = txDetail?.optString("hex", "") ?: txDetail?.optJSONObject("value")?.optString("hex", "") ?: ""
-                        Log.d(TAG, "Spend resolve: txid=${txid.take(16)} hex.len=${hex.length}")
                         if (hex.isEmpty()) { continue }
                         val decoded = rpc.call("decoderawtransaction", JSONArray().apply { put(hex) })
                         val vin = decoded?.optJSONArray("vin")
-                        Log.d(TAG, "Spend resolve: vin count=${vin?.length()}")
                         if (vin != null) {
                             for (v in 0 until vin.length()) {
                                 val input = vin.getJSONObject(v)
@@ -419,9 +407,7 @@ class AddressIndex(private val rpc: BitcoinRpcClient, private val context: Conte
                                 // Find which tracked address owned this input
                                 for ((trackedAddr, sh) in addressToScripthash) {
                                     val addrHistory = persistedHistory[sh] ?: continue
-                                    val hasPrev = addrHistory.any { it.startsWith(prevTxid) }
-                                    if (hasPrev) Log.d(TAG, "Spend resolve: prevTx ${prevTxid.take(16)} found in ${sh.take(16)}")
-                                    if (hasPrev || addrHistory.any { it.startsWith("$txid:") }) {
+                                    if (addrHistory.any { it.startsWith(prevTxid) } || addrHistory.any { it.startsWith("$txid:") }) {
                                         val entry = "$txid:$height"
                                         if (!addrHistory.contains(entry) && !addrHistory.contains("$txid:0")) {
                                             addrHistory.add(entry)
@@ -793,14 +779,8 @@ class AddressIndex(private val rpc: BitcoinRpcClient, private val context: Conte
     }
 
     suspend fun getHistory(scripthash: String): JSONArray {
-        val addresses = scripthashToAddress[scripthash]
-        if (addresses == null) {
-            Log.d(TAG, "getHistory: scripthash ${scripthash.take(16)} NOT in scripthashToAddress (${scripthashToAddress.size} entries)")
-            return JSONArray()
-        }
+        val addresses = scripthashToAddress[scripthash] ?: return JSONArray()
         val seenTxids = mutableMapOf<String, Int>()  // txid -> height
-        Log.d(TAG, "getHistory: sh=${scripthash.take(16)} addrs=${addresses.size} persisted=${persistedHistory[scripthash]?.size ?: 0}")
-
         // Source 1: Persisted history (survives pruning)
         val persisted = persistedHistory[scripthash]
         if (persisted != null) {
@@ -859,7 +839,6 @@ class AddressIndex(private val rpc: BitcoinRpcClient, private val context: Conte
                 put("height", height)
             })
         }
-        if (result.length() > 0) Log.d(TAG, "getHistory: returning ${result.length()} txs for ${scripthash.take(16)}")
         return result
     }
 
