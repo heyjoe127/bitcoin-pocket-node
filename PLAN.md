@@ -60,6 +60,8 @@
 ### Lightning Phase 1: Block Filter Infrastructure ✅
 Block filter support enables Lightning on pruned nodes. Filters are copied from a home node or another Bitcoin Pocket Node.
 
+**Historical note:** The original approach used Zeus with embedded LND, which worked but had a fundamental limitation: our pruned bitcoind advertises `NODE_NETWORK_LIMITED` instead of `NODE_NETWORK`. LND's Neutrino requires `NODE_NETWORK` from peers, so it silently rejected our local node and fell back to internet peers. This meant two independent sync engines on the phone and no true local sovereignty. This limitation drove the decision to migrate to LDK (Phase 4), which connects to bitcoind via RPC instead of P2P, bypassing service bit checks entirely.
+
 - [x] "Add Lightning Support" button on dashboard
 - [x] Reuse existing SSH credentials from chainstate copy
 - [x] Detect if donor already has block filters, skip build if so
