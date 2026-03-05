@@ -71,13 +71,34 @@ Possible causes:
 | `385a639` | Use decoderawtransaction for input resolution | Logic correct, needs scripthash fix |
 | (stashed) | ConcurrentHashMap + debug logging | Not committed, stashed |
 
+## Root Cause (FOUND)
+
+**BlueWallet only queries `get_history` for addresses at the gap limit frontier, not for addresses it already has cached history for.**
+
+- BW caches tx history in Realm DB
+- On reconnect, it queries balance for ALL addresses (0-23+change) but history ONLY for addresses where `next_free_address_index` starts (index 4+)
+- Indices 0-3 already had history in Realm DB cache from previous sessions
+- The sweep tx happened AFTER BW cached index 0-3 history
+- No scripthash notification was delivered because BW wasn't connected when the status changed
+- On next connect, `lastStatusHashes` was initialized with current hashes (already including sweep) so no "change" was detected
+
+**Verified:**
+- zpub-to-xpub conversion is correct (matches BlueWallet's `_zpubToXpub` exactly: `0x04B24746` -> `0x0488B21E`)
+- `deriveaddresses` produces correct addresses (index 0 = `bc1q3tnd...`)
+- All 40 of BlueWallet's queried scripthashes are in our 200-entry computed set (100% overlap)
+- BlueWallet's first history query is `574d46f9...` = our index 4 (the gap limit boundary)
+- BlueWallet queries `0e31a9b2...` (index 0) for BALANCE but not for HISTORY
+
+## Fix
+
+Send unsolicited `blockchain.scripthash.subscribe` notifications for all tracked scripthashes on first client connection. This forces BlueWallet to re-fetch history for addresses it has cached, picking up the sweep tx.
+
 ## Next Steps
 
-1. **Verify zpub-to-xpub conversion:** Compare address at index 0 from `deriveaddresses` with BlueWallet's known address. If they differ, the conversion is wrong.
-2. **Check derivation path in descriptor:** Confirm we use `wpkh([...]/84'/0'/0')` with both `/0/*` (receive) and `/1/*` (change) ranges.
-3. **Log BlueWallet's first scripthash address:** Reverse-lookup which address BlueWallet's `574d46f9...` maps to in our set, and check what index it corresponds to.
-4. **Compare with known address:** We know index 0 receive = `bc1q3tndgvlx66w95l3lahugqgfd08zwupdqqvxtds`. Check if this is in BlueWallet's query set.
-5. **Consider importing zpub directly** instead of converting to xpub, if Bitcoin Core supports it (it doesn't for descriptors, which is why we convert).
+1. Implement "notify all on connect" in SubscriptionManager or ElectrumServer
+2. Remove debug logging
+3. Revert ConcurrentHashMap (was not the issue)
+4. Test with BlueWallet restart
 
 ## Test Data
 

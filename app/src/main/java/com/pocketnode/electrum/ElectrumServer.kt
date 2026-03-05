@@ -132,7 +132,18 @@ class ElectrumServer(
                                 responses.put(response)
                             }
                             val s = responses.toString()
-                            Log.d(TAG, ">>> batch(${batch.length()}) ${s.take(200)}")
+                            // Log non-empty results individually for debugging
+                            for (r in 0 until responses.length()) {
+                                val resp = responses.getJSONObject(r)
+                                val result = resp.opt("result")
+                                val nonEmpty = when (result) {
+                                    is JSONArray -> result.length() > 0
+                                    is JSONObject -> true
+                                    else -> result != null && result.toString() != "null"
+                                }
+                                if (nonEmpty) Log.d(TAG, ">>> batch[$r] ${resp.toString().take(500)}")
+                            }
+                            Log.d(TAG, ">>> batch(${batch.length()}) sent")
                             writer?.println(s)
                         } else {
                             val request = JSONObject(trimmed)
