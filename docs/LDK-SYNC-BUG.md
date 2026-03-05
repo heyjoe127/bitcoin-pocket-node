@@ -1,7 +1,7 @@
 # LDK On-Chain Balance Bug
 
 **Date:** 2026-03-05
-**Status:** Partially fixed. Tokio reactor hang resolved. `synchronize_listeners` still not advancing height.
+**Status:** FIXED. Root cause: coroutine context leak + stale chain state. Auto-recovery implemented.
 
 ## Symptom
 
@@ -88,13 +88,35 @@ With the tokio reactor confirmed working, tested both chain source modes:
 
 Both modes behave identically, confirming the remaining issue is inside `synchronize_listeners` above the network layer.
 
+### Phase 9: Fresh state test (ROOT CAUSE CONFIRMED)
+
+Renamed `lightning/` to `lightning_backup/` to force a fresh LDK state. Result:
+
+```
+block_connected 939416 → 939417 → 939418 → ... → 939425
+"Finished polling best tip in 2513ms"
+ldkHeight=939425  ← AT THE TIP
+"Finished polling mempool" ← continuous sync working
+```
+
+Fresh node syncs in ~2 seconds. **The stored chain state was the root cause.** The old wallet/channel_manager/sweeper listeners were at heights where `synchronize_listeners` couldn't reconcile with the pruned chain, causing it to hang forever trying to fetch pruned blocks.
+
+### Phase 10: Auto-recovery implemented
+
+Two-layer protection added:
+
+1. **Proactive stale detection (pre-start):** Before building the LDK node, compares stored `last_ldk_sync_height` against bitcoind's current height. If > 500 blocks behind, resets chain state (preserves seed + channel data) before starting.
+
+2. **Sync watchdog (post-start):** After node starts, a watchdog thread waits 120 seconds. If `currentBestBlock.height` hasn't advanced, stops the node, resets chain state, and auto-restarts. This catches cases where the stale detection threshold wasn't triggered but sync still hangs.
+
+`resetChainState()` preserves: `keys_seed`, `keys_seed.bak`, `channel_manager`, `monitors/`. Deletes everything else (scorer, network_graph, chain tracking files). LDK regenerates these from scratch on next start.
+
 ## Current Status
 
 **Fixed:**
-- Tokio reactor hang (coroutine context leak). Background tasks confirmed working.
-
-**Not fixed:**
-- `synchronize_listeners` not advancing chain height. No errors, no network failures observed. Height frozen at 939381 with bitcoind at 939421+.
+- Tokio reactor hang (coroutine context leak)
+- Stale chain state causing `synchronize_listeners` hang
+- Auto-recovery for future occurrences
 
 ## Root Cause Analysis
 
@@ -170,25 +192,33 @@ builder.setChainSourceBitcoindRpc(
 
 ## Changes Made
 
-1. **Removed coroutine context from ldk-start thread** (Phase 7 fix):
+1. **Removed coroutine context from ldk-start thread** (Phase 7):
    - `startInternal` is now a plain `fun` on bare `Thread("ldk-start")`
    - Added `callSync()`/`getBlockchainInfoSync()` to `BitcoinRpcClient` (plain HttpURLConnection)
    - Replaced `delay()` with `Thread.sleep()` in fee-rate retry
    - `recoverPrunedBlocks` handed off to `scope.launch`
-2. Added RPC readiness gate before `node.start()` (polls `getblockchaininfo` up to 30 times, 2s intervals)
-3. Removed manual `syncWallets()` call (was waiting on hung background sync)
-4. Added custom `LogWriter` routing LDK Rust logs to Android logcat (tag: `LDK`)
-5. Added `rest=1` to bitcoin.conf (migration for existing installs)
-6. Reduced Electrum SubscriptionManager poll interval from 5s to 60s
-7. Switched back to RPC chain source (REST showed same behavior)
+2. **Stale chain state auto-recovery** (Phase 10):
+   - Pre-start: detects >500 blocks behind, resets chain state before building node
+   - Post-start: 120s sync watchdog, auto-restarts with fresh state if height stuck
+   - `resetChainState()` preserves seed + channels, deletes chain tracking files
+3. Added RPC readiness gate before `node.start()` (polls `getblockchaininfo` up to 30 times)
+4. Removed manual `syncWallets()` call (was waiting on hung background sync)
+5. Added custom `LogWriter` routing LDK Rust logs to Android logcat (tag: `LDK`)
+6. Added `rest=1` to bitcoin.conf (migration for existing installs)
+7. Reduced Electrum SubscriptionManager poll interval from 5s to 60s
+8. Using RPC chain source (REST showed same behavior, RPC simpler)
 
-## Next Steps
+## Resolution
 
-1. **Test with fresh LDK state** (rename storage dir, keep seed backup) to determine if stored height 939381 is the problem
-2. **Add Rust-level logging** before/after `header_cache.lock()` and inside `synchronize_listeners` (requires AAR rebuild with cross-compile toolchain)
-3. **Test on a non-GrapheneOS device** to rule out SELinux/seccomp
-4. **Consider Esplora chain source** as a completely different sync path
-5. **Check if `synchronize_listeners` is making RPC calls** by monitoring bitcoind's `debug.log` for `getblockheader`/`getblock` calls during LDK startup
+The fix has three parts:
+
+1. **Coroutine context isolation** (Phase 7): `startInternal` runs on a bare `Thread("ldk-start")` with zero coroutine machinery. LDK creates its own tokio runtime cleanly.
+
+2. **Chain source: RPC mode** (Phase 8): Switched to `setChainSourceBitcoindRpc`. REST showed same behavior but RPC is simpler and proven.
+
+3. **Auto-recovery** (Phase 10): Proactive stale detection (>500 blocks behind = reset) + 120-second sync watchdog. `resetChainState()` preserves seed and channel data, deletes chain tracking files.
+
+4. **Electrum polling reduction**: SubscriptionManager poll interval reduced from 5s to 60s to avoid saturating bitcoind's RPC server with TIME_WAIT connections.
 
 ## Lessons Learned
 

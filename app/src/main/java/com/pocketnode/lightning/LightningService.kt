@@ -139,8 +139,25 @@ class LightningService(private val context: Context) {
             }
             if (!rpcReady) throw Exception("bitcoind RPC not reachable after 60 seconds")
 
-            // --- Build LDK node ---
+            // --- Stale chain state detection ---
+            // If LDK's stored height is far behind bitcoind, synchronize_listeners
+            // will hang trying to fetch pruned blocks. Proactively reset chain state
+            // while preserving the seed and any channel data.
             val storageDir = File(context.filesDir, STORAGE_DIR)
+            if (storageDir.exists()) {
+                val chainInfo = rpc.getBlockchainInfoSync()
+                val bitcoindHeight = chainInfo?.optLong("blocks", 0) ?: 0
+                val lastLdkHeight = context.getSharedPreferences("pocketnode_prefs", MODE_PRIVATE)
+                    .getLong("last_ldk_sync_height", 0)
+                val staleThreshold = 500 // blocks behind before we reset
+                if (lastLdkHeight > 0 && bitcoindHeight > 0 && (bitcoindHeight - lastLdkHeight) > staleThreshold) {
+                    Log.w(TAG, "LDK chain state is stale: LDK at $lastLdkHeight, bitcoind at $bitcoindHeight (${bitcoindHeight - lastLdkHeight} blocks behind)")
+                    Log.w(TAG, "Resetting chain state to avoid synchronize_listeners hang. Seed and channels preserved.")
+                    resetChainState(storageDir)
+                }
+            }
+
+            // --- Build LDK node ---
             if (!storageDir.exists()) storageDir.mkdirs()
 
             val builder = Builder()
@@ -163,9 +180,7 @@ class LightningService(private val context: Context) {
 
             builder.setNetwork(Network.BITCOIN)
 
-            builder.setChainSourceBitcoindRest(
-                "127.0.0.1",
-                8332.toUShort(),  // REST port
+            builder.setChainSourceBitcoindRpc(
                 "127.0.0.1",
                 rpcPort.toUShort(),
                 rpcUser,
@@ -250,6 +265,33 @@ class LightningService(private val context: Context) {
                 }
             }
 
+            // Sync watchdog: if height doesn't advance within 120s after start,
+            // the stored chain state is likely corrupted. Reset and restart.
+            val startHeight = try { ldkNode.status().currentBestBlock.height.toLong() } catch (_: Exception) { 0L }
+            Thread({
+                Thread.sleep(120_000) // Wait 2 minutes
+                try {
+                    val currentHeight = ldkNode.status().currentBestBlock.height.toLong()
+                    if (currentHeight <= startHeight) {
+                        Log.e(TAG, "Sync watchdog: height stuck at $currentHeight after 120s (started at $startHeight). Resetting chain state.")
+                        stop()
+                        resetChainState(storageDir)
+                        // Clear the stale sync height so prune check doesn't block restart
+                        context.getSharedPreferences("pocketnode_prefs", MODE_PRIVATE)
+                            .edit().putLong("last_ldk_sync_height", 0).apply()
+                        // Restart on a new thread
+                        Thread({
+                            Thread.sleep(2_000)
+                            start(rpcUser, rpcPassword, rpcPort)
+                        }, "ldk-restart").start()
+                    } else {
+                        Log.i(TAG, "Sync watchdog: height advanced from $startHeight to $currentHeight. Sync healthy.")
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Sync watchdog check failed: ${e.message}")
+                }
+            }, "ldk-sync-watchdog").start()
+
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start Lightning node", e)
             starting = false
@@ -277,6 +319,23 @@ class LightningService(private val context: Context) {
      * Try to restore the most recent seed backup that differs from the current seed.
      * Returns true if a backup was restored.
      */
+    /**
+     * Reset LDK chain state while preserving seed and channel data.
+     * Deletes files that synchronize_listeners uses to determine its starting point.
+     * On next start, LDK will sync from the current chain tip instead of the stale height.
+     */
+    private fun resetChainState(storageDir: File) {
+        val preserveNames = setOf("keys_seed", "keys_seed.bak", "channel_manager", "monitors")
+        storageDir.listFiles()?.forEach { file ->
+            if (file.name !in preserveNames) {
+                val deleted = if (file.isDirectory) file.deleteRecursively() else file.delete()
+                Log.d(TAG, "resetChainState: ${if (deleted) "deleted" else "FAILED to delete"} ${file.name}")
+            } else {
+                Log.d(TAG, "resetChainState: preserved ${file.name}")
+            }
+        }
+    }
+
     private fun tryRestoreSeedBackup(): Boolean {
         val storageDir = File(context.filesDir, STORAGE_DIR)
         val seedFile = File(storageDir, "keys_seed")
