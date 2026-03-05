@@ -57,8 +57,8 @@
 - [x] All 4 verified on phone: chainstate compatible across all versions, no reindex needed
 - [x] Confirmation dialog with auto-restart when switching
 
-### Lightning Phase 1: Sovereign Foundation ✅
-Pruned Bitcoin Core on the phone with BIP 157/158 block filters. Zeus with embedded LND handles Lightning. Full sovereign stack proven and operational.
+### Lightning Phase 1: Block Filter Infrastructure ✅
+Block filter support enables Lightning on pruned nodes. Filters are copied from a home node or another Bitcoin Pocket Node.
 
 - [x] "Add Lightning Support" button on dashboard
 - [x] Reuse existing SSH credentials from chainstate copy
@@ -69,10 +69,6 @@ Pruned Bitcoin Core on the phone with BIP 157/158 block filters. Zeus with embed
 - [x] Auto-restart node after filter install/remove
 - [x] Unified atomic snapshot: stop donor, archive chainstate + filters together, restart
 - [x] Revert listen/bind config when Lightning removed
-
-**Proven on device:** Zeus v0.12.2 with embedded LND syncs and operates on the phone. Block filters copied from home node. Full Lightning wallet functional.
-
-**Known limitation: NODE_NETWORK service bit.** Our pruned bitcoind advertises `NODE_NETWORK_LIMITED` (service bit 10) instead of `NODE_NETWORK` (service bit 0). Neutrino requires `NODE_NETWORK | NODE_WITNESS | NODE_CF` from peers, so it silently rejects our local node during the P2P handshake. Zeus falls back to internet peers for Neutrino sync. This means Zeus does not use our local bitcoind for P2P block/filter fetching, only internet peers. This is not a sovereignty gap (Neutrino is privacy-preserving and verifies everything locally), but it means two independent sync engines run on the phone. The LDK migration (Phase 4) eliminates this entirely by using bitcoind's RPC directly instead of P2P Neutrino.
 
 ### Additional Completed Features
 - [x] Onboarding flow (SetupChecklistScreen with auto-detection)
@@ -150,9 +146,8 @@ Pruned Bitcoin Core on the phone with BIP 157/158 block filters. Zeus with embed
 - [ ] Chainstate backup before version switch (safety net for future incompatible versions)
 
 ### Lightning Phase 2: Peer Channels
-As network matures, users open channels to arbitrary peers beyond Olympus. No new code from us: natural user behavior as confidence grows.
+As the network matures, users open channels to arbitrary peers. Natural user behavior as confidence grows.
 
-- [ ] LAN exposure toggle for Zeus on separate device (same network)
 - [ ] Documentation for opening peer channels
 
 ### Lightning Phase 3: Watchtower ✅
@@ -167,9 +162,9 @@ See [Watchtower Design](docs/WATCHTOWER-MESH.md) and [LDK-to-LND Bridge](docs/LD
 - [x] End-to-end verified against live LND tower on Umbrel
 
 ### Lightning Phase 4: LDK Migration ✅
-Replace Zeus embedded LND with ldk-node (Lightning Dev Kit): modular Lightning library with native Android bindings. Designed for mobile (constrained storage, intermittent connectivity).
+In-process Lightning using ldk-node (Lightning Dev Kit): modular Lightning library with native Android bindings. Designed for mobile (constrained storage, intermittent connectivity).
 
-This phase solves the NODE_NETWORK roadblock: LDK connects to bitcoind via RPC (not P2P Neutrino), so pruned nodes work natively. No service bit checks, no cross-app localhost issues, no duplicate sync engine. One bitcoind, one Lightning implementation, all in-process.
+LDK connects to bitcoind via RPC (not P2P), so pruned nodes work natively. No service bit checks, no cross-app issues, no duplicate sync engine. One bitcoind, one Lightning implementation, all in-process.
 
 **Architecture:**
 ```
