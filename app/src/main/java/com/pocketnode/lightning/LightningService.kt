@@ -189,7 +189,57 @@ class LightningService(private val context: Context) {
 
             builder.setGossipSourceRgs(RGS_URL)
 
-            val seedPath = File(storageDir, "keys_seed").absolutePath
+            // --- Wallet recovery scan ---
+            // If this is a fresh wallet (no persisted chain state), check if the seed
+            // has existing UTXOs on-chain. If so, set wallet birthday to resync from
+            // the earliest UTXO height instead of the current tip.
+            val seedFile = File(storageDir, "keys_seed")
+            val hasPersistedState = File(storageDir, "bdk_wallet").exists()
+            if (seedFile.exists() && !hasPersistedState) {
+                Log.i(TAG, "Fresh wallet with existing seed detected. Scanning for recovery UTXOs...")
+                val recoveryService = WalletRecoveryService(context)
+                val seedBytes = seedFile.readBytes()
+                if (seedBytes.size == 32) {
+                    val scanResult = recoveryService.scanForFunds(seedBytes, rpc)
+                    if (scanResult != null && scanResult.totalSats > 0) {
+                        Log.i(TAG, "Recovery scan found ${scanResult.totalSats} sats in ${scanResult.utxos.size} UTXOs")
+                        if (scanResult.canResync) {
+                            Log.i(TAG, "Blocks available. Setting wallet birthday to ${scanResult.birthdayHeight}")
+                            // Use reflection until wallet-recovery AAR is built
+                            try {
+                                val method = builder.javaClass.getMethod("setWalletBirthdayHeight", UInt::class.java)
+                                method.invoke(builder, scanResult.birthdayHeight.toUInt())
+                                Log.i(TAG, "Wallet birthday set successfully via AAR")
+                            } catch (e: NoSuchMethodException) {
+                                Log.w(TAG, "setWalletBirthdayHeight not in current AAR. Recovery will use sweep fallback.")
+                                // Mark for sweep instead
+                                context.getSharedPreferences("pocketnode_prefs", MODE_PRIVATE)
+                                    .edit().putBoolean("recovery_needs_sweep", true).apply()
+                            }
+                            // Save recovery info for UI
+                            context.getSharedPreferences("pocketnode_prefs", MODE_PRIVATE)
+                                .edit()
+                                .putLong("recovery_sats_found", scanResult.totalSats)
+                                .putInt("recovery_birthday_height", scanResult.birthdayHeight)
+                                .putBoolean("recovery_pending", true)
+                                .apply()
+                        } else {
+                            Log.w(TAG, "Blocks pruned below height ${scanResult.minHeight}. " +
+                                    "Sweep required to recover ${scanResult.totalSats} sats.")
+                            // TODO: Trigger sweep flow for pruned blocks
+                            context.getSharedPreferences("pocketnode_prefs", MODE_PRIVATE)
+                                .edit()
+                                .putLong("recovery_sats_found", scanResult.totalSats)
+                                .putBoolean("recovery_needs_sweep", true)
+                                .apply()
+                        }
+                    } else {
+                        Log.i(TAG, "No UTXOs found for this seed. Starting fresh.")
+                    }
+                }
+            }
+
+            val seedPath = seedFile.absolutePath
             val entropy = NodeEntropy.fromSeedPath(seedPath)
             val ldkNode = builder.build(entropy)
 
