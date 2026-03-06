@@ -252,7 +252,7 @@ class LightningService(private val context: Context) {
             // Check if this is a restored wallet needing background scan
             val restoredMarker = File(storageDir, "restored_wallet")
             val needsRecoveryScan = restoredMarker.exists() && !birthdayFile.exists()
-                && initBalances.totalOnchainBalanceSats == 0UL
+                && !hasPersistedState && initBalances.totalOnchainBalanceSats == 0UL
 
             // Collect scan addresses FIRST — before verification/sweep newAddress() calls
             // advance the internal index past the deposit address
@@ -384,7 +384,7 @@ class LightningService(private val context: Context) {
      * On next start, LDK will sync from the current chain tip instead of the stale height.
      */
     private fun resetChainState(storageDir: File) {
-        val preserveNames = setOf("keys_seed", "keys_seed.bak", "channel_manager", "monitors", "wallet_birthday", "restored_wallet")
+        val preserveNames = setOf("keys_seed", "keys_seed.bak", "channel_manager", "monitors", "wallet_birthday")
         storageDir.listFiles()?.forEach { file ->
             if (file.name !in preserveNames) {
                 val deleted = if (file.isDirectory) file.deleteRecursively() else file.delete()
