@@ -102,11 +102,15 @@ Libraries hand off derivation to whatever module the caller provides. LDK/BDK do
 User enters 24 words
         │
         ▼
-  Prism scans all modes
-  (single scantxoutset call,
-   addresses from each derivation)
+  Prism generates addresses from ALL modes
+  (20 per mode = 60 total addresses)
         │
         ▼
+  Single scantxoutset call with all 60 addresses
+  (~4 min on phone, same as scanning 20)
+        │
+        ▼
+  Attribute results back to each mode by address
   ┌─────────────────────┐
   │ BIP39:  0 sats      │
   │ LDK:    110,628 sats │ ← auto-selected
@@ -117,6 +121,8 @@ User enters 24 words
   App starts with LDK derivation
   Balance appears immediately
 ```
+
+One scan, all modes checked simultaneously. Each address is tagged with its source mode, so results are attributed back cleanly.
 
 ### Why Not Three Wallets?
 
@@ -136,11 +142,29 @@ Running three wallet engines in parallel is complex, resource-heavy, and unneces
 - **Nested SegWit (BIP49):** P2SH-P2WPKH
 - **Custom paths:** User-specified derivation for exotic setups
 
+### Implementation Complexity
+
+Not all modes are equal:
+
+- **LDK raw:** Already implemented. Zero work.
+- **BIP39 standard:** Add PBKDF2 step before key derivation. Straightforward.
+- **AEZEED:** Significantly harder. Requires scrypt KDF, version byte decoding, birthday field extraction, and LND-specific derivation paths. Essentially porting a chunk of LND's Go cipher seed code to Kotlin. Separate order of magnitude of effort.
+
+### BDK/LDK Wallet Split
+
+LDK and BDK maintain separate wallet instances internally. LDK's `KeysManager` takes a `[u8; 32]` seed for Lightning keys. BDK uses descriptors for on-chain. Prism must produce correct inputs for both from the same entropy:
+
+- **LDK side:** 32-byte seed → `KeysManager` (straightforward, already works)
+- **BDK side:** Descriptor derivation varies by mode. BIP39 standard uses `wpkh([fingerprint/84'/0'/0']xprv.../0/*)`. LDK raw uses its own internal descriptor. AEZEED uses LND's key family paths.
+
+The `DerivedKeys` struct must handle both halves. This is the architectural crux: ensuring both wallet engines derive from the same seed consistently per mode.
+
 ### Dependencies
 
 - BIP39 mnemonic handling (already in app: `Bip39.kt`)
 - BIP32 HD key derivation (available via bitcoinj or custom implementation)
-- AEZEED decoding (would need implementation or port from LND's Go code)
+- PBKDF2-HMAC-SHA512 for BIP39 standard (available in standard Java crypto)
+- AEZEED decoding (would need implementation or port from LND's Go code, including scrypt)
 - `scantxoutset` RPC (already working in app)
 
 ### Related
