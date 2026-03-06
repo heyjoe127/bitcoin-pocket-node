@@ -12,6 +12,7 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 
+
 /**
  * Checks GitHub Releases for a newer version and handles APK download + install.
  */
@@ -65,7 +66,17 @@ object UpdateChecker {
                 }
             }
 
-            val hasUpdate = isNewer(tagName, currentVersion)
+            var hasUpdate = isNewer(tagName, currentVersion)
+
+            // Same version? Compare APK size to detect rebuilt releases
+            if (!hasUpdate && assets != null) {
+                val localSize = getInstalledApkSize(context)
+                val remoteSize = getRemoteApkSize(assets)
+                if (localSize != null && remoteSize != null && localSize != remoteSize) {
+                    hasUpdate = true
+                    Log.i(TAG, "Same version but different APK size: local=$localSize remote=$remoteSize")
+                }
+            }
 
             UpdateInfo(
                 latestVersion = tagName,
@@ -138,6 +149,34 @@ object UpdateChecker {
             Log.e(TAG, "Download/install failed: ${e.message}", e)
             false
         }
+    }
+
+    /**
+     * Size of the installed APK file in bytes.
+     */
+    private fun getInstalledApkSize(context: Context): Long? {
+        return try {
+            val apkPath = context.packageManager
+                .getApplicationInfo(context.packageName, 0).sourceDir
+            File(apkPath).length()
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not get installed APK size: ${e.message}")
+            null
+        }
+    }
+
+    /**
+     * Get the APK file size from GitHub release assets.
+     * Different builds almost always produce different file sizes.
+     */
+    private fun getRemoteApkSize(assets: org.json.JSONArray): Long? {
+        for (i in 0 until assets.length()) {
+            val asset = assets.getJSONObject(i)
+            if (asset.getString("name").endsWith(".apk")) {
+                return asset.getLong("size")
+            }
+        }
+        return null
     }
 
     /**
