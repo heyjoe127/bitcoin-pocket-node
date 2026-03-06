@@ -195,6 +195,13 @@ bitcoind ← RPC → ldk-node (in-process)
   - Proven: 110,628 sats recovered end-to-end on Pixel 9
 - [ ] Pruned node recovery: auto-detect missing blocks, temporarily grow prune window, show recovery progress, shrink back when caught up
 - [x] Watchtower bridge: LDK-to-LND watchtower protocol (see docs/LDK-WATCHTOWER-BRIDGE.md)
+- [ ] **Seed Prism**: same 24 words viewed through multiple derivation paths simultaneously
+  - BIP39 standard (PBKDF2 + BIP84) — compatible with BlueWallet, Electrum, Sparrow
+  - LDK raw entropy — current KeysManager derivation
+  - AEZEED (LND cipher seed) — compatible with Zeus, Zap, Blixt
+  - Single `scantxoutset` with addresses from all derivations, shows funds per "lens"
+  - Enables recovery regardless of which app originally created the wallet
+  - Future: implement BIP39 standard derivation in our ldk-node fork for cross-wallet compatibility
 - [ ] VLS (Validating Lightning Signer): phone holds signing keys, remote server runs always-online node
 
 **What was built:**
