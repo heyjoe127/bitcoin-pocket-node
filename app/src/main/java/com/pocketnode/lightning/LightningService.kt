@@ -49,7 +49,9 @@ class LightningService(private val context: Context) {
         // Prune recovery progress
         val recoveryBlocksNeeded: Int = 0,
         val recoveryBlocksDone: Int = 0,
-        val recoveryWaitingForWifi: Boolean = false
+        val recoveryWaitingForWifi: Boolean = false,
+        // Background UTXO scan
+        val scanningForFunds: Boolean = false
     ) {
         enum class Status { STOPPED, STARTING, RUNNING, ERROR, RECOVERING }
     }
@@ -245,14 +247,31 @@ class LightningService(private val context: Context) {
             val initBalances = ldkNode.listBalances()
             Log.i(TAG, "Lightning node started. Node ID: $nodeId")
             Log.i(TAG, "Initial balances: onchain=${initBalances.totalOnchainBalanceSats} spendable=${initBalances.spendableOnchainBalanceSats} lightning=${initBalances.totalLightningBalanceSats}")
+
+            // Check if this is a restored wallet needing background scan
+            val restoredMarker = File(storageDir, "restored_wallet")
+            val needsRecoveryScan = restoredMarker.exists() && !birthdayFile.exists()
+                && initBalances.totalOnchainBalanceSats == 0UL
+
+            // Collect scan addresses FIRST — before verification/sweep newAddress() calls
+            // advance the internal index past the deposit address
+            val scanAddresses = if (needsRecoveryScan) {
+                val addrs = mutableListOf<String>()
+                for (i in 0 until 20) {
+                    try { addrs.add(ldkNode.onchainPayment().newAddress()) } catch (_: Exception) { break }
+                }
+                Log.i(TAG, "Collected ${addrs.size} addresses for recovery scan")
+                addrs
+            } else { emptyList() }
+
             try {
                 val bestBlock = ldkNode.status().currentBestBlock
                 Log.i(TAG, "LDK best block: height=${bestBlock.height} hash=${bestBlock.blockHash}")
                 val newAddr = ldkNode.onchainPayment().newAddress()
                 Log.i(TAG, "LDK new deposit address (for verification): $newAddr")
 
-                // Save wallet birthday on first creation (for future seed recovery)
-                if (!birthdayFile.exists()) {
+                // Save wallet birthday on first creation (not on restore — scan handles that)
+                if (!birthdayFile.exists() && !restoredMarker.exists()) {
                     val height = bestBlock.height.toInt()
                     birthdayFile.writeText(height.toString())
                     Log.i(TAG, "Saved wallet birthday: $height")
@@ -284,14 +303,9 @@ class LightningService(private val context: Context) {
             Log.i(TAG, "LNDHub server started on localhost:${LndHubServer.PORT}")
 
             // --- Background recovery scan fallback ---
-            // If this is a fresh wallet with no birthday file (old wallet restore),
-            // scan the UTXO set using LDK's actual addresses to find historical deposits.
-            // If found, save the birthday and restart to sync from that height.
-            val isRestoredWithoutBirthday = !hasPersistedState && !birthdayFile.exists()
-                && initBalances.totalOnchainBalanceSats == 0UL
-            if (isRestoredWithoutBirthday) {
+            if (needsRecoveryScan && scanAddresses.isNotEmpty()) {
                 Thread({
-                    backgroundRecoveryScan(ldkNode, rpc, storageDir, rpcUser, rpcPassword, rpcPort)
+                    backgroundRecoveryScan(ldkNode, rpc, storageDir, rpcUser, rpcPassword, rpcPort, scanAddresses)
                 }, "recovery-scan").start()
             }
 
@@ -316,7 +330,7 @@ class LightningService(private val context: Context) {
                 Thread.sleep(120_000) // Wait 2 minutes
                 try {
                     val currentHeight = ldkNode.status().currentBestBlock.height.toLong()
-                    if (currentHeight <= startHeight) {
+                    if (currentHeight <= startHeight && !_state.value.scanningForFunds) {
                         Log.e(TAG, "Sync watchdog: height stuck at $currentHeight after 120s (started at $startHeight). Resetting chain state.")
                         stop()
                         resetChainState(storageDir)
@@ -369,7 +383,7 @@ class LightningService(private val context: Context) {
      * On next start, LDK will sync from the current chain tip instead of the stale height.
      */
     private fun resetChainState(storageDir: File) {
-        val preserveNames = setOf("keys_seed", "keys_seed.bak", "channel_manager", "monitors", "wallet_birthday")
+        val preserveNames = setOf("keys_seed", "keys_seed.bak", "channel_manager", "monitors", "wallet_birthday", "restored_wallet")
         storageDir.listFiles()?.forEach { file ->
             if (file.name !in preserveNames) {
                 val deleted = if (file.isDirectory) file.deleteRecursively() else file.delete()
@@ -578,7 +592,8 @@ class LightningService(private val context: Context) {
                 totalInboundSats = channels.sumOf {
                     (it.channelValueSats.toLong() - (it.outboundCapacityMsat.toLong() / 1000))
                 },
-                error = null
+                error = null,
+                scanningForFunds = _state.value.scanningForFunds
             )
         } catch (e: Exception) {
             Log.e(TAG, "Failed to update state", e)
@@ -860,25 +875,31 @@ class LightningService(private val context: Context) {
         val storageDir = File(context.filesDir, STORAGE_DIR)
         if (!storageDir.exists()) storageDir.mkdirs()
 
-        // Clear all state except seed backups
+        // Clear ALL state (including wallet_birthday from previous wallet)
         storageDir.listFiles()?.forEach { file ->
-            if (!file.name.startsWith("keys_seed.bak.")) {
-                file.deleteRecursively()
-                Log.d(TAG, "Cleared for restore: ${file.name}")
-            }
+            file.deleteRecursively()
+            Log.d(TAG, "Cleared for restore: ${file.name}")
         }
 
         // Write the new seed
         File(storageDir, "keys_seed").writeBytes(seed64)
 
-        // Copy wallet_birthday from backup if available
+        // Copy wallet_birthday from backup if the seed matches
         val backupBirthday = File(context.filesDir, "${STORAGE_DIR}_backup/wallet_birthday")
-        if (backupBirthday.exists()) {
-            backupBirthday.copyTo(File(storageDir, "wallet_birthday"), overwrite = true)
-            Log.i(TAG, "Restored wallet birthday: ${backupBirthday.readText().trim()}")
+        val backupSeedFile = File(context.filesDir, "${STORAGE_DIR}_backup/keys_seed")
+        if (backupBirthday.exists() && backupSeedFile.exists()) {
+            val backupBytes = backupSeedFile.readBytes()
+            if (backupBytes.contentEquals(seed64)) {
+                backupBirthday.copyTo(File(storageDir, "wallet_birthday"), overwrite = true)
+                Log.i(TAG, "Restored wallet birthday: ${backupBirthday.readText().trim()}")
+            } else {
+                Log.i(TAG, "Backup birthday skipped (different seed). Background scan will run.")
+            }
         }
 
         pendingFile.delete()
+        // Mark as restored wallet so we don't save tip as birthday on first start
+        File(storageDir, "restored_wallet").writeText("1")
         Log.i(TAG, "Seed restore applied. Fresh wallet state ready.")
     }
 
@@ -893,26 +914,25 @@ class LightningService(private val context: Context) {
         storageDir: File,
         rpcUser: String,
         rpcPassword: String,
-        rpcPort: Int
+        rpcPort: Int,
+        addresses: List<String>
     ) {
         try {
-            Log.i(TAG, "Background recovery scan: collecting LDK addresses...")
+            _state.value = _state.value.copy(scanningForFunds = true)
 
-            // Get first 20 addresses from LDK
-            val addresses = mutableListOf<String>()
-            for (i in 0 until 20) {
-                try {
-                    addresses.add(ldkNode.onchainPayment().newAddress())
-                } catch (e: Exception) {
-                    break
-                }
-            }
             if (addresses.isEmpty()) {
-                Log.w(TAG, "Background recovery scan: no addresses generated")
+                Log.w(TAG, "Background recovery scan: no addresses provided")
                 return
             }
 
             Log.i(TAG, "Background recovery scan: scanning ${addresses.size} addresses...")
+
+            // Abort any previous scan that might still be running
+            try {
+                val abortParams = org.json.JSONArray()
+                abortParams.put("abort")
+                rpc.callSync("scantxoutset", abortParams, readTimeoutMs = 10_000)
+            } catch (_: Exception) {}
 
             // Build scantxoutset params with addr() descriptors
             val scanObjects = org.json.JSONArray()
@@ -928,7 +948,8 @@ class LightningService(private val context: Context) {
 
             val result = rpc.callSync("scantxoutset", params, readTimeoutMs = 300_000)
             if (result == null || result.has("_rpc_error")) {
-                Log.e(TAG, "Background recovery scan: scantxoutset failed")
+                val errMsg = result?.optString("_rpc_error", "null response") ?: "null response"
+                Log.e(TAG, "Background recovery scan: scantxoutset failed: $errMsg")
                 return
             }
 
@@ -937,7 +958,9 @@ class LightningService(private val context: Context) {
             val unspents = result.optJSONArray("unspents") ?: org.json.JSONArray()
 
             if (totalSats == 0L || unspents.length() == 0) {
-                Log.i(TAG, "Background recovery scan: no UTXOs found. Wallet is clean.")
+                Log.i(TAG, "Background recovery scan: no UTXOs found in ${addresses.size} addresses.")
+                _state.value = _state.value.copy(scanningForFunds = false)
+                File(storageDir, "restored_wallet").delete()
                 return
             }
 
@@ -952,8 +975,9 @@ class LightningService(private val context: Context) {
             Log.i(TAG, "Background recovery scan: found $totalSats sats in ${unspents.length()} UTXOs. " +
                     "Min height: $minHeight, birthday: $birthdayHeight")
 
-            // Save the birthday
+            // Save the birthday and clear restored marker
             File(storageDir, "wallet_birthday").writeText(birthdayHeight.toString())
+            File(storageDir, "restored_wallet").delete()
             Log.i(TAG, "Background recovery scan: saved birthday $birthdayHeight. Restarting LDK...")
 
             // Restart LDK with the birthday
@@ -964,6 +988,7 @@ class LightningService(private val context: Context) {
 
         } catch (e: Exception) {
             Log.e(TAG, "Background recovery scan failed: ${e.message}", e)
+            _state.value = _state.value.copy(scanningForFunds = false)
         }
     }
 

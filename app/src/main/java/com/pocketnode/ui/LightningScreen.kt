@@ -319,8 +319,22 @@ fun LightningScreen(
                             Column {
                                 Text("On-chain", style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
-                                Text("${"%,d".format(effectiveState.onchainBalanceSats)} sats",
-                                    fontWeight = FontWeight.Bold)
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text("${"%,d".format(effectiveState.onchainBalanceSats)} sats",
+                                        fontWeight = FontWeight.Bold)
+                                    if (effectiveState.scanningForFunds) {
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(14.dp),
+                                            strokeWidth = 2.dp,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("scanning…",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.primary)
+                                    }
+                                }
                             }
                             Column(horizontalAlignment = Alignment.End) {
                                 Text("Lightning", style = MaterialTheme.typography.labelSmall,
