@@ -15,7 +15,8 @@ Turn any Android phone into a fully-validating Bitcoin full node. No server depe
 - ~26 GB total disk with Lightning (11 GB chainstate + 2 GB pruned blocks + 13 GB block filters), ~13 GB without
 - **Pure Kotlin Electrum server** with wallet tracking: balance, transactions, UTXOs all served from your own pruned node
 - **Built-in Lightning wallet** powered by LDK: send, receive, BOLT12 offers, open/close channels, peer browser, QR codes
-- **LNDHub API** for external Lightning wallets (BlueWallet, Zeus)
+- **LNDHub API** for external Lightning wallets (BlueWallet)
+- **Zeus compatible** via Neutrino P2P connection (localhost:8333)
 - **Proactive prune recovery** re-downloads missed blocks on startup when node was offline
 - **Embedded Tor** for direct .onion watchtower connections (no Orbot, no SSH tunnel needed)
 
@@ -118,7 +119,8 @@ See [Version Selection Design](docs/VERSION-SELECTION.md) and [BIP 110 Research]
 - **Two proven bootstrap paths:** home node or internet download (phone-to-phone built, untested)
 - **Pure Kotlin Electrum server** purpose-built for pruned nodes: the only Electrum server that works with `prune=2048`. Balances from the UTXO set, transaction history persisted forever (survives pruning), unsolicited notifications push new transactions to BlueWallet in real time
 - **Built-in Lightning node** powered by LDK (send, receive, channels, peer browser, seed backup/restore with automatic fund recovery)
-- **LNDHub API** on localhost:3000 for external wallet connectivity (BlueWallet, Zeus)
+- **LNDHub API** on localhost:3000 for external wallet connectivity (BlueWallet)
+- **Zeus compatible** via embedded LND Neutrino connecting to localhost:8333
 - **Wallet birthday recovery:** automatic fund discovery on seed restore via UTXO scan with live progress, instant restore for wallets with saved birthday
 - **Home node watchtower** with automatic channel protection via LDK-to-LND bridge (direct Tor .onion or SSH fallback)
 - **BOLT12 support:** send to offers, create reusable offers, variable-amount offers
@@ -252,7 +254,7 @@ bitcoind ← RPC → ldk-node (in-process)
 
 ### External Wallet Support
 
-The app runs an LNDHub-compatible API server on localhost:3000. Connect BlueWallet or Zeus in LNDHub mode to use your Lightning node from another app on the same phone.
+The app runs an LNDHub-compatible API server on localhost:3000. Connect BlueWallet in LNDHub mode to use your Lightning node from another app on the same phone.
 
 ### Peer Discovery
 
