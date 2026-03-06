@@ -92,6 +92,12 @@ fun SeedBackupScreen(
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onErrorContainer
                     )
+                    Text(
+                        "⚠\uFE0F Works in Pocket Node only. These words use LDK key derivation " +
+                                "and will NOT show your funds in BlueWallet, Electrum, or other standard wallets.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
                 }
             }
 
@@ -251,6 +257,12 @@ fun SeedBackupScreen(
                     Text(
                         "Restore an existing wallet from a 24-word backup, or create a new one.",
                         style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        "Pocket Node uses LDK key derivation. Seeds from other wallets " +
+                                "(BlueWallet, Electrum, Zeus) will create a different wallet with different addresses.",
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
