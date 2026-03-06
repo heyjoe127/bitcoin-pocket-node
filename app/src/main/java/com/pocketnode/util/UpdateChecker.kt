@@ -15,6 +15,7 @@ import java.net.URL
 
 /**
  * Checks GitHub Releases for a newer version and handles APK download + install.
+ * Detects rebuilt releases via APK size comparison when version matches.
  */
 object UpdateChecker {
     private const val TAG = "UpdateChecker"
