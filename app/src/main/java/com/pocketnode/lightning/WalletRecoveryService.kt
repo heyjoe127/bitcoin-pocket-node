@@ -77,7 +77,7 @@ class WalletRecoveryService(private val context: Context) {
             params.put("start")
             params.put(scanObjects)
 
-            val result = rpc.callSync("scantxoutset", params, readTimeoutMs = 120_000)
+            val result = rpc.callSync("scantxoutset", params, readTimeoutMs = 300_000)
             if (result == null || result.has("_rpc_error")) {
                 val errMsg = result?.optString("message", "unknown") ?: "null response"
                 Log.e(TAG, "scantxoutset failed: $errMsg")

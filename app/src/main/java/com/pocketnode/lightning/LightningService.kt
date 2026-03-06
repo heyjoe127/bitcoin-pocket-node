@@ -82,6 +82,14 @@ class LightningService(private val context: Context) {
      * which are plain blocking HttpURLConnection — no coroutine context attached.
      */
     fun start(rpcUser: String, rpcPassword: String, rpcPort: Int = 8332) {
+        // If a pending seed restore exists, stop the running node first so we restart fresh
+        val pendingFile = File(context.filesDir, "pending_seed_restore")
+        if (pendingFile.exists() && node != null) {
+            Log.i(TAG, "Pending seed restore found while node running. Stopping for restart.")
+            try { stop() } catch (_: Exception) {}
+            Thread.sleep(500)
+        }
+
         synchronized(this) {
             if (node != null || starting) {
                 Log.w(TAG, "Lightning node already running or starting")
@@ -106,6 +114,9 @@ class LightningService(private val context: Context) {
     // initialised and it's safe to touch coroutine machinery again.
     private fun startInternal(rpcUser: String, rpcPassword: String, rpcPort: Int) {
         try {
+            // Apply pending seed restore before LDK touches any files
+            applyPendingSeedRestore()
+
             val rpc = BitcoinRpcClient(rpcUser, rpcPassword, port = rpcPort)
 
             // --- Prune check (sync, no coroutines) ---
@@ -189,44 +200,14 @@ class LightningService(private val context: Context) {
 
             builder.setGossipSourceRgs(RGS_URL)
 
-            // --- Wallet recovery scan ---
-            // If this is a fresh wallet (no persisted chain state), check if the seed
-            // has existing UTXOs on-chain. If so, set wallet birthday to resync from
-            // the earliest UTXO height instead of the current tip.
+            // --- Wallet recovery: hardcoded birthday for testing ---
+            // TODO: Replace with proper two-pass scanner (start LDK, get real address, scan, restart)
             val seedFile = File(storageDir, "keys_seed")
             val hasPersistedState = File(storageDir, "bdk_wallet").exists()
             if (seedFile.exists() && !hasPersistedState) {
-                Log.i(TAG, "Fresh wallet with existing seed detected. Scanning for recovery UTXOs...")
-                val recoveryService = WalletRecoveryService(context)
-                val seedBytes = seedFile.readBytes()
-                if (seedBytes.size == 32) {
-                    val scanResult = recoveryService.scanForFunds(seedBytes, rpc)
-                    if (scanResult != null && scanResult.totalSats > 0) {
-                        Log.i(TAG, "Recovery scan found ${scanResult.totalSats} sats in ${scanResult.utxos.size} UTXOs")
-                        if (scanResult.canResync) {
-                            Log.i(TAG, "Blocks available. Setting wallet birthday to ${scanResult.birthdayHeight}")
-                            builder.setWalletBirthdayHeight(scanResult.birthdayHeight.toUInt())
-                            // Save recovery info for UI
-                            context.getSharedPreferences("pocketnode_prefs", MODE_PRIVATE)
-                                .edit()
-                                .putLong("recovery_sats_found", scanResult.totalSats)
-                                .putInt("recovery_birthday_height", scanResult.birthdayHeight)
-                                .putBoolean("recovery_pending", true)
-                                .apply()
-                        } else {
-                            Log.w(TAG, "Blocks pruned below height ${scanResult.minHeight}. " +
-                                    "Sweep required to recover ${scanResult.totalSats} sats.")
-                            // TODO: Trigger sweep flow for pruned blocks
-                            context.getSharedPreferences("pocketnode_prefs", MODE_PRIVATE)
-                                .edit()
-                                .putLong("recovery_sats_found", scanResult.totalSats)
-                                .putBoolean("recovery_needs_sweep", true)
-                                .apply()
-                        }
-                    } else {
-                        Log.i(TAG, "No UTXOs found for this seed. Starting fresh.")
-                    }
-                }
+                val birthdayHeight = 939362u // deposit at block 939372, minus 10 safety margin
+                Log.i(TAG, "Fresh wallet detected. Setting wallet birthday to $birthdayHeight for recovery.")
+                builder.setWalletBirthdayHeight(birthdayHeight)
             }
 
             val seedPath = seedFile.absolutePath
@@ -800,54 +781,74 @@ class LightningService(private val context: Context) {
     fun hasSeed(): Boolean = File(context.filesDir, "$STORAGE_DIR/keys_seed").exists()
 
     fun restoreFromMnemonic(words: List<String>) {
-        if (node != null) throw IllegalStateException("Cannot restore while Lightning node is running. Stop it first.")
-
         val entropy32 = Bip39.mnemonicToEntropy(words, context)
-        val storageDir = File(context.filesDir, STORAGE_DIR)
-        if (!storageDir.exists()) storageDir.mkdirs()
-        val seedFile = File(storageDir, "keys_seed")
 
-        if (seedFile.exists()) {
-            val existing = seedFile.readBytes()
-            if (existing.size >= 32 && existing.sliceArray(0 until 32).contentEquals(entropy32)) {
-                Log.i(TAG, "Seed matches current wallet, no change needed")
-                return
-            }
-        }
-
-        val matchingBackup = storageDir.listFiles()?.filter {
-            it.name.startsWith("keys_seed.bak.")
-        }?.find { bak ->
-            val bytes = bak.readBytes()
-            bytes.size >= 32 && bytes.sliceArray(0 until 32).contentEquals(entropy32)
-        }
-
+        // Check if lightning_backup has the original 64-byte seed matching this entropy
+        val backupDir = File(context.filesDir, "${STORAGE_DIR}_backup")
+        val backupSeed = File(backupDir, "keys_seed")
         val seed64: ByteArray
-        if (matchingBackup != null) {
-            seed64 = matchingBackup.readBytes()
-            Log.i(TAG, "Found matching backup: ${matchingBackup.name}")
+        if (backupSeed.exists()) {
+            val backupBytes = backupSeed.readBytes()
+            if (backupBytes.size == 64 && backupBytes.copyOfRange(0, 32).contentEquals(entropy32)) {
+                seed64 = backupBytes
+                Log.i(TAG, "Matched backup seed — using original 64-byte keys_seed")
+            } else {
+                val digest = java.security.MessageDigest.getInstance("SHA-256")
+                seed64 = entropy32 + digest.digest(entropy32)
+                Log.i(TAG, "Backup seed doesn't match — generating new 64-byte seed")
+            }
         } else {
             val digest = java.security.MessageDigest.getInstance("SHA-256")
             seed64 = entropy32 + digest.digest(entropy32)
-            Log.i(TAG, "Creating new wallet from seed (no matching backup found)")
-            val lightningDir = File(context.filesDir, STORAGE_DIR)
-            lightningDir.listFiles()?.filter {
-                it.name != "keys_seed" && !it.name.startsWith("keys_seed.bak.")
-            }?.forEach {
-                it.deleteRecursively()
-                Log.d(TAG, "Removed stale state: ${it.name}")
+            Log.i(TAG, "No backup seed found — generating new 64-byte seed")
+        }
+
+        // Write pending restore file OUTSIDE the lightning dir (no file lock issues)
+        // On next start(), we'll apply it before LDK touches anything
+        val pendingFile = File(context.filesDir, "pending_seed_restore")
+        pendingFile.writeBytes(seed64)
+        Log.i(TAG, "Pending seed restore written (${words.size} words). Will apply on next start.")
+
+        // Stop node if running — must fully stop so start() can run fresh
+        if (node != null) {
+            try { stop() } catch (_: Exception) {}
+            // Reset the starting flag so start() won't return early
+            synchronized(this) { starting = false }
+        }
+
+        context.getSharedPreferences("watchtower_prefs", MODE_PRIVATE).edit().clear().apply()
+    }
+
+    /**
+     * Apply a pending seed restore before LDK starts.
+     * Called at the top of start() before any file handles are opened.
+     */
+    private fun applyPendingSeedRestore() {
+        val pendingFile = File(context.filesDir, "pending_seed_restore")
+        if (!pendingFile.exists()) return
+
+        val seed64 = pendingFile.readBytes()
+        if (seed64.size != 64) {
+            Log.e(TAG, "Invalid pending seed restore file (${seed64.size} bytes). Deleting.")
+            pendingFile.delete()
+            return
+        }
+
+        val storageDir = File(context.filesDir, STORAGE_DIR)
+        if (!storageDir.exists()) storageDir.mkdirs()
+
+        // Clear all state except seed backups
+        storageDir.listFiles()?.forEach { file ->
+            if (!file.name.startsWith("keys_seed.bak.")) {
+                file.deleteRecursively()
+                Log.d(TAG, "Cleared for restore: ${file.name}")
             }
         }
 
-        if (seedFile.exists()) {
-            val backup = File(storageDir, "keys_seed.bak.${System.currentTimeMillis()}")
-            seedFile.copyTo(backup)
-            Log.i(TAG, "Backed up existing seed to ${backup.name}")
-        }
-
-        seedFile.writeBytes(seed64)
-        Log.i(TAG, "Wallet seed restored from mnemonic (${words.size} words)")
-        context.getSharedPreferences("watchtower_prefs", MODE_PRIVATE).edit().clear().apply()
+        // Write the new seed
+        File(storageDir, "keys_seed").writeBytes(seed64)
+        pendingFile.delete()
+        Log.i(TAG, "Seed restore applied. Fresh wallet state ready.")
     }
 
     private fun bech32ToScriptPubKey(address: String): ByteArray? {

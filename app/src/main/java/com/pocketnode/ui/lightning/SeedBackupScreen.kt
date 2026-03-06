@@ -46,6 +46,7 @@ fun SeedBackupScreen(
     var showRestoreDialog by remember { mutableStateOf(false) }
     var restoreInput by remember { mutableStateOf("") }
     var restoreError by remember { mutableStateOf<String?>(null) }
+    var restoreInProgress by remember { mutableStateOf(false) }
     var restoreSuccess by remember { mutableStateOf(false) }
     var createSuccess by remember { mutableStateOf(false) }
     var copied by remember { mutableStateOf(false) }
@@ -261,9 +262,6 @@ fun SeedBackupScreen(
                     ) {
                         Button(
                             onClick = {
-                                if (lightningService.isRunning()) {
-                                    lightningService.stop()
-                                }
                                 restoreInput = ""
                                 restoreError = null
                                 restoreSuccess = false
@@ -446,21 +444,41 @@ fun SeedBackupScreen(
                         if (error != null) {
                             restoreError = error
                         } else {
-                            try {
-                                lightningService.restoreFromMnemonic(words)
-                                showRestoreDialog = false
-                                restoreSuccess = true
-                            } catch (e: Exception) {
-                                restoreError = e.message ?: "Restore failed"
-                            }
+                            restoreError = null // Clear previous errors
+                            restoreInProgress = true
+                            Thread {
+                                try {
+                                    lightningService.restoreFromMnemonic(words)
+                                    // Wait for stop to complete, then restart
+                                    Thread.sleep(2000)
+                                    val prefs = context.getSharedPreferences("pocketnode_prefs", android.content.Context.MODE_PRIVATE)
+                                    val rpcUser = prefs.getString("rpc_user", "pocketnode") ?: "pocketnode"
+                                    val rpcPass = prefs.getString("rpc_password", "") ?: ""
+                                    if (rpcPass.isNotEmpty()) {
+                                        lightningService.start(rpcUser, rpcPass)
+                                    }
+                                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                        restoreInProgress = false
+                                        showRestoreDialog = false
+                                        restoreSuccess = true
+                                    }
+                                } catch (e: Exception) {
+                                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                        restoreInProgress = false
+                                        restoreError = e.message ?: "Restore failed"
+                                    }
+                                }
+                            }.start()
                         }
                     }
+                ,
+                    enabled = !restoreInProgress
                 ) {
-                    Text("Restore")
+                    Text(if (restoreInProgress) "Restoring..." else "Restore")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showRestoreDialog = false }) {
+                TextButton(onClick = { showRestoreDialog = false }, enabled = !restoreInProgress) {
                     Text("Cancel")
                 }
             }
