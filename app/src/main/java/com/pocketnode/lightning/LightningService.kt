@@ -51,7 +51,8 @@ class LightningService(private val context: Context) {
         val recoveryBlocksDone: Int = 0,
         val recoveryWaitingForWifi: Boolean = false,
         // Background UTXO scan
-        val scanningForFunds: Boolean = false
+        val scanningForFunds: Boolean = false,
+        val scanProgress: Int = 0  // 0-100%
     ) {
         enum class Status { STOPPED, STARTING, RUNNING, ERROR, RECOVERING }
     }
@@ -593,7 +594,8 @@ class LightningService(private val context: Context) {
                     (it.channelValueSats.toLong() - (it.outboundCapacityMsat.toLong() / 1000))
                 },
                 error = null,
-                scanningForFunds = _state.value.scanningForFunds
+                scanningForFunds = _state.value.scanningForFunds,
+                scanProgress = _state.value.scanProgress
             )
         } catch (e: Exception) {
             Log.e(TAG, "Failed to update state", e)
@@ -946,7 +948,26 @@ class LightningService(private val context: Context) {
             params.put("start")
             params.put(scanObjects)
 
+            // Poll progress while scan runs
+            val progressPoller = Thread({
+                try {
+                    while (!Thread.interrupted()) {
+                        Thread.sleep(2_000)
+                        val statusParams = org.json.JSONArray()
+                        statusParams.put("status")
+                        val status = rpc.callSync("scantxoutset", statusParams, readTimeoutMs = 5_000)
+                        if (status != null && status.has("progress")) {
+                            val pct = status.getInt("progress")
+                            _state.value = _state.value.copy(scanProgress = pct)
+                        }
+                    }
+                } catch (_: InterruptedException) {}
+                catch (_: Exception) {}
+            }, "scan-progress")
+            progressPoller.start()
+
             val result = rpc.callSync("scantxoutset", params, readTimeoutMs = 300_000)
+            progressPoller.interrupt()
             if (result == null || result.has("_rpc_error")) {
                 val errMsg = result?.optString("_rpc_error", "null response") ?: "null response"
                 Log.e(TAG, "Background recovery scan: scantxoutset failed: $errMsg")

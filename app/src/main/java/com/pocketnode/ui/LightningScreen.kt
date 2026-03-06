@@ -330,9 +330,12 @@ fun LightningScreen(
                                             color = MaterialTheme.colorScheme.primary
                                         )
                                         Spacer(modifier = Modifier.width(4.dp))
-                                        Text("scanning…",
+                                        val pct = effectiveState.scanProgress
+                                        Text(
+                                            if (pct > 0) "scanning chainstate $pct%" else "scanning chainstate…",
                                             style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.primary)
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
                                     }
                                 }
                             }
