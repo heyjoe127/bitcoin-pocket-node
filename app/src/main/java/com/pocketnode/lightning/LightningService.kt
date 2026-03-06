@@ -283,6 +283,18 @@ class LightningService(private val context: Context) {
             lndHubServer = LndHubServer(context).also { it.start() }
             Log.i(TAG, "LNDHub server started on localhost:${LndHubServer.PORT}")
 
+            // --- Background recovery scan fallback ---
+            // If this is a fresh wallet with no birthday file (old wallet restore),
+            // scan the UTXO set using LDK's actual addresses to find historical deposits.
+            // If found, save the birthday and restart to sync from that height.
+            val isRestoredWithoutBirthday = !hasPersistedState && !birthdayFile.exists()
+                && initBalances.totalOnchainBalanceSats == 0UL
+            if (isRestoredWithoutBirthday) {
+                Thread({
+                    backgroundRecoveryScan(ldkNode, rpc, storageDir, rpcUser, rpcPassword, rpcPort)
+                }, "recovery-scan").start()
+            }
+
             context.getSharedPreferences("pocketnode_prefs", Context.MODE_PRIVATE)
                 .edit().putBoolean("lightning_was_running", true).apply()
 
@@ -868,6 +880,91 @@ class LightningService(private val context: Context) {
 
         pendingFile.delete()
         Log.i(TAG, "Seed restore applied. Fresh wallet state ready.")
+    }
+
+    /**
+     * Background UTXO scan fallback for wallets without a saved birthday.
+     * Gets LDK's actual addresses, scans with scantxoutset, and if UTXOs
+     * are found at an older height, saves the birthday and restarts LDK.
+     */
+    private fun backgroundRecoveryScan(
+        ldkNode: org.lightningdevkit.ldknode.Node,
+        rpc: com.pocketnode.rpc.BitcoinRpcClient,
+        storageDir: File,
+        rpcUser: String,
+        rpcPassword: String,
+        rpcPort: Int
+    ) {
+        try {
+            Log.i(TAG, "Background recovery scan: collecting LDK addresses...")
+
+            // Get first 20 addresses from LDK
+            val addresses = mutableListOf<String>()
+            for (i in 0 until 20) {
+                try {
+                    addresses.add(ldkNode.onchainPayment().newAddress())
+                } catch (e: Exception) {
+                    break
+                }
+            }
+            if (addresses.isEmpty()) {
+                Log.w(TAG, "Background recovery scan: no addresses generated")
+                return
+            }
+
+            Log.i(TAG, "Background recovery scan: scanning ${addresses.size} addresses...")
+
+            // Build scantxoutset params with addr() descriptors
+            val scanObjects = org.json.JSONArray()
+            for (addr in addresses) {
+                val obj = org.json.JSONObject()
+                obj.put("desc", "addr($addr)")
+                scanObjects.put(obj)
+            }
+
+            val params = org.json.JSONArray()
+            params.put("start")
+            params.put(scanObjects)
+
+            val result = rpc.callSync("scantxoutset", params, readTimeoutMs = 300_000)
+            if (result == null || result.has("_rpc_error")) {
+                Log.e(TAG, "Background recovery scan: scantxoutset failed")
+                return
+            }
+
+            val totalAmount = result.optDouble("total_amount", 0.0)
+            val totalSats = (totalAmount * 100_000_000).toLong()
+            val unspents = result.optJSONArray("unspents") ?: org.json.JSONArray()
+
+            if (totalSats == 0L || unspents.length() == 0) {
+                Log.i(TAG, "Background recovery scan: no UTXOs found. Wallet is clean.")
+                return
+            }
+
+            // Find the minimum height
+            var minHeight = Int.MAX_VALUE
+            for (i in 0 until unspents.length()) {
+                val h = unspents.getJSONObject(i).getInt("height")
+                if (h < minHeight) minHeight = h
+            }
+
+            val birthdayHeight = maxOf(minHeight - 10, 0)
+            Log.i(TAG, "Background recovery scan: found $totalSats sats in ${unspents.length()} UTXOs. " +
+                    "Min height: $minHeight, birthday: $birthdayHeight")
+
+            // Save the birthday
+            File(storageDir, "wallet_birthday").writeText(birthdayHeight.toString())
+            Log.i(TAG, "Background recovery scan: saved birthday $birthdayHeight. Restarting LDK...")
+
+            // Restart LDK with the birthday
+            stop()
+            Thread.sleep(500)
+            synchronized(this) { starting = false }
+            start(rpcUser, rpcPassword, rpcPort)
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Background recovery scan failed: ${e.message}", e)
+        }
     }
 
     private fun bech32ToScriptPubKey(address: String): ByteArray? {
