@@ -71,11 +71,6 @@ object ConfigGenerator {
             # REST API — used by LDK for block sync (avoids RPC HTTP client issues)
             rest=1
             
-            # Block filter index (BIP 157/158) — enables fast wallet recovery via scanblocks
-            # Also serves compact block filters to Lightning peers (Zeus/Neutrino)
-            blockfilterindex=1
-            peerblockfilters=1
-            
             # Wallet enabled for BWT (Electrum server) address tracking
             # disablewallet=0
             deprecatedrpc=create_bdb
@@ -160,11 +155,7 @@ object ConfigGenerator {
                 additions.add("rest=1")
             }
 
-            // Block filter index for fast wallet recovery + Lightning peer serving
-            if (!content.contains("blockfilterindex=")) {
-                additions.add("blockfilterindex=1")
-                additions.add("peerblockfilters=1")
-            }
+
 
             if (additions.isNotEmpty()) {
                 confFile.appendText("\n# Added by config migration\n" +
