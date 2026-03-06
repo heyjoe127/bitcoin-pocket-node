@@ -188,6 +188,11 @@ bitcoind ← RPC → ldk-node (in-process)
 - [x] Auto-start Lightning when bitcoind syncs (SharedPreference persistence)
 - [x] Channel status indicators (Active/Ready/Pending) with outbound capacity display
 - [x] **Seed backup & restore**: BIP39 mnemonic display (view 24 words), restore from existing mnemonic with smart backup matching
+- [x] **Wallet birthday recovery**: automatic fund discovery on seed restore (see docs/LDK-SEED-RECOVERY.md)
+  - Saves wallet creation height to `wallet_birthday` file for instant future restores
+  - Fallback: `scantxoutset` scans UTXO set (~4 min on phone) with live progress indicator
+  - Auto-restarts LDK from birthday height, balance appears in seconds
+  - Proven: 110,628 sats recovered end-to-end on Pixel 9
 - [ ] Pruned node recovery: auto-detect missing blocks, temporarily grow prune window, show recovery progress, shrink back when caught up
 - [x] Watchtower bridge: LDK-to-LND watchtower protocol (see docs/LDK-WATCHTOWER-BRIDGE.md)
 - [ ] VLS (Validating Lightning Signer): phone holds signing keys, remote server runs always-online node

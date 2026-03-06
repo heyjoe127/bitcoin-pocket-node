@@ -152,10 +152,11 @@ Deletes everything else. LDK rebuilds chain tracking from the current tip.
 
 ## Timeline
 
-1. Deposit 110,628 sats to LDK address — confirmed at block 939372
-2. Balance shows 0 — sync never completed due to Bug 1
-3. Bug 1 identified and fixed — tokio background tasks now work
-4. Bug 2 discovered — stored chain state at height 939381, bitcoind at 939425
-5. Fresh state test — syncs in 2 seconds, confirms stored state is the problem
-6. Auto-recovery implemented — proactive detection + sync watchdog
-7. Seed recovery planned — scantxoutset-based UTXO sweep (LDK-SEED-RECOVERY.md)
+1. Deposit 110,628 sats to LDK address -- confirmed at block 939372
+2. Balance shows 0 -- sync never completed due to Bug 1
+3. Bug 1 identified and fixed -- tokio background tasks now work
+4. Bug 2 discovered -- stored chain state at height 939381, bitcoind at 939425
+5. Fresh state test -- syncs in 2 seconds, confirms stored state is the problem
+6. Auto-recovery implemented -- proactive detection + sync watchdog
+7. Wallet birthday recovery shipped -- see LDK-SEED-RECOVERY.md
+8. 110,628 sats recovered via birthday resync (block 939362 to tip in 10 seconds)

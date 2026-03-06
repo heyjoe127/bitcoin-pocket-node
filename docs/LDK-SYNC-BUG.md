@@ -230,3 +230,9 @@ The fix has three parts:
 6. **UniFFI + Kotlin coroutines can leak tokio handles.** `withContext(Dispatchers.IO)` runs on threads that may have UniFFI's tokio runtime attached. LDK's `Runtime::new()` uses `Handle::try_current()` and will borrow that handle instead of creating its own. Fix: use plain Java threads with zero coroutine machinery for LDK startup.
 7. **Document findings before fixing.** Each failed hypothesis narrows the search.
 8. **Tokio reactor alive ≠ sync working.** After fixing the reactor, background tasks confirmed working but chain sync still stalls. Multiple independent issues can stack.
+
+## Resolution
+
+Both bugs fixed. See LDK-ANDROID-FIXES.md for the complete fix details.
+
+For seed recovery after chain state resets, see LDK-SEED-RECOVERY.md. The wallet birthday system ensures funds are always recoverable without fees.

@@ -117,8 +117,9 @@ See [Version Selection Design](docs/VERSION-SELECTION.md) and [BIP 110 Research]
 - **3 Bitcoin implementations** with one-tap switching: Core 28.1, Core 30, Knots 29.3 (BIP 110 toggle)
 - **Two proven bootstrap paths:** home node or internet download (phone-to-phone built, untested)
 - **Pure Kotlin Electrum server** purpose-built for pruned nodes: the only Electrum server that works with `prune=2048`. Balances from the UTXO set, transaction history persisted forever (survives pruning), unsolicited notifications push new transactions to BlueWallet in real time
-- **Built-in Lightning node** powered by LDK (send, receive, channels, peer browser, seed backup/restore)
+- **Built-in Lightning node** powered by LDK (send, receive, channels, peer browser, seed backup/restore with automatic fund recovery)
 - **LNDHub API** on localhost:3000 for external wallet connectivity (BlueWallet, Zeus)
+- **Wallet birthday recovery:** automatic fund discovery on seed restore via UTXO scan with live progress, instant restore for wallets with saved birthday
 - **Home node watchtower** with automatic channel protection via LDK-to-LND bridge (direct Tor .onion or SSH fallback)
 - **BOLT12 support:** send to offers, create reusable offers, variable-amount offers
 - **QR codes:** generate on receive, scan with camera on send (CameraX + ZXing, no Google Play)

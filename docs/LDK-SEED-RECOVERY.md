@@ -1,8 +1,8 @@
-# LDK Seed Recovery on Pruned Nodes
+# LDK Seed Recovery
 
 **Date:** 2026-03-06
-**Status:** Planned
-**Related:** LDK-SYNC-BUG.md
+**Status:** Shipped (v0.12+)
+**Related:** LDK-SYNC-BUG.md, LDK-ANDROID-FIXES.md
 
 ## Problem
 
@@ -16,126 +16,118 @@ When restoring an LDK wallet from seed backup, the on-chain balance shows 0 even
 
 LDK's bitcoind backend uses `synchronize_listeners` which processes blocks forward from its starting point. A fresh node starts at the current chain tip. Historical blocks containing deposits are never processed, so UTXOs are invisible to the wallet.
 
-This is by design: LDK assumes an always-on node that never misses blocks. The "restore from seed" use case is not handled in upstream ldk-node's bitcoind chain source.
-
 ### Impact
 
 - On-chain balance shows 0 after seed restore
 - Cannot open Lightning channels (requires on-chain funds)
 - Funds are safe on-chain but inaccessible through LDK
-- No existing recovery mechanism in ldk-node
 
-## Solution: scantxoutset Recovery
+## Solution: Wallet Birthday Recovery
 
-Use bitcoind's `scantxoutset` RPC to find UTXOs belonging to the wallet, then sweep them into LDK's current wallet. This works on pruned nodes because `scantxoutset` reads the UTXO set directly, not block data.
+Two-layer approach: saved birthday for instant recovery, UTXO scan as fallback.
+
+### Layer 1: Saved Birthday (Instant)
+
+On first wallet creation, save the current block height to `lightning/wallet_birthday`. On seed restore, copy this file from `lightning_backup/` if the seed matches. LDK starts from that height and processes all subsequent blocks, finding any deposits.
+
+### Layer 2: scantxoutset Fallback (~4 minutes)
+
+For wallets without a saved birthday (created before this feature), use bitcoind's `scantxoutset` to discover UTXOs and their block heights automatically.
 
 ### Architecture
 
 ```
-Seed (keys_seed) → BIP39 Mnemonic → BIP32 Master Key
-                                          ↓
-                              BIP84 Derivation (m/84'/0'/0')
-                                          ↓
-                              wpkh descriptor (receiving + change)
-                                          ↓
-                         scantxoutset with descriptor range
-                                          ↓
-                              Found UTXOs (txid, vout, amount)
-                                          ↓
-                         Create + sign raw transaction
-                                          ↓
-                         sendrawtransaction → LDK deposit address
+Seed Restore Flow:
+                                          
+1. User enters 24 seed words
+2. BIP39 decode → 32 bytes entropy
+3. Match against lightning_backup/keys_seed (use original 64-byte seed if match)
+4. Write pending_seed_restore file + set SharedPreferences flag
+5. Stop LDK → clear wallet state → restart
+
+On LDK Start (with pending_recovery_scan flag):
+                                          
+6. Start LDK from chain tip (0 balance initially)
+7. Collect 20 addresses from LDK's internal wallet
+8. scantxoutset with addr() descriptors
+9. If UTXOs found → save birthday (min height - 10)
+10. resetChainState → restart LDK with birthday
+11. LDK syncs from birthday → finds deposits → balance appears
 ```
 
 ### Key Design Decisions
 
-1. **scantxoutset over rescanblockchain**: Works on pruned nodes. No block data needed. Scans the live UTXO set directly.
+1. **Birthday resync over sweep**: No transaction fees. LDK processes the historical block and registers the UTXO in its internal BDK wallet natively.
 
-2. **Sweep to current LDK address**: Rather than trying to make LDK aware of historical UTXOs (no API for this), sweep them into LDK's current wallet via a new on-chain transaction. LDK sees the sweep tx in a new block and updates balance.
+2. **LDK's actual addresses, not BIP84 derivation**: LDK uses non-standard key derivation from raw entropy (not PBKDF2 + BIP84 paths). We start LDK first, get its real addresses via `newAddress()`, then scan with `addr()` descriptors.
 
-3. **Raw transaction construction**: Can't use bitcoind's wallet RPC (importdescriptors) on pruned nodes for historical transactions. Instead: manually construct the spending transaction, sign with derived keys, broadcast via sendrawtransaction.
+3. **Collect addresses before other calls**: `newAddress()` advances an internal counter. The 20 scan addresses must be collected before verification/sweep address generation to avoid skipping the deposit address.
 
-4. **Automatic detection**: Trigger recovery when seed is restored but on-chain balance is 0 after initial sync. Also available as manual action from settings.
+4. **SharedPreferences flag, not file marker**: The `pending_recovery_scan` boolean in SharedPreferences survives cleanly across restarts and is cleared on first read. File-based markers caused scan-on-every-restart bugs.
 
-### Implementation Plan
+5. **resetChainState before birthday restart**: After saving the birthday, `bdk_wallet` must be deleted so `hasPersistedState` is false and the birthday height takes effect.
 
-```kotlin
-// WalletRecoveryService.kt
+6. **Watchdog suppression**: The sync watchdog (120s stuck height detector) is suppressed while `scanningForFunds` is true, preventing it from killing LDK mid-scan.
 
-class WalletRecoveryService(private val context: Context) {
-    
-    /**
-     * Scan for UTXOs belonging to the given seed.
-     * Uses bitcoind's scantxoutset which works on pruned nodes.
-     * 
-     * @param seedBytes 32-byte seed (from keys_seed file)
-     * @param rpc BitcoinRpcClient instance
-     * @return List of found UTXOs with amounts
-     */
-    fun scanForFunds(seedBytes: ByteArray, rpc: BitcoinRpcClient): List<FoundUtxo>
-    
-    /**
-     * Sweep all found UTXOs to the given destination address.
-     * Constructs and signs a raw transaction, broadcasts via bitcoind.
-     * 
-     * @param utxos UTXOs found by scanForFunds
-     * @param destAddress LDK's current deposit address
-     * @param feeRate Fee rate in sat/vB
-     * @param rpc BitcoinRpcClient instance
-     * @return Sweep transaction ID
-     */
-    fun sweepToAddress(utxos: List<FoundUtxo>, destAddress: String, 
-                       feeRate: Long, rpc: BitcoinRpcClient): String
-}
+### LDK Non-Standard Key Derivation
+
+Standard BIP39 wallets:
+```
+24 words → PBKDF2("mnemonic" + entropy) → 64 bytes → HMAC-SHA512 → master key → BIP84 path
 ```
 
-### RPC Calls Required
+LDK (our app):
+```
+24 words → BIP39 decode → 32 bytes raw entropy → KeysManager → internal derivation
+```
 
-1. `scantxoutset "start" [{"desc": "wpkh(xprv.../*)", "range": 20}]`
-   - Scans UTXO set for matching descriptors
-   - Returns: txid, vout, amount, scriptPubKey for each match
-   - Works on pruned nodes
+Same words produce completely different addresses. Seed words from this app are NOT compatible with BlueWallet, Electrum, or any standard wallet.
 
-2. `createrawtransaction [{"txid":"...","vout":N}] [{"addr":amount}]`
-   - Build the sweep transaction
+The `keys_seed` file is 64 bytes: 32 bytes entropy + 32 bytes derived. Both halves matter for key derivation. On restore, we match against the backup's full 64 bytes, not just the entropy.
 
-3. `signrawtransactionwithkey "hex" ["privkey1","privkey2"]`
-   - Sign with derived private keys
-   - No wallet import needed
+### RPC Calls
 
-4. `sendrawtransaction "hex"`
-   - Broadcast the signed sweep
+1. `scantxoutset "start" [{"desc": "addr(bc1q...)"}]` (x20 addresses)
+   - Scans full UTXO set (~4 min on Pixel 9)
+   - Returns: txid, vout, amount, height for each match
+   - Works on pruned nodes (reads UTXO set, not blocks)
 
-### Descriptor Derivation
+2. `scantxoutset "status"` (polled every 2s)
+   - Returns progress percentage for UI indicator
 
-LDK/BDK uses BIP84 (native segwit) descriptors:
-- Receiving: `wpkh([fingerprint/84'/0'/0']xprv.../0/*)`
-- Change: `wpkh([fingerprint/84'/0'/0']xprv.../1/*)`
+3. `scantxoutset "abort"`
+   - Called before starting new scan to prevent conflicts
 
-For scantxoutset, we scan both paths with range 0-20 (covers typical gap limit).
+### UI
 
-### Edge Cases
+- "scanning chainstate XX%" shown next to "0 sats" during scan
+- Spinner (CircularProgressIndicator) with real-time progress
+- `scanningForFunds` and `scanProgress` state preserved through `updateState()` cycles
 
-- **Multiple UTXOs**: Sweep all in a single transaction to minimize fees
-- **Dust amounts**: Skip UTXOs smaller than fee cost to spend them
-- **Block confirmation**: Sweep tx needs 1 confirmation before LDK sees the balance
-- **Concurrent spending**: Check UTXO still exists before broadcasting (could have been spent elsewhere)
-- **No UTXOs found**: Inform user, suggest increasing scan range
+### Files
 
-## Upstream Potential
+- `lightning/wallet_birthday` - Block height at wallet creation (preserved in resetChainState)
+- `lightning/keys_seed` - 64-byte seed (32 entropy + 32 derived)
+- `lightning_backup/` - Previous wallet state (keys_seed, wallet_birthday)
+- SharedPreferences `pending_recovery_scan` - One-shot flag for scan trigger
 
-This addresses a gap in ldk-node's bitcoind backend. Currently there is no recovery path for seed-restored wallets. Possible upstream contributions:
+### Proven End-to-End
 
-1. **scantxoutset integration in ldk-node**: After `node.start()`, if on-chain balance is 0 and the node has a restored seed, automatically scan the UTXO set.
+Tested on Pixel 9 (GrapheneOS):
+- Deposit: 110,628 sats at block 939372 to `bc1q54daym3gaarc4fld86gj8qd8ktpma3y4dfczw4`
+- Restore seed → scantxoutset finds UTXO → birthday 939362 saved → LDK restart → balance in 5 seconds
+- Multiple restore cycles verified with consistent results
 
-2. **Birthday height for chain sync**: Allow specifying a "wallet birthday" block height when restoring. `synchronize_listeners` would start from that height instead of the stored tip, catching historical deposits (requires unpruned blocks though).
+## Upstream
 
-3. **UTXO import API**: Allow external code to inform BDK/LDK about known UTXOs without processing the containing block. Would enable pruned-node recovery without sweeping.
+Our ldk-node fork adds `set_wallet_birthday_height()` to Builder:
+- Branch: `upstream/wallet-birthday` on `FreeOnlineUser/ldk-node`
+- Clean single commit off upstream/main, zero watchtower references
+- PR draft: `~/clawd/memory/ldk-wallet-birthday-pr-draft.md`
+- References upstream TODO at `src/builder.rs:1327`
 
-The `scantxoutset` approach is the most practical for pruned nodes and doesn't require upstream changes. The birthday height approach would be cleaner but only works on unpruned nodes.
+## Related
 
-## Related Issues
-
-- LDK-SYNC-BUG.md: Chain state reset triggers the need for recovery
-- ldk-node #813: Watchtower API improvements (our upstream issue)
-- The "restore from seed" UX is important for mobile wallets where data loss is common
+- LDK-SYNC-BUG.md: Chain state corruption that triggers need for recovery
+- LDK-ANDROID-FIXES.md: UniFFI tokio runtime fix, stale state auto-recovery
+- ldk-node #813: Watchtower API (our upstream issue, TheBlueMatt responded)
