@@ -927,22 +927,122 @@ class LightningService(private val context: Context) {
                 return
             }
 
-            Log.i(TAG, "Background recovery scan: scanning ${addresses.size} addresses...")
-
-            // Abort any previous scan that might still be running
-            try {
-                val abortParams = org.json.JSONArray()
-                abortParams.put("abort")
-                rpc.callSync("scantxoutset", abortParams, readTimeoutMs = 10_000)
-            } catch (_: Exception) {}
-
-            // Build scantxoutset params with addr() descriptors
+            // Build addr() descriptors (shared by both scan methods)
             val scanObjects = org.json.JSONArray()
             for (addr in addresses) {
                 val obj = org.json.JSONObject()
                 obj.put("desc", "addr($addr)")
                 scanObjects.put(obj)
             }
+
+            // Try scanblocks first (uses block filter index, returns in seconds)
+            var birthdayHeight = tryScanBlocks(rpc, scanObjects)
+
+            if (birthdayHeight == null) {
+                // Fallback: scantxoutset (scans full UTXO set, ~4 min on phone)
+                birthdayHeight = tryScanTxOutSet(rpc, scanObjects)
+            }
+
+            if (birthdayHeight == null) {
+                Log.i(TAG, "Background recovery scan: no funds found in ${addresses.size} addresses.")
+                _state.value = _state.value.copy(scanningForFunds = false)
+                File(storageDir, "restored_wallet").delete()
+                return
+            }
+
+            // Save the birthday and clear restored marker
+            File(storageDir, "wallet_birthday").writeText(birthdayHeight.toString())
+            File(storageDir, "restored_wallet").delete()
+            Log.i(TAG, "Background recovery scan: saved birthday $birthdayHeight. Restarting LDK...")
+
+            // Restart LDK with the birthday — must clear bdk_wallet so birthday takes effect
+            stop()
+            Thread.sleep(500)
+            resetChainState(storageDir)
+            synchronized(this) { starting = false }
+            start(rpcUser, rpcPassword, rpcPort)
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Background recovery scan failed: ${e.message}", e)
+            _state.value = _state.value.copy(scanningForFunds = false)
+        }
+    }
+
+    /**
+     * Fast scan using block filter index (BIP 157). Returns in seconds.
+     * Returns birthday height or null if no matches / index not available.
+     */
+    private fun tryScanBlocks(
+        rpc: com.pocketnode.rpc.BitcoinRpcClient,
+        scanObjects: org.json.JSONArray
+    ): Int? {
+        try {
+            Log.i(TAG, "Recovery scan: trying scanblocks (block filter index)...")
+            _state.value = _state.value.copy(scanProgress = 0)
+
+            val params = org.json.JSONArray()
+            params.put("start")          // action
+            params.put(scanObjects)      // scanobjects
+            params.put(0)               // start_height
+            // no stop_height = scan to tip
+
+            val result = rpc.callSync("scanblocks", params, readTimeoutMs = 60_000)
+            if (result == null || result.has("_rpc_error")) {
+                val err = result?.optString("_rpc_error", "") ?: ""
+                Log.i(TAG, "scanblocks not available: $err")
+                return null
+            }
+
+            val relevantBlocks = result.optJSONArray("relevant_blocks")
+            if (relevantBlocks == null || relevantBlocks.length() == 0) {
+                Log.i(TAG, "scanblocks: no matching blocks found")
+                _state.value = _state.value.copy(scanProgress = 100)
+                return null
+            }
+
+            // scanblocks returns block hashes, need to get heights
+            var minHeight = Int.MAX_VALUE
+            for (i in 0 until relevantBlocks.length()) {
+                val blockHash = relevantBlocks.getString(i)
+                val headerParams = org.json.JSONArray()
+                headerParams.put(blockHash)
+                val header = rpc.callSync("getblockheader", headerParams, readTimeoutMs = 10_000)
+                if (header != null && header.has("height")) {
+                    val h = header.getInt("height")
+                    if (h < minHeight) minHeight = h
+                }
+            }
+
+            if (minHeight == Int.MAX_VALUE) return null
+
+            val birthday = maxOf(minHeight - 10, 0)
+            Log.i(TAG, "scanblocks: found matches! Min height: $minHeight, birthday: $birthday")
+            _state.value = _state.value.copy(scanProgress = 100)
+            return birthday
+
+        } catch (e: Exception) {
+            Log.w(TAG, "scanblocks failed: ${e.message}")
+            return null
+        }
+    }
+
+    /**
+     * Slow fallback: scan entire UTXO set (~4 min on phone hardware).
+     * Returns birthday height or null if no UTXOs found.
+     */
+    private fun tryScanTxOutSet(
+        rpc: com.pocketnode.rpc.BitcoinRpcClient,
+        scanObjects: org.json.JSONArray
+    ): Int? {
+        try {
+            Log.i(TAG, "Recovery scan: falling back to scantxoutset (UTXO set scan)...")
+
+            // Abort any previous scan
+            try {
+                val abortParams = org.json.JSONArray()
+                abortParams.put("abort")
+                rpc.callSync("scantxoutset", abortParams, readTimeoutMs = 10_000)
+            } catch (_: Exception) {}
 
             val params = org.json.JSONArray()
             params.put("start")
@@ -968,10 +1068,11 @@ class LightningService(private val context: Context) {
 
             val result = rpc.callSync("scantxoutset", params, readTimeoutMs = 300_000)
             progressPoller.interrupt()
+
             if (result == null || result.has("_rpc_error")) {
                 val errMsg = result?.optString("_rpc_error", "null response") ?: "null response"
-                Log.e(TAG, "Background recovery scan: scantxoutset failed: $errMsg")
-                return
+                Log.e(TAG, "scantxoutset failed: $errMsg")
+                return null
             }
 
             val totalAmount = result.optDouble("total_amount", 0.0)
@@ -979,38 +1080,23 @@ class LightningService(private val context: Context) {
             val unspents = result.optJSONArray("unspents") ?: org.json.JSONArray()
 
             if (totalSats == 0L || unspents.length() == 0) {
-                Log.i(TAG, "Background recovery scan: no UTXOs found in ${addresses.size} addresses.")
-                _state.value = _state.value.copy(scanningForFunds = false)
-                File(storageDir, "restored_wallet").delete()
-                return
+                return null
             }
 
-            // Find the minimum height
             var minHeight = Int.MAX_VALUE
             for (i in 0 until unspents.length()) {
                 val h = unspents.getJSONObject(i).getInt("height")
                 if (h < minHeight) minHeight = h
             }
 
-            val birthdayHeight = maxOf(minHeight - 10, 0)
-            Log.i(TAG, "Background recovery scan: found $totalSats sats in ${unspents.length()} UTXOs. " +
-                    "Min height: $minHeight, birthday: $birthdayHeight")
-
-            // Save the birthday and clear restored marker
-            File(storageDir, "wallet_birthday").writeText(birthdayHeight.toString())
-            File(storageDir, "restored_wallet").delete()
-            Log.i(TAG, "Background recovery scan: saved birthday $birthdayHeight. Restarting LDK...")
-
-            // Restart LDK with the birthday — must clear bdk_wallet so birthday takes effect
-            stop()
-            Thread.sleep(500)
-            resetChainState(storageDir)
-            synchronized(this) { starting = false }
-            start(rpcUser, rpcPassword, rpcPort)
+            val birthday = maxOf(minHeight - 10, 0)
+            Log.i(TAG, "scantxoutset: found $totalSats sats in ${unspents.length()} UTXOs. " +
+                    "Min height: $minHeight, birthday: $birthday")
+            return birthday
 
         } catch (e: Exception) {
-            Log.e(TAG, "Background recovery scan failed: ${e.message}", e)
-            _state.value = _state.value.copy(scanningForFunds = false)
+            Log.e(TAG, "scantxoutset failed: ${e.message}", e)
+            return null
         }
     }
 
