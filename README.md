@@ -16,7 +16,7 @@ Turn any Android phone into a fully-validating Bitcoin full node. No server depe
 - **Pure Kotlin Electrum server** with wallet tracking: balance, transactions, UTXOs all served from your own pruned node
 - **Built-in Lightning wallet** powered by LDK: send, receive, BOLT12 offers, open/close channels, peer browser, QR codes
 - **LNDHub API** for external Lightning wallets (BlueWallet)
-- **Zeus** via Neutrino P2P (localhost:8333)
+- **P2P port** exposed on localhost:8333 for Neutrino-compatible wallets
 - **Proactive prune recovery** re-downloads missed blocks on startup when node was offline
 - **Embedded Tor** for direct .onion watchtower connections (no Orbot, no SSH tunnel needed)
 
@@ -120,7 +120,7 @@ See [Version Selection Design](docs/VERSION-SELECTION.md) and [BIP 110 Research]
 - **Pure Kotlin Electrum server** purpose-built for pruned nodes: the only Electrum server that works with `prune=2048`. Balances from the UTXO set, transaction history persisted forever (survives pruning), unsolicited notifications push new transactions to BlueWallet in real time
 - **Built-in Lightning node** powered by LDK (send, receive, channels, peer browser, seed backup/restore with automatic fund recovery)
 - **LNDHub API** on localhost:3000 for external wallet connectivity (BlueWallet)
-- **Zeus** via Neutrino P2P (localhost:8333)
+- **P2P port** exposed on localhost:8333 for Neutrino-compatible wallets
 - **Wallet birthday recovery:** automatic fund discovery on seed restore via UTXO scan with live progress, instant restore for wallets with saved birthday
 - **Home node watchtower** with automatic channel protection via LDK-to-LND bridge (direct Tor .onion or SSH fallback)
 - **BOLT12 support:** send to offers, create reusable offers, variable-amount offers
@@ -197,7 +197,7 @@ Download from `https://utxo.download/utxo-910000.dat` (9 GB). Same `loadtxoutset
 │      │     └──────┬───────┘                      │
 └──────┼────────────┼──────────────────────────────┘
        │            │
-  BlueWallet    BlueWallet/Zeus
+  BlueWallet    BlueWallet
   (on-chain)    (Lightning)
 ```
 
@@ -247,7 +247,7 @@ bitcoind ← RPC → ldk-node (in-process)
       Built-in UI      LNDHub API (:3000)
       (send/receive/        │
        channels)       External wallets
-                       (BlueWallet, Zeus)
+                       (BlueWallet)
 ```
 
 **Why LDK?** Earlier versions used Zeus with embedded LND, which required BIP 157/158 block filters and had a NODE_NETWORK service bit limitation with pruned nodes. LDK connects via RPC directly, so pruned nodes work natively. No service bit checks, no cross-app restrictions, no duplicate sync engine.
