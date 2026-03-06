@@ -200,14 +200,18 @@ class LightningService(private val context: Context) {
 
             builder.setGossipSourceRgs(RGS_URL)
 
-            // --- Wallet recovery: hardcoded birthday for testing ---
-            // TODO: Replace with proper two-pass scanner (start LDK, get real address, scan, restart)
+            // --- Wallet birthday for seed recovery ---
             val seedFile = File(storageDir, "keys_seed")
+            val birthdayFile = File(storageDir, "wallet_birthday")
             val hasPersistedState = File(storageDir, "bdk_wallet").exists()
-            if (seedFile.exists() && !hasPersistedState) {
-                val birthdayHeight = 939362u // deposit at block 939372, minus 10 safety margin
-                Log.i(TAG, "Fresh wallet detected. Setting wallet birthday to $birthdayHeight for recovery.")
-                builder.setWalletBirthdayHeight(birthdayHeight)
+            if (seedFile.exists() && !hasPersistedState && birthdayFile.exists()) {
+                try {
+                    val birthdayHeight = birthdayFile.readText().trim().toUInt()
+                    Log.i(TAG, "Wallet birthday found: $birthdayHeight. Setting for recovery sync.")
+                    builder.setWalletBirthdayHeight(birthdayHeight)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Invalid wallet_birthday file: ${e.message}")
+                }
             }
 
             val seedPath = seedFile.absolutePath
@@ -246,6 +250,13 @@ class LightningService(private val context: Context) {
                 Log.i(TAG, "LDK best block: height=${bestBlock.height} hash=${bestBlock.blockHash}")
                 val newAddr = ldkNode.onchainPayment().newAddress()
                 Log.i(TAG, "LDK new deposit address (for verification): $newAddr")
+
+                // Save wallet birthday on first creation (for future seed recovery)
+                if (!birthdayFile.exists()) {
+                    val height = bestBlock.height.toInt()
+                    birthdayFile.writeText(height.toString())
+                    Log.i(TAG, "Saved wallet birthday: $height")
+                }
             } catch (e: Exception) {
                 Log.w(TAG, "Could not get LDK status: ${e.message}")
             }
@@ -346,7 +357,7 @@ class LightningService(private val context: Context) {
      * On next start, LDK will sync from the current chain tip instead of the stale height.
      */
     private fun resetChainState(storageDir: File) {
-        val preserveNames = setOf("keys_seed", "keys_seed.bak", "channel_manager", "monitors")
+        val preserveNames = setOf("keys_seed", "keys_seed.bak", "channel_manager", "monitors", "wallet_birthday")
         storageDir.listFiles()?.forEach { file ->
             if (file.name !in preserveNames) {
                 val deleted = if (file.isDirectory) file.deleteRecursively() else file.delete()
@@ -847,6 +858,14 @@ class LightningService(private val context: Context) {
 
         // Write the new seed
         File(storageDir, "keys_seed").writeBytes(seed64)
+
+        // Copy wallet_birthday from backup if available
+        val backupBirthday = File(context.filesDir, "${STORAGE_DIR}_backup/wallet_birthday")
+        if (backupBirthday.exists()) {
+            backupBirthday.copyTo(File(storageDir, "wallet_birthday"), overwrite = true)
+            Log.i(TAG, "Restored wallet birthday: ${backupBirthday.readText().trim()}")
+        }
+
         pendingFile.delete()
         Log.i(TAG, "Seed restore applied. Fresh wallet state ready.")
     }
