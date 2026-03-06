@@ -249,10 +249,16 @@ class LightningService(private val context: Context) {
             Log.i(TAG, "Lightning node started. Node ID: $nodeId")
             Log.i(TAG, "Initial balances: onchain=${initBalances.totalOnchainBalanceSats} spendable=${initBalances.spendableOnchainBalanceSats} lightning=${initBalances.totalLightningBalanceSats}")
 
-            // Check if this is a restored wallet needing background scan
+            // Check if a seed restore just happened and needs a recovery scan.
+            // Uses SharedPreferences flag (survives file-level resets) — set in applyPendingSeedRestore,
+            // cleared here after reading. Only scans once per restore.
+            val prefs = context.getSharedPreferences("pocketnode_prefs", MODE_PRIVATE)
+            val needsRecoveryScan = prefs.getBoolean("pending_recovery_scan", false)
+                && !birthdayFile.exists() && initBalances.totalOnchainBalanceSats == 0UL
+            prefs.edit().putBoolean("pending_recovery_scan", false).apply()
+            // Clean up legacy file marker if present
             val restoredMarker = File(storageDir, "restored_wallet")
-            val needsRecoveryScan = restoredMarker.exists() && !birthdayFile.exists()
-                && !hasPersistedState && initBalances.totalOnchainBalanceSats == 0UL
+            if (restoredMarker.exists()) restoredMarker.delete()
 
             // Collect scan addresses FIRST — before verification/sweep newAddress() calls
             // advance the internal index past the deposit address
@@ -272,7 +278,7 @@ class LightningService(private val context: Context) {
                 Log.i(TAG, "LDK new deposit address (for verification): $newAddr")
 
                 // Save wallet birthday on first creation (not on restore — scan handles that)
-                if (!birthdayFile.exists() && !restoredMarker.exists()) {
+                if (!birthdayFile.exists() && !needsRecoveryScan) {
                     val height = bestBlock.height.toInt()
                     birthdayFile.writeText(height.toString())
                     Log.i(TAG, "Saved wallet birthday: $height")
@@ -900,8 +906,9 @@ class LightningService(private val context: Context) {
         }
 
         pendingFile.delete()
-        // Mark as restored wallet so we don't save tip as birthday on first start
-        File(storageDir, "restored_wallet").writeText("1")
+        // Mark as restored wallet so we trigger recovery scan (not birthday save) on first start
+        context.getSharedPreferences("pocketnode_prefs", MODE_PRIVATE)
+            .edit().putBoolean("pending_recovery_scan", true).apply()
         Log.i(TAG, "Seed restore applied. Fresh wallet state ready.")
     }
 
