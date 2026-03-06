@@ -1001,9 +1001,10 @@ class LightningService(private val context: Context) {
             File(storageDir, "restored_wallet").delete()
             Log.i(TAG, "Background recovery scan: saved birthday $birthdayHeight. Restarting LDK...")
 
-            // Restart LDK with the birthday
+            // Restart LDK with the birthday — must clear bdk_wallet so birthday takes effect
             stop()
             Thread.sleep(500)
+            resetChainState(storageDir)
             synchronized(this) { starting = false }
             start(rpcUser, rpcPassword, rpcPort)
 
