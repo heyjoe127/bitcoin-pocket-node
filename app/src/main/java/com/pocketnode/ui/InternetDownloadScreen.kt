@@ -41,6 +41,14 @@ fun InternetDownloadScreen(
     onComplete: () -> Unit
 ) {
     val context = LocalContext.current
+    val activity = context as? android.app.Activity
+
+    // Lock orientation while download/load is in progress to prevent state loss
+    DisposableEffect(Unit) {
+        onDispose {
+            activity?.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+    }
 
     var currentStep by remember { mutableStateOf(DownloadStep.NOT_STARTED) }
     var statusMessage by remember { mutableStateOf("") }
@@ -89,6 +97,8 @@ fun InternetDownloadScreen(
     }
 
     fun startFlow() {
+        // Lock orientation to prevent rotation from killing the download
+        activity?.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LOCKED
         currentStep = DownloadStep.DOWNLOADING
         statusMessage = "Connecting to utxo.download..."
         isRunning = true

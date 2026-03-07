@@ -28,8 +28,16 @@ import kotlinx.coroutines.launch
 @Composable
 fun ChainstateCopyScreen(onBack: () -> Unit, onComplete: () -> Unit = {}) {
     val context = LocalContext.current
+    val activity = context as? android.app.Activity
     val view = androidx.compose.ui.platform.LocalView.current
     val scope = rememberCoroutineScope()
+
+    // Lock orientation during transfer to prevent state loss
+    DisposableEffect(Unit) {
+        onDispose {
+            activity?.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+    }
     // Use a scope that survives recomposition for long-running work
     val workScope = rememberCoroutineScope()
     val setupManager = remember { NodeSetupManager(context) }
@@ -44,6 +52,10 @@ fun ChainstateCopyScreen(onBack: () -> Unit, onComplete: () -> Unit = {}) {
             state.step != ChainstateManager.Step.COMPLETE
     LaunchedEffect(transferActive) {
         view.keepScreenOn = transferActive
+        activity?.requestedOrientation = if (transferActive)
+            android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LOCKED
+        else
+            android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
     }
 
     var started by remember { mutableStateOf(false) }
