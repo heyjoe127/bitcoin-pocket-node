@@ -43,22 +43,31 @@ LDK creates the channel locally *before* sending `OpenChannel` to the peer. A po
 
 ## What Works
 
-### Wait then check (current approach)
-Wait 3 seconds after `openChannel()`, then call `listChannels()`. If the channel survived, peer accepted. If it's gone, peer rejected.
+### Wait then check (current working approach)
+Wait 3 seconds (polling `handleEvents()` every 500ms during the wait), then call `listChannels()`. If the channel survived, peer accepted. If it's gone, peer rejected.
 
-Why 3 seconds: peer rejections arrive within 1-2 seconds in practice (350ms for Boltz, even Tor peers should respond within 2-3s). 3 seconds gives margin.
+Why 3 seconds: LDK creates the channel locally before sending `OpenChannel` to the peer. Rejections arrive within 1-2 seconds (350ms for Boltz), but the local channel exists immediately. Checking too early (500ms) sees the local channel and falsely reports success.
 
-Trade-off: the UI spinner runs for 3 seconds even for instant rejections. Acceptable for now.
+The 3s wait also drains events via `handleEvents()` to capture the `ChannelClosed` reason for display.
 
-### Future improvement: poll with confirmation
-Poll `listChannels()` every 500ms but require the channel to be present on *two consecutive* checks. This would catch fast rejections while still responding quickly to acceptances from slow peers.
+Trade-off: the UI spinner runs for 3 seconds even for instant rejections. Acceptable.
+
+### Critical bug: updateState() wiping lastChannelError
+`updateState()` was creating a new `LightningState()` object every 10 seconds. The constructor defaults `lastChannelError = null`, so the error captured by `handleEvents()` was wiped before the UI could read it. Fix: carry `lastChannelError` through `updateState()`.
+
+This pattern applies to any new field added to `LightningState`: if `updateState()` doesn't preserve it, it gets silently reset.
 
 ## Peer Minimum Channel Size
 
 Peers don't advertise their minimum channel size in gossip data. You only find out when they reject you.
 
-### Heuristic
-Use the peer's smallest existing channel (from mempool.space API) as a proxy. `NodeDirectory.getNodeChannelStats()` computes this as `minChannelSize`.
+### Two-tier approach
+
+1. **Cached rejection data (preferred):** When a peer rejects with "min chan size of X BTC", we parse X and store it in SharedPreferences (`peer_channel_limits`). Survives app restarts. Shows as "Peer minimum: X sats" in blue info card.
+
+2. **Heuristic fallback:** If no cached data, use the peer's smallest existing channel from mempool.space API (`NodeDirectory.getNodeChannelStats()` computes `minChannelSize`). Shows as "Peer's smallest channel: X sats". Less accurate but better than nothing.
+
+The UI shows a red warning line ("Amount is below this peer's minimum") only when the entered amount is below the effective minimum. The info card itself stays blue (informational, not alarming).
 
 ### Known Minimums (from rejection messages)
 - **Boltz / ACINQ**: 5,000,000 sats (0.05 BTC)
@@ -74,6 +83,19 @@ When a peer rejects with an `ErrorMessage`, LDK automatically retries `OpenChann
 - `isUsable == false, isChannelReady == true`: Ready but not yet usable
 - `isUsable == true`: Fully operational
 - Channel disappears from list: Closed or rejected
+
+## Open Channel Screen Layout
+
+```
+Info card (balance)
+Browse Peers button
+Selected: peer name (green)
+Peer Node ID / Address fields
+Channel Amount (orange border when peer selected)
+Peer minimum info (blue card, red warning if amount too small)
+Status / Error card (green success or red rejection with reason)
+Open Channel button (orange, disabled after success)
+```
 
 ## Stale ChannelMonitors
 
