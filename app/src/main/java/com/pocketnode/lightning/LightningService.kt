@@ -74,7 +74,8 @@ class LightningService(private val context: Context) {
         data class PendingClose(
             val channelId: String,
             val amountSats: Long,
-            val status: String // "Pending broadcast", "Awaiting confirmation", "Awaiting threshold"
+            val status: String, // "Pending broadcast", "Awaiting confirmation", "Awaiting threshold"
+            val confirmationHeight: Int = 0 // block height when confirmed (for countdown)
         )
 
         enum class Status { STOPPED, STARTING, RUNNING, ERROR, RECOVERING }
@@ -667,14 +668,17 @@ class LightningService(private val context: Context) {
             }
 
             // Parse pending balances from channel closures
+            val currentHeight = bestBlock.height.toInt()
             val pendingCloses = balances.pendingBalancesFromChannelClosures.map { psb ->
                 when (psb) {
                     is org.lightningdevkit.ldknode.PendingSweepBalance.PendingBroadcast ->
                         LightningState.PendingClose(psb.channelId ?: "", psb.amountSatoshis.toLong(), "Pending broadcast")
                     is org.lightningdevkit.ldknode.PendingSweepBalance.BroadcastAwaitingConfirmation ->
-                        LightningState.PendingClose(psb.channelId ?: "", psb.amountSatoshis.toLong(), "Awaiting confirmation")
+                        LightningState.PendingClose(psb.channelId ?: "", psb.amountSatoshis.toLong(),
+                            "Awaiting confirmation", psb.latestBroadcastHeight.toInt())
                     is org.lightningdevkit.ldknode.PendingSweepBalance.AwaitingThresholdConfirmations ->
-                        LightningState.PendingClose(psb.channelId ?: "", psb.amountSatoshis.toLong(), "Awaiting threshold")
+                        LightningState.PendingClose(psb.channelId ?: "", psb.amountSatoshis.toLong(),
+                            "Awaiting threshold", psb.confirmationHeight.toInt())
                     else -> LightningState.PendingClose("", 0, "Unknown")
                 }
             }.filter { it.amountSats > 0 }
@@ -908,6 +912,8 @@ class LightningService(private val context: Context) {
     }
 
     fun listChannels(): List<ChannelDetails> = node?.listChannels() ?: emptyList()
+
+    fun getLdkHeight(): Int = try { node?.status()?.currentBestBlock?.height?.toInt() ?: 0 } catch (_: Exception) { 0 }
 
     // === Payment operations ===
 

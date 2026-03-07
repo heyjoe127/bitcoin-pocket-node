@@ -395,6 +395,7 @@ fun LightningScreen(
                             // Pending close balances
                             if (effectiveState.pendingCloseDetails.isNotEmpty()) {
                                 Spacer(Modifier.height(12.dp))
+                                val ldkHeight = remember(effectiveState) { lightning.getLdkHeight() }
                                 effectiveState.pendingCloseDetails.forEach { pc ->
                                     Divider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
                                     Row(
@@ -406,8 +407,14 @@ fun LightningScreen(
                                     ) {
                                         Column {
                                             Text("Channel closed", style = MaterialTheme.typography.bodySmall)
+                                            val blocksInfo = if (pc.confirmationHeight > 0 && ldkHeight > 0) {
+                                                // CSV timelock is typically 144 blocks for to_local
+                                                val blocksElapsed = ldkHeight - pc.confirmationHeight
+                                                val blocksRemaining = (144 - blocksElapsed).coerceAtLeast(0)
+                                                if (blocksRemaining > 0) " (~$blocksRemaining blocks)" else " (ready)"
+                                            } else ""
                                             Text(
-                                                pc.status,
+                                                "${pc.status}$blocksInfo",
                                                 style = MaterialTheme.typography.labelSmall,
                                                 color = Color(0xFFFF9800)
                                             )
