@@ -196,16 +196,20 @@ fun PocketNodeApp(
                         navController.navigate("nearby_node?host=&port=")
                     },
                     onPullFromNode = {
-                        if (setupManager.isSetupDone()) {
+                        val hasData = java.io.File(context.filesDir, "bitcoin/bitcoin.conf").exists()
+                        if (setupManager.isSetupDone() && hasData) {
                             navController.navigate("chainstate_copy")
                         } else {
+                            setupManager.clearCredentials()
                             navController.navigate("node_setup/chainstate_copy")
                         }
                     },
                     onCopyChainstate = {
-                        if (setupManager.isSetupDone()) {
+                        val hasData = java.io.File(context.filesDir, "bitcoin/bitcoin.conf").exists()
+                        if (setupManager.isSetupDone() && hasData) {
                             navController.navigate("chainstate_copy")
                         } else {
+                            setupManager.clearCredentials()
                             navController.navigate("node_setup/chainstate_copy")
                         }
                     }
