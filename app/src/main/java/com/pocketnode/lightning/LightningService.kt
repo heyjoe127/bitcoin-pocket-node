@@ -617,7 +617,7 @@ class LightningService(private val context: Context) {
             _state.value = LightningState(
                 status = LightningState.Status.RUNNING,
                 nodeId = n.nodeId(),
-                onchainBalanceSats = balances.totalOnchainBalanceSats.toLong(),
+                onchainBalanceSats = balances.spendableOnchainBalanceSats.toLong(),
                 lightningBalanceSats = balances.totalLightningBalanceSats.toLong(),
                 channelCount = channels.size,
                 totalCapacitySats = channels.sumOf { it.channelValueSats.toLong() },
