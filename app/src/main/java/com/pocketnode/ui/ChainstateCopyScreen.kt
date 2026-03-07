@@ -216,11 +216,14 @@ fun ChainstateCopyScreen(onBack: () -> Unit, onComplete: () -> Unit = {}) {
 
                 Button(
                     onClick = {
-                        // Check if archive already downloaded to phone
+                        // Check if archive already downloaded to phone AND chainstate is healthy
                         val dataDir = java.io.File(context.filesDir, "bitcoin")
                         val localArchive = java.io.File(dataDir, "node-sync.tar")
-                        if (localArchive.exists() && localArchive.length() > 1_000_000_000) {
-                            android.util.Log.i("ChainstateCopyScreen", "Local archive valid, skipping admin dialog")
+                        val chainstateDir = java.io.File(dataDir, "chainstate")
+                        val chainstateHealthy = chainstateDir.exists() &&
+                            (chainstateDir.listFiles()?.size ?: 0) > 1
+                        if (localArchive.exists() && localArchive.length() > 1_000_000_000 && chainstateHealthy) {
+                            android.util.Log.i("ChainstateCopyScreen", "Local archive valid + chainstate healthy, skipping admin dialog")
                             startWithoutAdmin()
                         } else if (NodeSetupManager.adminPasswordInMemory.isNotEmpty() && setupManager.getSavedAdminUser().isNotEmpty()) {
                             // Admin creds carried over from NodeSetupScreen — start directly
