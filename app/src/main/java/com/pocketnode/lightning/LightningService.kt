@@ -673,19 +673,20 @@ class LightningService(private val context: Context) {
             Log.i(TAG, "Channel open initiated: $userChannelId")
             // Clear any previous channel error
             _state.value = _state.value.copy(lastChannelError = null)
-            // Wait for peer response. LDK creates the channel locally before peer responds,
+            // Poll for peer response. LDK creates the channel locally before peer responds,
             // so we must wait long enough for rejection to arrive (~1-2s typically).
-            // Strategy: wait 3s, then check if channel still exists.
-            Thread.sleep(3000)
-            // Drain events to capture rejection reason from ChannelClosed
-            for (i in 1..5) { handleEvents() }
+            // Drain events during the wait to catch ChannelClosed reason.
+            for (i in 1..6) { // 6 x 500ms = 3s
+                Thread.sleep(500)
+                handleEvents()
+            }
             val channels = n.listChannels()
             val hasNewChannel = channels.isNotEmpty()
             updateState()
             val reason = _state.value.lastChannelError
             Log.i(TAG, "Post-open: channels=${channels.size} hasNew=$hasNewChannel reason=$reason")
             if (!hasNewChannel) {
-                val msg = if (reason != null) "Rejected: $reason" else "Peer rejected channel open"
+                val msg = if (reason != null) reason else "Peer rejected channel open"
                 Result.failure(Exception(msg))
             } else {
                 Result.success(userChannelId)
