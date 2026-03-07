@@ -137,14 +137,17 @@ object UpdateChecker {
 
             // Trigger install via FileProvider
             val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", apkFile)
-            val intent = Intent(Intent.ACTION_INSTALL_PACKAGE).apply {
-                data = uri
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "application/vnd.android.package-archive")
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true)
-                putExtra(Intent.EXTRA_RETURN_RESULT, true)
             }
             context.startActivity(intent)
+
+            // Give the installer a moment to launch, then kill our process
+            // so the old version doesn't stay in memory after install
+            Thread.sleep(1000)
+            android.os.Process.killProcess(android.os.Process.myPid())
             true
         } catch (e: Exception) {
             Log.e(TAG, "Download/install failed: ${e.message}", e)
