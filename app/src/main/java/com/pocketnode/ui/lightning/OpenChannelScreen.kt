@@ -161,26 +161,30 @@ fun OpenChannelScreen(
                 ) else OutlinedTextFieldDefaults.colors()
             )
 
-            // Minimum channel size warning
-            if (peerMinChannelSats > 0) {
+            // Minimum channel size warning (prefer cached rejection data over heuristic)
+            val cachedMin = if (nodeId.length >= 60) lightning.getPeerMinChannel(nodeId) else -1L
+            val effectiveMin = if (cachedMin > 0) cachedMin else peerMinChannelSats
+            val isCachedData = cachedMin > 0
+            if (effectiveMin > 0) {
+                val amountLong = amountSats.toLongOrNull() ?: 0L
+                val tooSmall = amountLong in 1 until effectiveMin
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
-                        containerColor = if (lightningState.onchainBalanceSats < peerMinChannelSats)
+                        containerColor = if (tooSmall)
                             MaterialTheme.colorScheme.errorContainer
-                        else Color(0xFF1B5E20).copy(alpha = 0.15f)
+                        else Color(0xFF1565C0).copy(alpha = 0.15f)
                     )
                 ) {
                     Text(
-                        "Peer's smallest channel: ${"%,d".format(peerMinChannelSats)} sats" +
-                            if (lightningState.onchainBalanceSats < peerMinChannelSats)
-                                "\n⚠️ Your balance may be below this peer's minimum"
-                            else "",
+                        (if (isCachedData) "Peer minimum: " else "Peer's smallest channel: ") +
+                            "${"%,d".format(effectiveMin)} sats" +
+                            if (tooSmall) "\n⚠️ Amount is below this peer's minimum" else "",
                         modifier = Modifier.padding(12.dp),
                         style = MaterialTheme.typography.bodySmall,
-                        color = if (lightningState.onchainBalanceSats < peerMinChannelSats)
+                        color = if (tooSmall)
                             MaterialTheme.colorScheme.error
-                        else Color(0xFF4CAF50)
+                        else Color(0xFF64B5F6)
                     )
                 }
             }

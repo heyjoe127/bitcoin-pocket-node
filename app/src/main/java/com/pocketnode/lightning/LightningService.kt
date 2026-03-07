@@ -634,6 +634,15 @@ class LightningService(private val context: Context) {
                     val reason = event.reason?.toString() ?: "unknown"
                     Log.w(TAG, "Channel closed: ${event.channelId} reason: $reason")
                     _state.value = _state.value.copy(lastChannelError = reason)
+                    // Cache peer's min channel size from rejection message
+                    val peerId = event.counterpartyNodeId
+                    if (peerId != null) {
+                        val minBtc = Regex("""min chan size of (\d+\.\d+) BTC""").find(reason)?.groupValues?.get(1)
+                        if (minBtc != null) {
+                            val minSats = (minBtc.toDouble() * 100_000_000).toLong()
+                            savePeerMinChannel(peerId, minSats)
+                        }
+                    }
                     channelEventLatch?.countDown()
                 }
                 else -> Log.d(TAG, "Event: $event")
@@ -647,6 +656,17 @@ class LightningService(private val context: Context) {
         } catch (e: Exception) {
             Log.e(TAG, "Error handling events", e)
         }
+    }
+
+    private fun savePeerMinChannel(peerId: PublicKey, minSats: Long) {
+        val prefs = context.getSharedPreferences("peer_channel_limits", MODE_PRIVATE)
+        prefs.edit().putLong(peerId.toString(), minSats).apply()
+        Log.i(TAG, "Cached peer min channel: ${peerId.toString().take(16)}... = $minSats sats")
+    }
+
+    fun getPeerMinChannel(peerId: String): Long {
+        val prefs = context.getSharedPreferences("peer_channel_limits", MODE_PRIVATE)
+        return prefs.getLong(peerId, -1L)
     }
 
     private fun drainWatchtowerBlobs() {
