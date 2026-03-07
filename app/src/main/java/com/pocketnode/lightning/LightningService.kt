@@ -1223,7 +1223,7 @@ class LightningService(private val context: Context) {
             for (desc in descriptors) {
                 val obj = org.json.JSONObject()
                 obj.put("desc", desc)
-                obj.put("range", 50)
+                obj.put("range", 20)
                 scanObjects.put(obj)
             }
 
