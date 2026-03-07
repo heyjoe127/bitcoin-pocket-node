@@ -15,6 +15,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import android.content.Context
+import androidx.compose.ui.platform.LocalContext
 import com.pocketnode.lightning.NodeDirectory
 import com.pocketnode.lightning.NodeDirectory.LightningNode
 import kotlinx.coroutines.Dispatchers
@@ -179,6 +181,12 @@ private fun NodeCard(
     node: LightningNode,
     onSelect: () -> Unit
 ) {
+    val context = LocalContext.current
+    val cachedMin = remember(node.publicKey) {
+        context.getSharedPreferences("peer_channel_limits", Context.MODE_PRIVATE)
+            .getLong(node.publicKey, -1L)
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -229,6 +237,13 @@ private fun NodeCard(
                     )
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (cachedMin > 0) {
+                        Text(
+                            "min ${"%,d".format(cachedMin)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFF64B5F6)
+                        )
+                    }
                     if (node.feeRate >= 0) {
                         Text(
                             "${node.feeRate} ppm",
