@@ -573,6 +573,16 @@ fun LightningScreen(
                         Spacer(Modifier.height(12.dp))
 
                         if (depositAddress != null) {
+                            Box(
+                                modifier = Modifier.fillMaxWidth(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                com.pocketnode.ui.lightning.QrCodeImage(
+                                    data = "bitcoin:${depositAddress!!}",
+                                    size = 200
+                                )
+                            }
+                            Spacer(Modifier.height(8.dp))
                             Text(
                                 depositAddress!!,
                                 style = MaterialTheme.typography.bodySmall,
