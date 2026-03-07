@@ -664,9 +664,25 @@ class LightningService(private val context: Context) {
             // Clear any previous channel error
             _state.value = _state.value.copy(lastChannelError = null)
             updateState()
-            // Give peer time to respond, then process any events (including rejections)
+            // Give peer time to respond, then drain all pending events
             Thread.sleep(3000)
-            handleEvents()
+            // Process all pending events (peer rejection may queue multiple)
+            var eventsProcessed = 0
+            while (eventsProcessed < 10) {
+                val evt = n.nextEvent() ?: break
+                when (evt) {
+                    is Event.ChannelClosed -> {
+                        val reason = evt.reason?.toString() ?: "unknown"
+                        Log.w(TAG, "Channel closed: ${evt.channelId} reason: $reason")
+                        _state.value = _state.value.copy(lastChannelError = "Channel closed: $reason")
+                    }
+                    is Event.ChannelPending -> Log.i(TAG, "Channel pending: ${evt.channelId}")
+                    is Event.ChannelReady -> Log.i(TAG, "Channel ready: ${evt.channelId}")
+                    else -> Log.d(TAG, "Event during open: $evt")
+                }
+                n.eventHandled()
+                eventsProcessed++
+            }
             updateState()
             // Check if the channel was rejected
             val channelError = _state.value.lastChannelError
