@@ -31,8 +31,7 @@ fun OpenChannelScreen(
     onNavigateToPeerBrowser: () -> Unit = {},
     prefillNodeId: String = "",
     prefillAddress: String = "",
-    prefillAlias: String = "",
-    peerMinChannelSats: Long = -1
+    prefillAlias: String = ""
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -161,13 +160,11 @@ fun OpenChannelScreen(
                 ) else OutlinedTextFieldDefaults.colors()
             )
 
-            // Minimum channel size warning (prefer cached rejection data over heuristic)
+            // Peer minimum warning (only from cached rejection data, not heuristic)
             val cachedMin = if (nodeId.length >= 60) lightning.getPeerMinChannel(nodeId) else -1L
-            val effectiveMin = if (cachedMin > 0) cachedMin else peerMinChannelSats
-            val isCachedData = cachedMin > 0
-            if (effectiveMin > 0) {
+            if (cachedMin > 0) {
                 val amountLong = amountSats.toLongOrNull() ?: 0L
-                val tooSmall = amountLong in 1 until effectiveMin
+                val tooSmall = amountLong in 1 until cachedMin
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
@@ -176,14 +173,13 @@ fun OpenChannelScreen(
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
                         Text(
-                            (if (isCachedData) "Peer minimum: " else "Peer's smallest channel: ") +
-                                "${"%,d".format(effectiveMin)} sats",
+                            "Peer minimum: ${"%,d".format(cachedMin)} sats",
                             style = MaterialTheme.typography.bodySmall,
                             color = Color(0xFF64B5F6)
                         )
                         if (tooSmall) {
                             Text(
-                                "⚠️ Amount is below this peer's minimum",
+                                "⚠️ Amount is below this peer's known minimum",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.error
                             )
