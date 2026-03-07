@@ -171,21 +171,24 @@ fun OpenChannelScreen(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
-                        containerColor = if (tooSmall)
-                            MaterialTheme.colorScheme.errorContainer
-                        else Color(0xFF1565C0).copy(alpha = 0.15f)
+                        containerColor = Color(0xFF1565C0).copy(alpha = 0.15f)
                     )
                 ) {
-                    Text(
-                        (if (isCachedData) "Peer minimum: " else "Peer's smallest channel: ") +
-                            "${"%,d".format(effectiveMin)} sats" +
-                            if (tooSmall) "\n⚠️ Amount is below this peer's minimum" else "",
-                        modifier = Modifier.padding(12.dp),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (tooSmall)
-                            MaterialTheme.colorScheme.error
-                        else Color(0xFF64B5F6)
-                    )
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(
+                            (if (isCachedData) "Peer minimum: " else "Peer's smallest channel: ") +
+                                "${"%,d".format(effectiveMin)} sats",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFF64B5F6)
+                        )
+                        if (tooSmall) {
+                            Text(
+                                "⚠️ Amount is below this peer's minimum",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
                 }
             }
 
