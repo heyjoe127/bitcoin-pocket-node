@@ -56,7 +56,9 @@ class LightningService(private val context: Context) {
         // Channel error (set when a pending channel is rejected by peer)
         val lastChannelError: String? = null,
         // Pending channel confirmation tracking
-        val pendingChannels: List<PendingChannel> = emptyList()
+        val pendingChannels: List<PendingChannel> = emptyList(),
+        // Funding tx fee rates keyed by channel ID (sat/vB)
+        val channelFeeRates: Map<String, Long> = emptyMap()
     ) {
         data class PendingChannel(
             val channelId: String,
@@ -70,6 +72,7 @@ class LightningService(private val context: Context) {
     }
 
     private var node: Node? = null
+    private var rpcClient: BitcoinRpcClient? = null
     private var watchtowerBridge: WatchtowerBridge? = null
     private var lndHubServer: LndHubServer? = null
     private var stateRefreshJob: kotlinx.coroutines.Job? = null
@@ -136,6 +139,7 @@ class LightningService(private val context: Context) {
             applyPendingSeedRestore()
 
             val rpc = BitcoinRpcClient(rpcUser, rpcPassword, port = rpcPort)
+            rpcClient = rpc
 
             // --- Prune check (sync, no coroutines) ---
             val lastLdkHeight = context.getSharedPreferences("pocketnode_prefs", MODE_PRIVATE)
@@ -345,15 +349,19 @@ class LightningService(private val context: Context) {
                 }
             }
 
-            // Sync watchdog: if height doesn't advance within 120s after start,
-            // the stored chain state is likely corrupted. Reset and restart.
+            // Sync watchdog: if LDK is behind bitcoind after 120s, chain state
+            // may be corrupted. Only resets if LDK height < bitcoind height.
+            // If LDK is at tip (no new blocks mined), that's normal — don't reset.
             val startHeight = try { ldkNode.status().currentBestBlock.height.toLong() } catch (_: Exception) { 0L }
+            val watchdogRpc = BitcoinRpcClient(rpcUser, rpcPassword, port = rpcPort)
             Thread({
                 Thread.sleep(120_000) // Wait 2 minutes
                 try {
-                    val currentHeight = ldkNode.status().currentBestBlock.height.toLong()
-                    if (currentHeight <= startHeight && !_state.value.scanningForFunds) {
-                        Log.e(TAG, "Sync watchdog: height stuck at $currentHeight after 120s (started at $startHeight). Resetting chain state.")
+                    val ldkHeight = ldkNode.status().currentBestBlock.height.toLong()
+                    val chainInfo = watchdogRpc.getBlockchainInfoSync()
+                    val bitcoindHeight = chainInfo?.optLong("blocks", 0) ?: 0
+                    if (ldkHeight < bitcoindHeight && ldkHeight <= startHeight && !_state.value.scanningForFunds) {
+                        Log.e(TAG, "Sync watchdog: LDK stuck at $ldkHeight, bitcoind at $bitcoindHeight. Resetting chain state.")
                         stop()
                         resetChainState(storageDir)
                         // Clear the stale sync height so prune check doesn't block restart
@@ -365,7 +373,7 @@ class LightningService(private val context: Context) {
                             start(rpcUser, rpcPassword, rpcPort)
                         }, "ldk-restart").start()
                     } else {
-                        Log.i(TAG, "Sync watchdog: height advanced from $startHeight to $currentHeight. Sync healthy.")
+                        Log.i(TAG, "Sync watchdog: LDK at $ldkHeight, bitcoind at $bitcoindHeight. Sync healthy.")
                     }
                 } catch (e: Exception) {
                     Log.w(TAG, "Sync watchdog check failed: ${e.message}")
@@ -614,6 +622,41 @@ class LightningService(private val context: Context) {
                 )
             }
 
+            // Look up funding tx fee rates for pending channels (once per channel, async)
+            val feeRates = _state.value.channelFeeRates.toMutableMap()
+            val uncachedChannels = channels.filter { ch ->
+                ch.fundingTxo != null && !feeRates.containsKey(ch.channelId)
+            }
+            if (uncachedChannels.isNotEmpty()) {
+                val rpc = rpcClient
+                if (rpc != null) {
+                    scope.launch(Dispatchers.IO) {
+                        for (ch in uncachedChannels) {
+                            try {
+                                val txid = ch.fundingTxo!!.txid
+                                val entry = rpc.callSync("getmempoolentry", org.json.JSONArray().put(txid))
+                                if (entry != null && !entry.has("_rpc_error")) {
+                                    val vsize = entry.optLong("vsize", 0)
+                                    val feeBtc = entry.optJSONObject("fees")?.optDouble("base", 0.0) ?: 0.0
+                                    if (vsize > 0 && feeBtc > 0) {
+                                        val feeSats = (feeBtc * 100_000_000).toLong()
+                                        val satVb = feeSats / vsize
+                                        Log.i(TAG, "Funding tx $txid fee: $feeSats sats, $vsize vB = $satVb sat/vB")
+                                        kotlinx.coroutines.withContext(Dispatchers.Main) {
+                                            val updated = _state.value.channelFeeRates.toMutableMap()
+                                            updated[ch.channelId] = satVb
+                                            _state.value = _state.value.copy(channelFeeRates = updated)
+                                        }
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                Log.w(TAG, "Failed to look up funding tx fee: ${e.message}")
+                            }
+                        }
+                    }
+                }
+            }
+
             _state.value = LightningState(
                 status = LightningState.Status.RUNNING,
                 nodeId = n.nodeId(),
@@ -628,7 +671,8 @@ class LightningService(private val context: Context) {
                 scanningForFunds = _state.value.scanningForFunds,
                 scanProgress = _state.value.scanProgress,
                 lastChannelError = _state.value.lastChannelError,
-                pendingChannels = pending
+                pendingChannels = pending,
+                channelFeeRates = feeRates
             )
         } catch (e: Exception) {
             Log.e(TAG, "Failed to update state", e)
@@ -782,6 +826,7 @@ class LightningService(private val context: Context) {
             } else {
                 // Peer accepted: their minimum is at most this amount
                 savePeerMinCeiling(nodeId, amountSats)
+
                 Result.success(userChannelId)
             }
         } catch (e: Exception) {

@@ -415,11 +415,12 @@ fun LightningScreen(
                                         )
                                         val confs = ch.confirmations?.toInt() ?: 0
                                         val confsReq = ch.confirmationsRequired?.toInt() ?: 3
-                                        val feerateSatVb = ch.feerateSatPer1000Weight.toLong() / 4
+                                        val fundingFee = effectiveState.channelFeeRates[ch.channelId]
                                         val status = when {
                                             ch.isUsable -> "Active ⚡"
                                             ch.isChannelReady -> "Ready"
-                                            else -> "Confirming $confs/$confsReq @ ${feerateSatVb} sat/vB"
+                                            fundingFee != null -> "Confirming $confs/$confsReq @ $fundingFee sat/vB"
+                                            else -> "Confirming $confs/$confsReq"
                                         }
                                         val statusColor = when {
                                             ch.isUsable -> Color(0xFF4CAF50)
