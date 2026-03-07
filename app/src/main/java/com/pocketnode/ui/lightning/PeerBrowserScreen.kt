@@ -16,10 +16,13 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import android.content.Context
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.ui.platform.LocalContext
 import com.pocketnode.lightning.NodeDirectory
 import com.pocketnode.lightning.NodeDirectory.LightningNode
 import kotlinx.coroutines.Dispatchers
+import org.json.JSONArray
+import org.json.JSONObject
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -35,26 +38,55 @@ fun PeerBrowserScreen(
     onSelectNode: (nodeId: String, address: String, alias: String, minChannelSats: Long) -> Unit = { _, _, _, _ -> }
 ) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     var searchQuery by remember { mutableStateOf("") }
     var nodes by remember { mutableStateOf<List<LightningNode>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var selectedTab by remember { mutableStateOf(0) }
     val tabs = listOf("Most Connected", "Largest", "Lowest Fee", "Search")
+    var lastUpdate by remember { mutableStateOf(getCacheAge(context)) }
 
-    // Load initial data
+    // Load from cache first, fetch from network only if no cache
     LaunchedEffect(selectedTab) {
         if (selectedTab < 3) {
             loading = true
+            val cached = loadCachedNodes(context, selectedTab)
+            if (cached.isNotEmpty()) {
+                nodes = cached
+                loading = false
+            } else {
+                nodes = withContext(Dispatchers.IO) {
+                    val fetched = when (selectedTab) {
+                        0 -> NodeDirectory.getTopNodes(30)
+                        1 -> NodeDirectory.getTopByCapacity(30)
+                        2 -> NodeDirectory.getTopByLowestFee(20)
+                        else -> emptyList()
+                    }
+                    if (fetched.isNotEmpty()) saveCachedNodes(context, selectedTab, fetched)
+                    fetched
+                }
+                loading = false
+                lastUpdate = getCacheAge(context)
+            }
+        }
+    }
+
+    fun refreshNodes() {
+        loading = true
+        scope.launch {
             nodes = withContext(Dispatchers.IO) {
-                when (selectedTab) {
+                val fetched = when (selectedTab) {
                     0 -> NodeDirectory.getTopNodes(30)
                     1 -> NodeDirectory.getTopByCapacity(30)
                     2 -> NodeDirectory.getTopByLowestFee(20)
                     else -> emptyList()
                 }
+                if (fetched.isNotEmpty()) saveCachedNodes(context, selectedTab, fetched)
+                fetched
             }
             loading = false
+            lastUpdate = getCacheAge(context)
         }
     }
 
@@ -65,6 +97,13 @@ fun PeerBrowserScreen(
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.Default.ArrowBack, "Back")
+                    }
+                },
+                actions = {
+                    if (selectedTab < 3) {
+                        IconButton(onClick = { refreshNodes() }) {
+                            Icon(Icons.Default.Refresh, "Refresh from mempool.space")
+                        }
                     }
                 }
             )
@@ -87,7 +126,7 @@ fun PeerBrowserScreen(
             }
 
             Text(
-                "Data from mempool.space (the only external service used by this app)",
+                "Data from mempool.space" + if (lastUpdate.isNotEmpty()) " · $lastUpdate" else "",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
@@ -256,5 +295,63 @@ private fun NodeCard(
                 }
             }
         }
+    }
+}
+
+// --- Peer cache helpers ---
+
+private fun cacheKey(tab: Int) = "peers_tab_$tab"
+
+private fun saveCachedNodes(context: Context, tab: Int, nodes: List<LightningNode>) {
+    val arr = JSONArray()
+    nodes.forEach { n ->
+        arr.put(JSONObject().apply {
+            put("publicKey", n.publicKey)
+            put("alias", n.alias)
+            put("channels", n.channels)
+            put("capacity", n.capacity)
+            put("country", n.country)
+            put("feeRate", n.feeRate)
+            put("sockets", n.sockets)
+            put("minChannelSize", n.minChannelSize)
+        })
+    }
+    context.getSharedPreferences("peer_cache", Context.MODE_PRIVATE).edit()
+        .putString(cacheKey(tab), arr.toString())
+        .putLong("last_update", System.currentTimeMillis())
+        .apply()
+}
+
+private fun loadCachedNodes(context: Context, tab: Int): List<LightningNode> {
+    val json = context.getSharedPreferences("peer_cache", Context.MODE_PRIVATE)
+        .getString(cacheKey(tab), null) ?: return emptyList()
+    return try {
+        val arr = JSONArray(json)
+        (0 until arr.length()).map { i ->
+            val o = arr.getJSONObject(i)
+            LightningNode(
+                publicKey = o.getString("publicKey"),
+                alias = o.optString("alias", ""),
+                channels = o.optInt("channels", 0),
+                capacity = o.optLong("capacity", 0),
+                country = o.optString("country", ""),
+                feeRate = o.optLong("feeRate", -1),
+                sockets = o.optString("sockets", ""),
+                minChannelSize = o.optLong("minChannelSize", 0)
+            )
+        }
+    } catch (_: Exception) { emptyList() }
+}
+
+private fun getCacheAge(context: Context): String {
+    val ts = context.getSharedPreferences("peer_cache", Context.MODE_PRIVATE)
+        .getLong("last_update", 0)
+    if (ts == 0L) return ""
+    val mins = (System.currentTimeMillis() - ts) / 60_000
+    return when {
+        mins < 1 -> "just now"
+        mins < 60 -> "${mins}m ago"
+        mins < 1440 -> "${mins / 60}h ago"
+        else -> "${mins / 1440}d ago"
     }
 }
