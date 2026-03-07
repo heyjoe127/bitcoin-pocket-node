@@ -92,49 +92,11 @@ fun OpenChannelScreen(
             }
 
             // Browse peers button
-            if (prefillAlias.isNotEmpty()) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1B5E20).copy(alpha = 0.2f))
-                ) {
-                    Text(
-                        "Selected: $prefillAlias",
-                        modifier = Modifier.padding(16.dp),
-                        color = Color(0xFF4CAF50),
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-
             OutlinedButton(
                 onClick = onNavigateToPeerBrowser,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("\uD83D\uDD0D Browse Peers")
-            }
-
-            // Minimum channel size warning
-            if (peerMinChannelSats > 0) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (lightningState.onchainBalanceSats < peerMinChannelSats)
-                            MaterialTheme.colorScheme.errorContainer
-                        else Color(0xFF1B5E20).copy(alpha = 0.15f)
-                    )
-                ) {
-                    Text(
-                        "Peer's smallest channel: ${"%,d".format(peerMinChannelSats)} sats" +
-                            if (lightningState.onchainBalanceSats < peerMinChannelSats)
-                                "\n⚠️ Your balance may be below this peer's minimum"
-                            else "",
-                        modifier = Modifier.padding(12.dp),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (lightningState.onchainBalanceSats < peerMinChannelSats)
-                            MaterialTheme.colorScheme.error
-                        else Color(0xFF4CAF50)
-                    )
-                }
             }
 
             // Manual peer details
@@ -177,6 +139,45 @@ fun OpenChannelScreen(
                 }
             }
 
+            // Selected peer name
+            if (prefillAlias.isNotEmpty()) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1B5E20).copy(alpha = 0.2f))
+                ) {
+                    Text(
+                        "Selected: $prefillAlias",
+                        modifier = Modifier.padding(12.dp),
+                        color = Color(0xFF4CAF50),
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            // Minimum channel size warning
+            if (peerMinChannelSats > 0) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (lightningState.onchainBalanceSats < peerMinChannelSats)
+                            MaterialTheme.colorScheme.errorContainer
+                        else Color(0xFF1B5E20).copy(alpha = 0.15f)
+                    )
+                ) {
+                    Text(
+                        "Peer's smallest channel: ${"%,d".format(peerMinChannelSats)} sats" +
+                            if (lightningState.onchainBalanceSats < peerMinChannelSats)
+                                "\n⚠️ Your balance may be below this peer's minimum"
+                            else "",
+                        modifier = Modifier.padding(12.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (lightningState.onchainBalanceSats < peerMinChannelSats)
+                            MaterialTheme.colorScheme.error
+                        else Color(0xFF4CAF50)
+                    )
+                }
+            }
+
             // Open button
             Button(
                 onClick = {
@@ -193,16 +194,10 @@ fun OpenChannelScreen(
                             lightning.openChannel(nodeId, address, amountSats.toLong())
                         }.onSuccess {
                             channelId = it
-                            // Check if peer rejected (lastChannelError set during the 2s wait)
-                            val channelError = LightningService.stateFlow.value.lastChannelError
-                            if (channelError != null) {
-                                error = "Peer rejected: $channelError"
-                                channelId = null
-                                result = null
-                            } else if (LightningService.stateFlow.value.channelCount > 0) {
-                                result = "Channel opening! Funding transaction broadcasting. Wait for confirmations."
+                            result = if (lightningState.channelCount > 0) {
+                                "Channel opening! Funding transaction broadcasting."
                             } else {
-                                result = "Channel request sent. Waiting for peer response..."
+                                "Channel accepted by peer. Waiting for funding confirmation."
                             }
                             opening = false
                         }.onFailure {

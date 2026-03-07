@@ -665,10 +665,16 @@ class LightningService(private val context: Context) {
             _state.value = _state.value.copy(lastChannelError = null)
             updateState()
             // Give peer time to respond, then process any events (including rejections)
-            Thread.sleep(2000)
+            Thread.sleep(3000)
             handleEvents()
             updateState()
-            Result.success(userChannelId)
+            // Check if the channel was rejected
+            val channelError = _state.value.lastChannelError
+            if (channelError != null) {
+                Result.failure(Exception(channelError))
+            } else {
+                Result.success(userChannelId)
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to open channel: ${e.message}", e)
             Result.failure(e)
