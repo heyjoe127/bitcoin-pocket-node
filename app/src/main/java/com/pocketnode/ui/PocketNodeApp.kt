@@ -46,10 +46,13 @@ fun PocketNodeApp(
         val setupManager = remember { NodeSetupManager(context) }
 
         // First run: no bitcoin.conf = never set up.
-        // Backup is fully disabled (backup_rules.xml + data_extraction_rules.xml),
-        // so restored data from Seedvault should not be an issue on new installs.
+        // Clear any Seedvault-restored preferences on fresh install.
         val isFirstRun = remember {
-            !java.io.File(context.filesDir, "bitcoin/bitcoin.conf").exists()
+            val fresh = !java.io.File(context.filesDir, "bitcoin/bitcoin.conf").exists()
+            if (fresh) {
+                setupManager.clearCredentials()
+            }
+            fresh
         }
 
         // Observe network state — reactively watch for service starting
