@@ -374,6 +374,25 @@ fun ChainstateCopyScreen(onBack: () -> Unit, onComplete: () -> Unit = {}) {
                     ) {
                         Text("Retry")
                     }
+
+                    Spacer(Modifier.height(8.dp))
+
+                    // Allow changing credentials on failure
+                    OutlinedButton(
+                        onClick = {
+                            chainstateManager.reset()
+                            lastAdminHost = ""
+                            lastAdminUser = ""
+                            lastAdminPass = ""
+                            lastAdminPort = 22
+                            showConfirm = true
+                            started = false
+                            highestStepReached = 0
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Change credentials")
+                    }
                 }
 
                 if (state.step == ChainstateManager.Step.COMPLETE) {
