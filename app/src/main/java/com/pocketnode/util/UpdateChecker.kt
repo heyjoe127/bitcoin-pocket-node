@@ -135,24 +135,23 @@ object UpdateChecker {
 
             Log.i(TAG, "APK downloaded: ${apkFile.length()} bytes")
 
-            // Stop bitcoind before install to avoid orphan processes
+            // Stop bitcoind service before install to avoid orphan processes
             try {
                 val stopIntent = Intent(context, com.pocketnode.service.BitcoindService::class.java)
                 context.stopService(stopIntent)
                 Log.i(TAG, "Stopped BitcoindService before update install")
-                Thread.sleep(2000) // Give bitcoind time to shut down
+                Thread.sleep(3000) // Give bitcoind time to shut down cleanly
             } catch (e: Exception) {
                 Log.w(TAG, "Could not stop bitcoind: ${e.message}")
             }
 
-            // Trigger install via FileProvider (proven working since v0.16)
+            // Trigger install via FileProvider
             val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", apkFile)
             val intent = Intent(Intent.ACTION_INSTALL_PACKAGE).apply {
                 data = uri
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true)
-                putExtra(Intent.EXTRA_RETURN_RESULT, true)
             }
             context.startActivity(intent)
             true
