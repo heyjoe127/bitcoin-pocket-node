@@ -794,6 +794,27 @@ class LightningService(private val context: Context) {
 
     // === Channel operations ===
 
+    fun connectPeer(nodeId: String, address: String): Result<Unit> {
+        val n = node ?: return Result.failure(Exception("Node not running"))
+        return try {
+            Log.i(TAG, "Connecting to peer $nodeId at $address")
+            n.connect(nodeId, address, true)
+            Log.i(TAG, "Connected to peer. Draining events...")
+            // Drain events — if peer tries to reestablish a channel we don't know about,
+            // they should force-close and we'll see the event here.
+            for (i in 1..10) {
+                Thread.sleep(500)
+                handleEvents()
+            }
+            updateState()
+            Log.i(TAG, "Peer connection complete")
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to connect to peer: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
     fun openChannel(nodeId: String, address: String, amountSats: Long): Result<String> {
         val n = node ?: return Result.failure(Exception("Node not running"))
         return try {
