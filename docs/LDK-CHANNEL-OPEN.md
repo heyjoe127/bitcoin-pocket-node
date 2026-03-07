@@ -21,6 +21,12 @@ T+720ms   LDK's internal event handler processes it
 
 Key insight: the channel exists in `listChannels()` from T+6ms to T+700ms. Any check during that window sees a "pending" channel and falsely reports success.
 
+## The Real Bug
+
+`updateState()` was creating a **new** `LightningState()` object every 10 seconds, which reset `lastChannelError` to its default (null). The error was being captured correctly by `handleEvents()`, but wiped milliseconds later by the next `updateState()` call. One line fix: preserve `lastChannelError` across state refreshes.
+
+Lesson: when state objects use constructor defaults, any field not explicitly carried over gets silently reset.
+
 ## What Doesn't Work
 
 ### 1. Returning openChannel() result directly
