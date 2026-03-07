@@ -246,8 +246,34 @@ class LightningService(private val context: Context) {
                 }
             }
 
-            val seedPath = seedFile.absolutePath
-            val entropy = NodeEntropy.fromSeedPath(seedPath)
+            // --- Seed / Entropy ---
+            // Use BIP39 mnemonic as the canonical entropy source. This makes
+            // the mnemonic alone sufficient for full wallet recovery (standard
+            // BIP39 PBKDF2 derivation). Legacy wallets that only have a
+            // keys_seed file (random 64 bytes) continue to work via fromSeedPath
+            // but their mnemonic backup is incomplete.
+            val mnemonicFile = File(storageDir, "mnemonic")
+            val entropy: NodeEntropy
+            if (mnemonicFile.exists()) {
+                // BIP39 path: mnemonic -> PBKDF2 -> 64-byte seed (fully recoverable)
+                val words = mnemonicFile.readText().trim()
+                entropy = NodeEntropy.Companion.fromBip39Mnemonic(words, "")
+                Log.i(TAG, "Using BIP39 mnemonic entropy (${words.split(" ").size} words)")
+            } else if (seedFile.exists()) {
+                // Legacy path: raw 64-byte seed (mnemonic only covers first 32 bytes)
+                entropy = NodeEntropy.fromSeedPath(seedFile.absolutePath)
+                Log.w(TAG, "Using legacy keys_seed (mnemonic backup incomplete)")
+            } else {
+                // New wallet: generate BIP39 mnemonic and store it
+                val mnemonic = org.lightningdevkit.ldknode.generateEntropyMnemonic(null)
+                mnemonicFile.writeText(mnemonic)
+                // Also backup immediately
+                val backupDir = File(context.filesDir, "${STORAGE_DIR}_backup")
+                if (!backupDir.exists()) backupDir.mkdirs()
+                File(backupDir, "mnemonic").writeText(mnemonic)
+                entropy = NodeEntropy.Companion.fromBip39Mnemonic(mnemonic, "")
+                Log.i(TAG, "New BIP39 wallet created (${mnemonic.split(" ").size} words)")
+            }
             val ldkNode = builder.build(entropy)
 
             // --- Start LDK (sync, blocks until tokio runtime is running) ---
@@ -1036,11 +1062,19 @@ class LightningService(private val context: Context) {
     // === Seed Backup & Restore ===
 
     fun getSeedWords(): List<String>? {
+        // BIP39 path: read stored mnemonic directly
+        val mnemonicFile = File(context.filesDir, "$STORAGE_DIR/mnemonic")
+        if (mnemonicFile.exists()) {
+            val words = mnemonicFile.readText().trim()
+            Log.d(TAG, "getSeedWords: from mnemonic file (${words.split(" ").size} words)")
+            return words.split(" ")
+        }
+        // Legacy path: derive mnemonic from keys_seed first 32 bytes
         val seedFile = File(context.filesDir, "$STORAGE_DIR/keys_seed")
         Log.d(TAG, "getSeedWords: checking ${seedFile.absolutePath}, exists=${seedFile.exists()}")
         if (!seedFile.exists()) return null
         val rawBytes = seedFile.readBytes()
-        Log.d(TAG, "getSeedWords: read ${rawBytes.size} bytes")
+        Log.d(TAG, "getSeedWords: read ${rawBytes.size} bytes (legacy keys_seed)")
         val entropy = when (rawBytes.size) {
             32 -> rawBytes
             64 -> rawBytes.sliceArray(0 until 32)
@@ -1054,36 +1088,20 @@ class LightningService(private val context: Context) {
         }
     }
 
-    fun hasSeed(): Boolean = File(context.filesDir, "$STORAGE_DIR/keys_seed").exists()
+    fun hasSeed(): Boolean =
+        File(context.filesDir, "$STORAGE_DIR/mnemonic").exists() ||
+        File(context.filesDir, "$STORAGE_DIR/keys_seed").exists()
 
     fun restoreFromMnemonic(words: List<String>) {
-        val entropy32 = Bip39.mnemonicToEntropy(words, context)
+        val mnemonicStr = words.joinToString(" ")
 
-        // Check if lightning_backup has the original 64-byte seed matching this entropy
-        val backupDir = File(context.filesDir, "${STORAGE_DIR}_backup")
-        val backupSeed = File(backupDir, "keys_seed")
-        val seed64: ByteArray
-        if (backupSeed.exists()) {
-            val backupBytes = backupSeed.readBytes()
-            if (backupBytes.size == 64 && backupBytes.copyOfRange(0, 32).contentEquals(entropy32)) {
-                seed64 = backupBytes
-                Log.i(TAG, "Matched backup seed — using original 64-byte keys_seed")
-            } else {
-                val digest = java.security.MessageDigest.getInstance("SHA-256")
-                seed64 = entropy32 + digest.digest(entropy32)
-                Log.i(TAG, "Backup seed doesn't match — generating new 64-byte seed")
-            }
-        } else {
-            val digest = java.security.MessageDigest.getInstance("SHA-256")
-            seed64 = entropy32 + digest.digest(entropy32)
-            Log.i(TAG, "No backup seed found — generating new 64-byte seed")
-        }
-
-        // Write pending restore file OUTSIDE the lightning dir (no file lock issues)
-        // On next start(), we'll apply it before LDK touches anything
-        val pendingFile = File(context.filesDir, "pending_seed_restore")
-        pendingFile.writeBytes(seed64)
-        Log.i(TAG, "Pending seed restore written (${words.size} words). Will apply on next start.")
+        // Write the mnemonic to a pending restore file.
+        // On next start(), applyPendingSeedRestore clears old state and writes the mnemonic file.
+        // fromBip39Mnemonic handles the PBKDF2 derivation, making the mnemonic the single
+        // source of truth for the entire wallet (on-chain + Lightning keys).
+        val pendingFile = File(context.filesDir, "pending_mnemonic_restore")
+        pendingFile.writeText(mnemonicStr)
+        Log.i(TAG, "Pending mnemonic restore written (${words.size} words). Will apply on next start.")
 
         // Stop node if running — must fully stop so start() can run fresh
         if (node != null) {
@@ -1100,14 +1118,32 @@ class LightningService(private val context: Context) {
      * Called at the top of start() before any file handles are opened.
      */
     private fun applyPendingSeedRestore() {
+        // New BIP39 path: mnemonic file
+        val pendingMnemonic = File(context.filesDir, "pending_mnemonic_restore")
+        // Legacy path: raw seed bytes
         val pendingFile = File(context.filesDir, "pending_seed_restore")
-        if (!pendingFile.exists()) return
 
-        val seed64 = pendingFile.readBytes()
-        if (seed64.size != 64) {
-            Log.e(TAG, "Invalid pending seed restore file (${seed64.size} bytes). Deleting.")
-            pendingFile.delete()
-            return
+        val mnemonicStr: String?
+        val legacySeed64: ByteArray?
+
+        if (pendingMnemonic.exists()) {
+            mnemonicStr = pendingMnemonic.readText().trim()
+            legacySeed64 = null
+            if (mnemonicStr.split(" ").size !in listOf(12, 15, 18, 21, 24)) {
+                Log.e(TAG, "Invalid pending mnemonic (${mnemonicStr.split(" ").size} words). Deleting.")
+                pendingMnemonic.delete()
+                return
+            }
+        } else if (pendingFile.exists()) {
+            mnemonicStr = null
+            legacySeed64 = pendingFile.readBytes()
+            if (legacySeed64.size != 64) {
+                Log.e(TAG, "Invalid pending seed restore file (${legacySeed64.size} bytes). Deleting.")
+                pendingFile.delete()
+                return
+            }
+        } else {
+            return // Nothing to restore
         }
 
         val storageDir = File(context.filesDir, STORAGE_DIR)
@@ -1119,22 +1155,31 @@ class LightningService(private val context: Context) {
             Log.d(TAG, "Cleared for restore: ${file.name}")
         }
 
-        // Write the new seed
-        File(storageDir, "keys_seed").writeBytes(seed64)
+        if (mnemonicStr != null) {
+            // BIP39 path: write mnemonic file (fromBip39Mnemonic handles derivation)
+            File(storageDir, "mnemonic").writeText(mnemonicStr)
+            // Backup mnemonic
+            val backupDir = File(context.filesDir, "${STORAGE_DIR}_backup")
+            if (!backupDir.exists()) backupDir.mkdirs()
+            File(backupDir, "mnemonic").writeText(mnemonicStr)
+            Log.i(TAG, "BIP39 mnemonic restore applied.")
+        } else if (legacySeed64 != null) {
+            // Legacy path: write raw keys_seed
+            File(storageDir, "keys_seed").writeBytes(legacySeed64)
+            Log.i(TAG, "Legacy seed restore applied.")
+        }
 
-        // Copy wallet_birthday from backup if the seed matches
+        // Copy wallet_birthday from backup if available and mnemonic matches
         val backupBirthday = File(context.filesDir, "${STORAGE_DIR}_backup/wallet_birthday")
-        val backupSeedFile = File(context.filesDir, "${STORAGE_DIR}_backup/keys_seed")
-        if (backupBirthday.exists() && backupSeedFile.exists()) {
-            val backupBytes = backupSeedFile.readBytes()
-            if (backupBytes.contentEquals(seed64)) {
+        val backupMnemonicFile = File(context.filesDir, "${STORAGE_DIR}_backup/mnemonic")
+        if (backupBirthday.exists() && mnemonicStr != null && backupMnemonicFile.exists()) {
+            if (backupMnemonicFile.readText().trim() == mnemonicStr) {
                 backupBirthday.copyTo(File(storageDir, "wallet_birthday"), overwrite = true)
                 Log.i(TAG, "Restored wallet birthday: ${backupBirthday.readText().trim()}")
-            } else {
-                Log.i(TAG, "Backup birthday skipped (different seed). Background scan will run.")
             }
         }
 
+        pendingMnemonic.delete()
         pendingFile.delete()
         // Mark as restored wallet so we trigger recovery scan (not birthday save) on first start
         context.getSharedPreferences("pocketnode_prefs", MODE_PRIVATE)
