@@ -392,6 +392,35 @@ fun LightningScreen(
                                 }
                             }
 
+                            // Pending close balances
+                            if (effectiveState.pendingCloseDetails.isNotEmpty()) {
+                                Spacer(Modifier.height(12.dp))
+                                effectiveState.pendingCloseDetails.forEach { pc ->
+                                    Divider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 10.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column {
+                                            Text("Channel closed", style = MaterialTheme.typography.bodySmall)
+                                            Text(
+                                                pc.status,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = Color(0xFFFF9800)
+                                            )
+                                        }
+                                        Text(
+                                            "${"%,d".format(pc.amountSats)} sats",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = Color(0xFFFF9800)
+                                        )
+                                    }
+                                }
+                            }
+
                             // Channel list — tap to close
                             Spacer(Modifier.height(12.dp))
                             val channels = remember(effectiveState) { lightning.listChannels() }

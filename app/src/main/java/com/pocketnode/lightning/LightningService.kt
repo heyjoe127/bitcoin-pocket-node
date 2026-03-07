@@ -58,7 +58,10 @@ class LightningService(private val context: Context) {
         // Pending channel confirmation tracking
         val pendingChannels: List<PendingChannel> = emptyList(),
         // Funding tx fee rates keyed by channel ID (sat/vB)
-        val channelFeeRates: Map<String, Long> = emptyMap()
+        val channelFeeRates: Map<String, Long> = emptyMap(),
+        // Pending balances from channel closures
+        val pendingCloseSats: Long = 0,
+        val pendingCloseDetails: List<PendingClose> = emptyList()
     ) {
         data class PendingChannel(
             val channelId: String,
@@ -66,6 +69,12 @@ class LightningService(private val context: Context) {
             val confirmations: Int,
             val confirmationsRequired: Int,
             val capacitySats: Long
+        )
+
+        data class PendingClose(
+            val channelId: String,
+            val amountSats: Long,
+            val status: String // "Pending broadcast", "Awaiting confirmation", "Awaiting threshold"
         )
 
         enum class Status { STOPPED, STARTING, RUNNING, ERROR, RECOVERING }
@@ -657,6 +666,20 @@ class LightningService(private val context: Context) {
                 }
             }
 
+            // Parse pending balances from channel closures
+            val pendingCloses = balances.pendingBalancesFromChannelClosures.map { psb ->
+                when (psb) {
+                    is org.lightningdevkit.ldknode.PendingSweepBalance.PendingBroadcast ->
+                        LightningState.PendingClose(psb.channelId ?: "", psb.amountSatoshis.toLong(), "Pending broadcast")
+                    is org.lightningdevkit.ldknode.PendingSweepBalance.BroadcastAwaitingConfirmation ->
+                        LightningState.PendingClose(psb.channelId ?: "", psb.amountSatoshis.toLong(), "Awaiting confirmation")
+                    is org.lightningdevkit.ldknode.PendingSweepBalance.AwaitingThresholdConfirmations ->
+                        LightningState.PendingClose(psb.channelId ?: "", psb.amountSatoshis.toLong(), "Awaiting threshold")
+                    else -> LightningState.PendingClose("", 0, "Unknown")
+                }
+            }.filter { it.amountSats > 0 }
+            val pendingCloseTotalSats = pendingCloses.sumOf { it.amountSats }
+
             _state.value = LightningState(
                 status = LightningState.Status.RUNNING,
                 nodeId = n.nodeId(),
@@ -672,7 +695,9 @@ class LightningService(private val context: Context) {
                 scanProgress = _state.value.scanProgress,
                 lastChannelError = _state.value.lastChannelError,
                 pendingChannels = pending,
-                channelFeeRates = feeRates
+                channelFeeRates = feeRates,
+                pendingCloseSats = pendingCloseTotalSats,
+                pendingCloseDetails = pendingCloses
             )
         } catch (e: Exception) {
             Log.e(TAG, "Failed to update state", e)
