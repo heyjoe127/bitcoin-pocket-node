@@ -78,8 +78,8 @@ fun SeedBackupScreen(
                 )
             ) {
                 Row(
-                    modifier = Modifier.padding(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    modifier = Modifier.padding(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Icon(
                         Icons.Default.Warning,
@@ -87,14 +87,7 @@ fun SeedBackupScreen(
                         tint = MaterialTheme.colorScheme.error
                     )
                     Text(
-                        "Your seed words are the ONLY way to recover your Lightning wallet. " +
-                                "Write them down and store them safely. Never share them with anyone.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onErrorContainer
-                    )
-                    Text(
-                        "⚠\uFE0F Works in Pocket Node only. These words use LDK key derivation " +
-                                "and will NOT show your funds in BlueWallet, Electrum, or other standard wallets.",
+                        "Write down your seed words. They are the only way to recover your wallet.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onErrorContainer
                     )
@@ -255,13 +248,7 @@ fun SeedBackupScreen(
                         style = MaterialTheme.typography.titleMedium
                     )
                     Text(
-                        "Restore an existing wallet from a 24-word backup, or create a new one.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        "Pocket Node uses LDK key derivation. Seeds from other wallets " +
-                                "(BlueWallet, Electrum, Zeus) will create a different wallet with different addresses.",
+                        "Restore from a 24-word backup, or create a new wallet. Standard BIP39 seed, compatible with other wallets.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
