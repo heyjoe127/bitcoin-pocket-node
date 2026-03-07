@@ -114,6 +114,41 @@ fun OpenChannelScreen(
                 }
             }
 
+            // Status / Error (below selected peer)
+            if (result != null) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1B5E20).copy(alpha = 0.2f))
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(result!!, color = Color(0xFF4CAF50))
+                        if (channelId != null) {
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                "Channel: ${channelId!!.take(16)}...",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFF4CAF50).copy(alpha = 0.7f),
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "Channels: ${lightningState.channelCount} | On-chain: ${"%,d".format(lightningState.onchainBalanceSats)} sats",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFF4CAF50).copy(alpha = 0.7f)
+                        )
+                    }
+                }
+            }
+            if (error != null) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+                ) {
+                    Text(error!!, modifier = Modifier.padding(16.dp), color = MaterialTheme.colorScheme.error)
+                }
+            }
+
             // Peer details (node ID + address)
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -239,41 +274,7 @@ fun OpenChannelScreen(
                 )
             }
 
-            // Result / Error
-            if (result != null) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1B5E20).copy(alpha = 0.2f))
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(result!!, color = Color(0xFF4CAF50))
-                        if (channelId != null) {
-                            Spacer(Modifier.height(8.dp))
-                            Text(
-                                "Channel: ${channelId!!.take(16)}...",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color(0xFF4CAF50).copy(alpha = 0.7f),
-                                fontFamily = FontFamily.Monospace
-                            )
-                        }
-                        // Show live channel count
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            "Channels: ${lightningState.channelCount} | On-chain: ${"%,d".format(lightningState.onchainBalanceSats)} sats",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFF4CAF50).copy(alpha = 0.7f)
-                        )
-                    }
-                }
-            }
-            if (error != null) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
-                ) {
-                    Text(error!!, modifier = Modifier.padding(16.dp), color = MaterialTheme.colorScheme.error)
-                }
-            }
+
 
 
         }
