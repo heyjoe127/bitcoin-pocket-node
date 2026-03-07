@@ -99,7 +99,22 @@ fun OpenChannelScreen(
                 Text("\uD83D\uDD0D Browse Peers")
             }
 
-            // Manual peer details
+            // Selected peer name (above entry fields)
+            if (prefillAlias.isNotEmpty()) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1B5E20).copy(alpha = 0.2f))
+                ) {
+                    Text(
+                        "Selected: $prefillAlias",
+                        modifier = Modifier.padding(12.dp),
+                        color = Color(0xFF4CAF50),
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            // Peer details (node ID + address)
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
@@ -123,36 +138,28 @@ fun OpenChannelScreen(
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true
                     )
-
-                    OutlinedTextField(
-                        value = amountSats,
-                        onValueChange = { amountSats = it.filter { c -> c.isDigit() }; error = null; result = null },
-                        label = { Text("Channel Amount (sats)") },
-                        placeholder = { Text("100000") },
-                        modifier = Modifier.fillMaxWidth(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
-                        supportingText = {
-                            Text("Minimum ~20,000 sats recommended")
-                        }
-                    )
                 }
             }
 
-            // Selected peer name
-            if (prefillAlias.isNotEmpty()) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1B5E20).copy(alpha = 0.2f))
-                ) {
-                    Text(
-                        "Selected: $prefillAlias",
-                        modifier = Modifier.padding(12.dp),
-                        color = Color(0xFF4CAF50),
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
+            // Channel amount (separate, highlighted orange when peer selected)
+            val hasSelectedPeer = prefillAlias.isNotEmpty() || nodeId.isNotEmpty()
+            OutlinedTextField(
+                value = amountSats,
+                onValueChange = { amountSats = it.filter { c -> c.isDigit() }; error = null; result = null },
+                label = { Text("Channel Amount (sats)") },
+                placeholder = { Text("100000") },
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true,
+                supportingText = {
+                    Text("Minimum ~20,000 sats recommended")
+                },
+                colors = if (hasSelectedPeer) OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Color(0xFFFF9800),
+                    unfocusedBorderColor = Color(0xFFFF9800),
+                    focusedLabelColor = Color(0xFFFF9800)
+                ) else OutlinedTextFieldDefaults.colors()
+            )
 
             // Minimum channel size warning
             if (peerMinChannelSats > 0) {
