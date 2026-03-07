@@ -606,7 +606,8 @@ class LightningService(private val context: Context) {
                 },
                 error = null,
                 scanningForFunds = _state.value.scanningForFunds,
-                scanProgress = _state.value.scanProgress
+                scanProgress = _state.value.scanProgress,
+                lastChannelError = _state.value.lastChannelError
             )
         } catch (e: Exception) {
             Log.e(TAG, "Failed to update state", e)
