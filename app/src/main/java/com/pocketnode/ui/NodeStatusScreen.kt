@@ -1153,18 +1153,26 @@ private fun ActionButtons(
                     )
                 }
             }
+            var installReady by remember { mutableStateOf(false) }
             if (downloading) {
                 // Show progress, no button needed
+            } else if (installReady) {
+                Text(
+                    "Check notifications for install prompt",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
             } else if (updateInfo?.hasUpdate == true && updateInfo?.apkUrl != null) {
                 OutlinedButton(
                     onClick = {
                         downloading = true
                         downloadProgress = 0
                         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
-                            com.pocketnode.util.UpdateChecker.downloadAndInstall(
+                            val success = com.pocketnode.util.UpdateChecker.downloadAndInstall(
                                 updateContext, updateInfo!!.apkUrl!!
                             ) { progress -> downloadProgress = progress }
                             downloading = false
+                            if (success) installReady = true
                         }
                     }
                 ) { Text("Update") }
