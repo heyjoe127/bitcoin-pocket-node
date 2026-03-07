@@ -182,10 +182,10 @@ private fun NodeCard(
     onSelect: () -> Unit
 ) {
     val context = LocalContext.current
-    val prefs = remember { context.getSharedPreferences("peer_channel_limits", Context.MODE_PRIVATE) }
-    val cachedMin = remember(node.publicKey) { prefs.getLong(node.publicKey, -1L) }
-    val isFloor = remember(node.publicKey) { prefs.getBoolean("${node.publicKey}_floor", false) }
-    val isCeiling = remember(node.publicKey) { prefs.getBoolean("${node.publicKey}_ceiling", false) }
+    val prefs = context.getSharedPreferences("peer_channel_limits", Context.MODE_PRIVATE)
+    val cachedMin = prefs.getLong(node.publicKey, -1L)
+    val isFloor = prefs.getBoolean("${node.publicKey}_floor", false)
+    val isCeiling = prefs.getBoolean("${node.publicKey}_ceiling", false)
 
     Card(
         modifier = Modifier

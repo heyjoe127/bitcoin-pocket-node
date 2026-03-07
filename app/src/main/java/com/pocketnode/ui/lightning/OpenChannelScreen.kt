@@ -161,9 +161,16 @@ fun OpenChannelScreen(
             )
 
             // Peer minimum warning (only from cached rejection data, not heuristic)
-            val cachedMin = if (nodeId.length >= 60) lightning.getPeerMinChannel(nodeId) else -1L
-            val isExact = if (nodeId.length >= 60) lightning.isPeerMinExact(nodeId) else true
-            val isCeiling = if (nodeId.length >= 60) lightning.isPeerMinCeiling(nodeId) else false
+            // Re-read after errors (rejection saves new data to SharedPreferences)
+            val cachedMin = remember(nodeId, error) {
+                if (nodeId.length >= 60) lightning.getPeerMinChannel(nodeId) else -1L
+            }
+            val isExact = remember(nodeId, error) {
+                if (nodeId.length >= 60) lightning.isPeerMinExact(nodeId) else true
+            }
+            val isCeiling = remember(nodeId, error) {
+                if (nodeId.length >= 60) lightning.isPeerMinCeiling(nodeId) else false
+            }
             if (cachedMin > 0) {
                 val amountLong = amountSats.toLongOrNull() ?: 0L
                 val tooSmall = !isCeiling && amountLong in 1..cachedMin
