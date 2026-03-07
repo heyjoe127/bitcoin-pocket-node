@@ -673,31 +673,20 @@ class LightningService(private val context: Context) {
             Log.i(TAG, "Channel open initiated: $userChannelId")
             // Clear any previous channel error
             _state.value = _state.value.copy(lastChannelError = null)
-            val prevChannels = n.listChannels().size
-            // Poll for channel state change (peer typically responds within 1-2s)
-            var accepted = false
-            var rejected = false
-            for (i in 1..20) { // 20 x 500ms = 10s max
-                Thread.sleep(500)
-                val channels = n.listChannels()
-                val pending = channels.any { it.isUsable == false && it.isChannelReady == false }
-                val ready = channels.size > prevChannels && channels.any { it.isChannelReady }
-                if (pending || ready) {
-                    accepted = true
-                    Log.i(TAG, "Channel accepted by peer (channels: ${channels.size}, pending: $pending, ready: $ready)")
-                    break
-                }
-                if (channels.size <= prevChannels && i >= 4) {
-                    // After 2s with no new channel, peer likely rejected
-                    rejected = true
-                    Log.w(TAG, "Channel likely rejected (no new channel after ${i * 500}ms)")
-                    break
-                }
-            }
+            // Wait for peer response. LDK creates the channel locally before peer responds,
+            // so we must wait long enough for rejection to arrive (~1-2s typically).
+            // Strategy: wait 3s, then check if channel still exists.
+            Thread.sleep(3000)
+            // Drain events to capture rejection reason from ChannelClosed
+            for (i in 1..5) { handleEvents() }
+            val channels = n.listChannels()
+            val hasNewChannel = channels.isNotEmpty()
             updateState()
-            Log.i(TAG, "Post-open: accepted=$accepted rejected=$rejected channels=${n.listChannels().size}")
-            if (rejected) {
-                Result.failure(Exception("Peer rejected channel open. They may require a larger channel size."))
+            val reason = _state.value.lastChannelError
+            Log.i(TAG, "Post-open: channels=${channels.size} hasNew=$hasNewChannel reason=$reason")
+            if (!hasNewChannel) {
+                val msg = if (reason != null) "Rejected: $reason" else "Peer rejected channel open"
+                Result.failure(Exception(msg))
             } else {
                 Result.success(userChannelId)
             }
