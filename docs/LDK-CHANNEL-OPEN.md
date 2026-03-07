@@ -102,3 +102,34 @@ Open Channel button (orange, disabled after success)
 If the app is force-stopped during a channel operation, LDK may leave stale `ChannelMonitor` data. On next start, you'll see "Archiving stale ChannelMonitors" in the logs. This is cleanup, not an error.
 
 Lesson: don't force-stop during channel operations.
+
+## CRITICAL: Never Auto-Delete Channel State
+
+### The Bug (v0.17 and earlier)
+
+A "sync watchdog" fired after 120s if LDK's block height hadn't advanced. It assumed corrupted chain state and deleted `ldk_node_data.sqlite`. But Bitcoin blocks can take 30+ minutes (even 2 hours in rare cases). The watchdog destroyed a live 100k sat channel with CoinGate because no block was mined in 2 minutes.
+
+### The Fix
+
+The watchdog now compares LDK height against bitcoind height. It only resets if LDK is actually behind bitcoind (stuck syncing). If both are at the same height, no block has been mined yet, which is normal.
+
+### Hard Rules
+
+1. **Never delete wallet/channel state based on elapsed time alone.** Always compare against an external source of truth.
+2. **Channel monitors contain data that cannot be regenerated from the seed.** Commitment transactions, revocation secrets, per-commitment points are all stored in the database. Deleting it means losing the ability to close or manage channels.
+3. **If channel state is lost,** the counterparty must force-close. Funds are recoverable (static_remotekey channels pay to a seed-derived key) but locked until the counterparty acts, which could take days or weeks.
+
+### Recovery from Lost Channel State
+
+If `ldk_node_data.sqlite` is deleted while channels exist:
+
+1. The node ID remains the same (derived from seed)
+2. Connect to the peer. They'll try `channel_reestablish`
+3. Our node won't recognize the channel, triggering a protocol error
+4. The peer should force-close
+5. Our `to_remote` output pays to a static key from our seed
+6. LDK picks up the funds on rescan after the timelock expires (~144 blocks)
+
+### On-Chain Balance After State Loss
+
+`totalOnchainBalanceSats` may show phantom balance (the original UTXO that was spent by the funding tx). This is because LDK's wallet doesn't know the UTXO was spent. **Do not attempt to spend it.** Use `spendableOnchainBalanceSats` for display, though it may also be inaccurate until the situation resolves.
