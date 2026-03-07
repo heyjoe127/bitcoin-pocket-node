@@ -319,7 +319,7 @@ class LightningService(private val context: Context) {
             // advance the internal index past the deposit address
             val scanAddresses = if (needsRecoveryScan) {
                 val addrs = mutableListOf<String>()
-                for (i in 0 until 20) {
+                for (i in 0 until 50) {
                     try { addrs.add(ldkNode.onchainPayment().newAddress()) } catch (_: Exception) { break }
                 }
                 Log.i(TAG, "Collected ${addrs.size} addresses for recovery scan")
