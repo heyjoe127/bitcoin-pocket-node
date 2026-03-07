@@ -89,7 +89,29 @@ fun OpenChannelScreen(
                 }
             }
 
-            // Peer details
+            // Browse peers button
+            if (prefillAlias.isNotEmpty()) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1B5E20).copy(alpha = 0.2f))
+                ) {
+                    Text(
+                        "Selected: $prefillAlias",
+                        modifier = Modifier.padding(16.dp),
+                        color = Color(0xFF4CAF50),
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            OutlinedButton(
+                onClick = onNavigateToPeerBrowser,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("\uD83D\uDD0D Browse Peers")
+            }
+
+            // Manual peer details
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
@@ -196,27 +218,7 @@ fun OpenChannelScreen(
                 }
             }
 
-            // Peer browser
-            if (prefillAlias.isNotEmpty()) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1B5E20).copy(alpha = 0.2f))
-                ) {
-                    Text(
-                        "Selected: $prefillAlias",
-                        modifier = Modifier.padding(16.dp),
-                        color = Color(0xFF4CAF50),
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
 
-            OutlinedButton(
-                onClick = onNavigateToPeerBrowser,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("🔍 Browse Peers")
-            }
         }
     }
 }
