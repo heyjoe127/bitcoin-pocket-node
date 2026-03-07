@@ -678,6 +678,27 @@ class LightningService(private val context: Context) {
         return !prefs.getBoolean("${peerId}_floor", false)
     }
 
+    private fun savePeerMinCeiling(peerId: String, acceptedSats: Long) {
+        val prefs = context.getSharedPreferences("peer_channel_limits", MODE_PRIVATE)
+        val existing = prefs.getLong(peerId, -1L)
+        val isExistingExact = !prefs.getBoolean("${peerId}_floor", false) && !prefs.getBoolean("${peerId}_ceiling", false)
+        // Don't overwrite an exact min. Only update ceiling if lower.
+        if (isExistingExact && existing > 0) return
+        if (existing < 0 || acceptedSats < existing) {
+            prefs.edit()
+                .putLong(peerId, acceptedSats)
+                .putBoolean("${peerId}_floor", false)
+                .putBoolean("${peerId}_ceiling", true)
+                .apply()
+            Log.i(TAG, "Cached peer min ceiling: ${peerId.take(16)}... <= $acceptedSats sats")
+        }
+    }
+
+    fun isPeerMinCeiling(peerId: String): Boolean {
+        val prefs = context.getSharedPreferences("peer_channel_limits", MODE_PRIVATE)
+        return prefs.getBoolean("${peerId}_ceiling", false)
+    }
+
     private fun savePeerMinFloor(peerId: String, attemptedSats: Long) {
         val prefs = context.getSharedPreferences("peer_channel_limits", MODE_PRIVATE)
         val existing = prefs.getLong(peerId, -1L)
@@ -738,6 +759,8 @@ class LightningService(private val context: Context) {
                 val msg = if (reason != null) reason else "Peer rejected channel open"
                 Result.failure(Exception(msg))
             } else {
+                // Peer accepted: their minimum is at most this amount
+                savePeerMinCeiling(nodeId, amountSats)
                 Result.success(userChannelId)
             }
         } catch (e: Exception) {

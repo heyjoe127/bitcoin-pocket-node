@@ -185,6 +185,7 @@ private fun NodeCard(
     val prefs = remember { context.getSharedPreferences("peer_channel_limits", Context.MODE_PRIVATE) }
     val cachedMin = remember(node.publicKey) { prefs.getLong(node.publicKey, -1L) }
     val isFloor = remember(node.publicKey) { prefs.getBoolean("${node.publicKey}_floor", false) }
+    val isCeiling = remember(node.publicKey) { prefs.getBoolean("${node.publicKey}_ceiling", false) }
 
     Card(
         modifier = Modifier
@@ -237,10 +238,11 @@ private fun NodeCard(
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (cachedMin > 0) {
+                        val suffix = if (isCeiling) "-" else if (isFloor) "+" else ""
                         Text(
-                            "min ${"%,d".format(cachedMin)}${if (isFloor) "+" else ""}",
+                            "${if (isCeiling) "✓" else "min"} ${"%,d".format(cachedMin)}$suffix",
                             style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFF64B5F6)
+                            color = if (isCeiling) Color(0xFF4CAF50) else Color(0xFF64B5F6)
                         )
                     }
                     if (node.feeRate >= 0) {
