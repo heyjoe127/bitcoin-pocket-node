@@ -43,7 +43,14 @@ fun ChainstateCopyScreen(onBack: () -> Unit, onComplete: () -> Unit = {}) {
     val setupManager = remember { NodeSetupManager(context) }
     val chainstateManager = remember { ChainstateManager.getInstance(context) }
     // Reset any stale state from previous attempts
-    LaunchedEffect(Unit) { chainstateManager.reset() }
+    LaunchedEffect(Unit) {
+        chainstateManager.reset()
+        // Clear stale credentials restored by Seedvault if no bitcoin data exists
+        val bitcoinDir = java.io.File(context.filesDir, "bitcoin")
+        if (!bitcoinDir.exists() || (bitcoinDir.listFiles()?.size ?: 0) == 0) {
+            setupManager.clearCredentials()
+        }
+    }
     val state by chainstateManager.state.collectAsState()
 
     // Keep screen on during active transfer
