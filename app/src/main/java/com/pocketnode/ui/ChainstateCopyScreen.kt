@@ -115,8 +115,15 @@ fun ChainstateCopyScreen(onBack: () -> Unit, onComplete: () -> Unit = {}) {
                 lastAdminUser = creds.username
                 lastAdminPass = creds.password
                 workScope.launch {
-                    val user = setupManager.getSavedUser()
-                    val pass = setupManager.getSavedPassword()
+                    // Use saved SFTP creds if available, otherwise fall back to admin creds
+                    val savedUser = setupManager.getSavedUser()
+                    val user = if (savedUser.isNotEmpty()) savedUser else creds.username
+                    val savedPass = setupManager.getSavedPassword()
+                    val pass = if (savedPass.isNotEmpty()) savedPass else creds.password
+                    // Save creds for future use if not already saved
+                    if (savedUser.isEmpty()) {
+                        setupManager.saveCredentials(creds.host, creds.port, creds.username, creds.password)
+                    }
                     chainstateManager.copyChainstate(
                         sshHost = creds.host,
                         sshPort = creds.port,
