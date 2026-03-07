@@ -649,12 +649,15 @@ class LightningService(private val context: Context) {
     fun openChannel(nodeId: String, address: String, amountSats: Long): Result<String> {
         val n = node ?: return Result.failure(Exception("Node not running"))
         return try {
+            Log.i(TAG, "Connecting to peer $nodeId at $address")
             n.connect(nodeId, address, true)
+            Log.i(TAG, "Connected. Opening channel for $amountSats sats")
             val userChannelId = n.openChannel(nodeId, address, amountSats.toULong(), null, null)
+            Log.i(TAG, "Channel open initiated: $userChannelId")
             updateState()
             Result.success(userChannelId)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to open channel", e)
+            Log.e(TAG, "Failed to open channel: ${e.message}", e)
             Result.failure(e)
         }
     }

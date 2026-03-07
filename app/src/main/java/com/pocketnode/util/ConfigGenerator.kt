@@ -185,7 +185,8 @@ object ConfigGenerator {
     }
 
     private fun generateSecureToken(length: Int): String {
-        val chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+        // Exclude ambiguous characters: 0/O, 1/l/I
+        val chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789"
         val random = SecureRandom()
         return (1..length).map { chars[random.nextInt(chars.length)] }.joinToString("")
     }

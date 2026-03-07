@@ -43,6 +43,7 @@ fun OpenChannelScreen(
     var amountSats by remember { mutableStateOf("") }
     var opening by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf<String?>(null) }
+    var channelId by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     val powerMode by PowerModeManager.modeFlow.collectAsState()
     val needsMaxMode = powerMode != PowerModeManager.Mode.MAX
@@ -166,7 +167,8 @@ fun OpenChannelScreen(
                         withContext(Dispatchers.IO) {
                             lightning.openChannel(nodeId, address, amountSats.toLong())
                         }.onSuccess {
-                            result = "Channel opening initiated!"
+                            channelId = it
+                            result = "Channel opening initiated! Waiting for peer to accept and funding transaction to broadcast."
                             opening = false
                         }.onFailure {
                             error = it.message ?: "Failed to open channel"
@@ -175,7 +177,7 @@ fun OpenChannelScreen(
                     }
                 },
                 modifier = Modifier.fillMaxWidth().height(48.dp),
-                enabled = !needsMaxMode && !opening && nodeId.isNotBlank() && address.isNotBlank() && amountSats.isNotBlank(),
+                enabled = !needsMaxMode && !opening && channelId == null && nodeId.isNotBlank() && address.isNotBlank() && amountSats.isNotBlank(),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color(0xFFFF9800),
                     disabledContainerColor = if (needsMaxMode) Color(0xFF607D8B).copy(alpha = 0.3f)
@@ -206,7 +208,25 @@ fun OpenChannelScreen(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(containerColor = Color(0xFF1B5E20).copy(alpha = 0.2f))
                 ) {
-                    Text(result!!, modifier = Modifier.padding(16.dp), color = Color(0xFF4CAF50))
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(result!!, color = Color(0xFF4CAF50))
+                        if (channelId != null) {
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                "Channel: ${channelId!!.take(16)}...",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFF4CAF50).copy(alpha = 0.7f),
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                        // Show live channel count
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "Channels: ${lightningState.channelCount} | On-chain: ${"%,d".format(lightningState.onchainBalanceSats)} sats",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFF4CAF50).copy(alpha = 0.7f)
+                        )
+                    }
                 }
             }
             if (error != null) {

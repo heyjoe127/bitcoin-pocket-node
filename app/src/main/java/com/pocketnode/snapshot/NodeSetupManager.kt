@@ -29,7 +29,8 @@ class NodeSetupManager(private val context: Context) {
         private const val KEY_ADMIN_USER = "admin_user"
         private const val SFTP_USERNAME = "pocketnode"
         private const val PASSWORD_LENGTH = 20
-        private val PASSWORD_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789".toCharArray()
+        // Exclude ambiguous characters: 0/O, 1/l/I
+        private val PASSWORD_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789".toCharArray()
 
         // In-memory only — never persisted to disk. Static so it survives across screen instances.
         var adminPasswordInMemory: String = ""
