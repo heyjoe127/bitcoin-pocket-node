@@ -182,10 +182,9 @@ private fun NodeCard(
     onSelect: () -> Unit
 ) {
     val context = LocalContext.current
-    val cachedMin = remember(node.publicKey) {
-        context.getSharedPreferences("peer_channel_limits", Context.MODE_PRIVATE)
-            .getLong(node.publicKey, -1L)
-    }
+    val prefs = remember { context.getSharedPreferences("peer_channel_limits", Context.MODE_PRIVATE) }
+    val cachedMin = remember(node.publicKey) { prefs.getLong(node.publicKey, -1L) }
+    val isFloor = remember(node.publicKey) { prefs.getBoolean("${node.publicKey}_floor", false) }
 
     Card(
         modifier = Modifier
@@ -239,7 +238,7 @@ private fun NodeCard(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (cachedMin > 0) {
                         Text(
-                            "min ${"%,d".format(cachedMin)}",
+                            "min ${"%,d".format(cachedMin)}${if (isFloor) "+" else ""}",
                             style = MaterialTheme.typography.bodySmall,
                             color = Color(0xFF64B5F6)
                         )

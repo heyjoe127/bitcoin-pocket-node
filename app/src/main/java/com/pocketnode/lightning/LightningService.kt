@@ -660,13 +660,37 @@ class LightningService(private val context: Context) {
 
     private fun savePeerMinChannel(peerId: PublicKey, minSats: Long) {
         val prefs = context.getSharedPreferences("peer_channel_limits", MODE_PRIVATE)
-        prefs.edit().putLong(peerId.toString(), minSats).apply()
+        prefs.edit()
+            .putLong(peerId.toString(), minSats)
+            .putBoolean("${peerId}_floor", false)  // exact value, not a floor
+            .apply()
         Log.i(TAG, "Cached peer min channel: ${peerId.toString().take(16)}... = $minSats sats")
     }
 
     fun getPeerMinChannel(peerId: String): Long {
         val prefs = context.getSharedPreferences("peer_channel_limits", MODE_PRIVATE)
         return prefs.getLong(peerId, -1L)
+    }
+
+    /** true if the stored min is an exact value from a rejection message, false if it's a floor (amount+) */
+    fun isPeerMinExact(peerId: String): Boolean {
+        val prefs = context.getSharedPreferences("peer_channel_limits", MODE_PRIVATE)
+        return !prefs.getBoolean("${peerId}_floor", false)
+    }
+
+    private fun savePeerMinFloor(peerId: String, attemptedSats: Long) {
+        val prefs = context.getSharedPreferences("peer_channel_limits", MODE_PRIVATE)
+        val existing = prefs.getLong(peerId, -1L)
+        val isExistingExact = !prefs.getBoolean("${peerId}_floor", false)
+        // Don't overwrite an exact min with a floor. Only update floor if higher.
+        if (isExistingExact && existing > 0) return
+        if (attemptedSats > existing) {
+            prefs.edit()
+                .putLong(peerId, attemptedSats)
+                .putBoolean("${peerId}_floor", true)
+                .apply()
+            Log.i(TAG, "Cached peer min floor: ${peerId.take(16)}... > $attemptedSats sats")
+        }
     }
 
     private fun drainWatchtowerBlobs() {
@@ -707,6 +731,10 @@ class LightningService(private val context: Context) {
             val reason = _state.value.lastChannelError
             Log.i(TAG, "Post-open: channels=${channels.size} hasNew=$hasNewChannel reason=$reason")
             if (!hasNewChannel) {
+                // If no explicit min from rejection, save attempted amount as floor
+                if (reason == null || !reason.contains("min chan size")) {
+                    savePeerMinFloor(nodeId, amountSats)
+                }
                 val msg = if (reason != null) reason else "Peer rejected channel open"
                 Result.failure(Exception(msg))
             } else {

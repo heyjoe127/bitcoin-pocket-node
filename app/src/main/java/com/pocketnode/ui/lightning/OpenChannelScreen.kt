@@ -162,9 +162,11 @@ fun OpenChannelScreen(
 
             // Peer minimum warning (only from cached rejection data, not heuristic)
             val cachedMin = if (nodeId.length >= 60) lightning.getPeerMinChannel(nodeId) else -1L
+            val isExact = if (nodeId.length >= 60) lightning.isPeerMinExact(nodeId) else true
             if (cachedMin > 0) {
                 val amountLong = amountSats.toLongOrNull() ?: 0L
-                val tooSmall = amountLong in 1 until cachedMin
+                val tooSmall = amountLong in 1..cachedMin
+                val suffix = if (isExact) "" else "+"
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
@@ -173,13 +175,14 @@ fun OpenChannelScreen(
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
                         Text(
-                            "Peer minimum: ${"%,d".format(cachedMin)} sats",
+                            "Peer minimum: ${"%,d".format(cachedMin)}$suffix sats",
                             style = MaterialTheme.typography.bodySmall,
                             color = Color(0xFF64B5F6)
                         )
                         if (tooSmall) {
                             Text(
-                                "⚠️ Amount is below this peer's known minimum",
+                                if (isExact) "⚠️ Amount is below this peer's known minimum"
+                                else "⚠️ This peer rejected ${"%,d".format(cachedMin)} sats",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.error
                             )
