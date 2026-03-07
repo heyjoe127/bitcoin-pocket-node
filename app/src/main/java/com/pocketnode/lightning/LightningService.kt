@@ -315,15 +315,27 @@ class LightningService(private val context: Context) {
             val restoredMarker = File(storageDir, "restored_wallet")
             if (restoredMarker.exists()) restoredMarker.delete()
 
-            // Collect scan addresses FIRST — before verification/sweep newAddress() calls
-            // advance the internal index past the deposit address
-            val scanAddresses = if (needsRecoveryScan) {
-                val addrs = mutableListOf<String>()
-                for (i in 0 until 50) {
-                    try { addrs.add(ldkNode.onchainPayment().newAddress()) } catch (_: Exception) { break }
+            // For recovery scans, derive BIP84 descriptors from the mnemonic
+            // WITHOUT consuming LDK's address index. newAddress() permanently
+            // advances the BDK index, so we never call it for scanning.
+            val scanDescriptors = if (needsRecoveryScan) {
+                val mnemonicFile = File(storageDir, "mnemonic")
+                if (mnemonicFile.exists()) {
+                    val words = mnemonicFile.readText().trim()
+                    val recoveryService = WalletRecoveryService(context)
+                    val descs = recoveryService.descriptorsFromMnemonic(words)
+                    Log.i(TAG, "Derived ${descs.size} BIP84 descriptors for recovery scan (non-destructive)")
+                    descs
+                } else {
+                    // Legacy: use WalletRecoveryService with raw seed
+                    val recoveryService = WalletRecoveryService(context)
+                    val seed = recoveryService.readSeed() ?: recoveryService.readBackupSeed()
+                    if (seed != null) {
+                        val masterKey = recoveryService.scanForFunds(seed, rpc)
+                        Log.i(TAG, "Legacy recovery scan completed")
+                    }
+                    emptyList()
                 }
-                Log.i(TAG, "Collected ${addrs.size} addresses for recovery scan")
-                addrs
             } else { emptyList() }
 
             try {
@@ -365,9 +377,9 @@ class LightningService(private val context: Context) {
             Log.i(TAG, "LNDHub server started on localhost:${LndHubServer.PORT}")
 
             // --- Background recovery scan fallback ---
-            if (needsRecoveryScan && scanAddresses.isNotEmpty()) {
+            if (needsRecoveryScan && scanDescriptors.isNotEmpty()) {
                 Thread({
-                    backgroundRecoveryScan(ldkNode, rpc, storageDir, rpcUser, rpcPassword, rpcPort, scanAddresses)
+                    backgroundRecoveryScanWithDescriptors(ldkNode, rpc, storageDir, rpcUser, rpcPassword, rpcPort, scanDescriptors)
                 }, "recovery-scan").start()
             }
 
@@ -1192,6 +1204,54 @@ class LightningService(private val context: Context) {
      * Gets LDK's actual addresses, scans with scantxoutset, and if UTXOs
      * are found at an older height, saves the birthday and restarts LDK.
      */
+    /**
+     * Recovery scan using BIP84 xprv descriptors (non-destructive, no address index consumed).
+     */
+    private fun backgroundRecoveryScanWithDescriptors(
+        @Suppress("UNUSED_PARAMETER") ldkNode: org.lightningdevkit.ldknode.Node,
+        rpc: com.pocketnode.rpc.BitcoinRpcClient,
+        storageDir: File,
+        rpcUser: String,
+        rpcPassword: String,
+        rpcPort: Int,
+        descriptors: List<String>
+    ) {
+        try {
+            _state.value = _state.value.copy(scanningForFunds = true)
+
+            val scanObjects = org.json.JSONArray()
+            for (desc in descriptors) {
+                val obj = org.json.JSONObject()
+                obj.put("desc", desc)
+                obj.put("range", 50)
+                scanObjects.put(obj)
+            }
+
+            val birthdayHeight = tryScanTxOutSet(rpc, scanObjects)
+
+            if (birthdayHeight == null) {
+                Log.i(TAG, "Descriptor recovery scan: no funds found.")
+                _state.value = _state.value.copy(scanningForFunds = false)
+                File(storageDir, "restored_wallet").delete()
+                return
+            }
+
+            File(storageDir, "wallet_birthday").writeText(birthdayHeight.toString())
+            File(storageDir, "restored_wallet").delete()
+            Log.i(TAG, "Descriptor recovery scan: saved birthday $birthdayHeight. Restarting LDK...")
+
+            stop()
+            Thread.sleep(500)
+            resetChainState(storageDir)
+            synchronized(this) { starting = false }
+            start(rpcUser, rpcPassword, rpcPort)
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Descriptor recovery scan failed: ${e.message}", e)
+            _state.value = _state.value.copy(scanningForFunds = false)
+        }
+    }
+
     private fun backgroundRecoveryScan(
         @Suppress("UNUSED_PARAMETER") ldkNode: org.lightningdevkit.ldknode.Node,
         rpc: com.pocketnode.rpc.BitcoinRpcClient,

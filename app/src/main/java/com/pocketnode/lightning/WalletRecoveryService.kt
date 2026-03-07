@@ -182,6 +182,20 @@ class WalletRecoveryService(private val context: Context) {
         }
     }
 
+    /**
+     * Derive BIP84 descriptors from a BIP39 mnemonic for scantxoutset.
+     * Uses standard PBKDF2 seed derivation, no LDK address index consumed.
+     */
+    fun descriptorsFromMnemonic(mnemonic: String): List<String> {
+        // BIP39: PBKDF2(mnemonic, "mnemonic", 2048, SHA512) -> 64-byte seed
+        val seed = javax.crypto.SecretKeyFactory.getInstance("PBKDF2WithHmacSHA512")
+            .generateSecret(javax.crypto.spec.PBEKeySpec(
+                mnemonic.toCharArray(), "mnemonic".toByteArray(), 2048, 512
+            )).encoded
+        val masterKey = deriveMasterKey(seed)
+        return deriveBip84Descriptors(masterKey)
+    }
+
     // --- BIP32/BIP84 Key Derivation ---
 
     private data class ExtendedKey(
