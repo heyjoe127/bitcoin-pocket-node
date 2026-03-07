@@ -765,6 +765,8 @@ class LightningService(private val context: Context) {
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to open channel: ${e.message}", e)
+            // Save floor for connection failures (peer blocked us)
+            savePeerMinFloor(nodeId, amountSats)
             Result.failure(e)
         }
     }
