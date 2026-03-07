@@ -65,6 +65,9 @@ class LightningService(private val context: Context) {
     private var stateRefreshJob: kotlinx.coroutines.Job? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
+    // Signaled by handleEvents() when a channel event (Pending/Ready/Closed) occurs
+    @Volatile private var channelEventLatch: java.util.concurrent.CountDownLatch? = null
+
     @Volatile private var starting = false
 
     /**
@@ -618,12 +621,19 @@ class LightningService(private val context: Context) {
                 is Event.PaymentSuccessful -> Log.i(TAG, "Payment successful: ${event.paymentId}")
                 is Event.PaymentFailed     -> Log.w(TAG, "Payment failed: ${event.paymentId}")
                 is Event.PaymentReceived   -> Log.i(TAG, "Payment received: ${event.amountMsat} msat")
-                is Event.ChannelPending    -> Log.i(TAG, "Channel pending: ${event.channelId} (funding txo: ${event.fundingTxo})")
-                is Event.ChannelReady      -> Log.i(TAG, "Channel ready: ${event.channelId}")
+                is Event.ChannelPending    -> {
+                    Log.i(TAG, "Channel pending: ${event.channelId} (funding txo: ${event.fundingTxo})")
+                    channelEventLatch?.countDown()
+                }
+                is Event.ChannelReady      -> {
+                    Log.i(TAG, "Channel ready: ${event.channelId}")
+                    channelEventLatch?.countDown()
+                }
                 is Event.ChannelClosed     -> {
                     val reason = event.reason?.toString() ?: "unknown"
                     Log.w(TAG, "Channel closed: ${event.channelId} reason: $reason")
-                    _state.value = _state.value.copy(lastChannelError = "Channel closed: $reason")
+                    _state.value = _state.value.copy(lastChannelError = reason)
+                    channelEventLatch?.countDown()
                 }
                 else -> Log.d(TAG, "Event: $event")
             }
@@ -663,31 +673,31 @@ class LightningService(private val context: Context) {
             Log.i(TAG, "Channel open initiated: $userChannelId")
             // Clear any previous channel error
             _state.value = _state.value.copy(lastChannelError = null)
-            updateState()
-            // Give peer time to respond, then drain all pending events
-            Thread.sleep(3000)
-            // Process all pending events (peer rejection may queue multiple)
-            var eventsProcessed = 0
-            while (eventsProcessed < 10) {
-                val evt = n.nextEvent() ?: break
-                when (evt) {
-                    is Event.ChannelClosed -> {
-                        val reason = evt.reason?.toString() ?: "unknown"
-                        Log.w(TAG, "Channel closed: ${evt.channelId} reason: $reason")
-                        _state.value = _state.value.copy(lastChannelError = "Channel closed: $reason")
-                    }
-                    is Event.ChannelPending -> Log.i(TAG, "Channel pending: ${evt.channelId}")
-                    is Event.ChannelReady -> Log.i(TAG, "Channel ready: ${evt.channelId}")
-                    else -> Log.d(TAG, "Event during open: $evt")
+            val prevChannels = n.listChannels().size
+            // Poll for channel state change (peer typically responds within 1-2s)
+            var accepted = false
+            var rejected = false
+            for (i in 1..20) { // 20 x 500ms = 10s max
+                Thread.sleep(500)
+                val channels = n.listChannels()
+                val pending = channels.any { it.isUsable == false && it.isChannelReady == false }
+                val ready = channels.size > prevChannels && channels.any { it.isChannelReady }
+                if (pending || ready) {
+                    accepted = true
+                    Log.i(TAG, "Channel accepted by peer (channels: ${channels.size}, pending: $pending, ready: $ready)")
+                    break
                 }
-                n.eventHandled()
-                eventsProcessed++
+                if (channels.size <= prevChannels && i >= 4) {
+                    // After 2s with no new channel, peer likely rejected
+                    rejected = true
+                    Log.w(TAG, "Channel likely rejected (no new channel after ${i * 500}ms)")
+                    break
+                }
             }
             updateState()
-            // Check if the channel was rejected
-            val channelError = _state.value.lastChannelError
-            if (channelError != null) {
-                Result.failure(Exception(channelError))
+            Log.i(TAG, "Post-open: accepted=$accepted rejected=$rejected channels=${n.listChannels().size}")
+            if (rejected) {
+                Result.failure(Exception("Peer rejected channel open. They may require a larger channel size."))
             } else {
                 Result.success(userChannelId)
             }
