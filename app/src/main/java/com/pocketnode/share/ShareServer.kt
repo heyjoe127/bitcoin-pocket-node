@@ -122,6 +122,7 @@ class ShareServer(private val context: Context) {
                     path == "/info" -> serveInfo(socket)
                     path == "/manifest" -> serveManifest(socket)
                     path == "/apk" -> serveApk(socket)
+                    path == "/peer-limits" -> servePeerLimits(socket)
                     path.startsWith("/file/") -> serveFile(socket, path.removePrefix("/file/"))
                     else -> sendResponse(socket, 404, "Not Found", "Unknown path: $path")
                 }
@@ -297,6 +298,21 @@ class ShareServer(private val context: Context) {
             put("fileCount", files.length())
         }
         sendResponse(socket, 200, "OK", manifest.toString(), "application/json")
+    }
+
+    /**
+     * GET /peer-limits — cached peer channel minimums learned from rejections.
+     * Shared so other phones don't have to discover the hard way.
+     */
+    private fun servePeerLimits(socket: Socket) {
+        val prefs = context.getSharedPreferences("peer_channel_limits", Context.MODE_PRIVATE)
+        val limits = JSONObject()
+        prefs.all.forEach { (key, value) ->
+            if (value is Long && value > 0) {
+                limits.put(key, value)
+            }
+        }
+        sendResponse(socket, 200, "OK", limits.toString(), "application/json")
     }
 
     /**

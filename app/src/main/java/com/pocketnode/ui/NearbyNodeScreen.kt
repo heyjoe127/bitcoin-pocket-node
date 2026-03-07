@@ -307,6 +307,8 @@ fun NearbyNodeScreen(
                     onClick = {
                         downloading = true
                         scope.launch {
+                            // Merge peer channel limits (lightweight, runs first)
+                            client.fetchPeerLimits(host, port)
                             val success = client.downloadChainstate(host, port, includeFilters)
                             if (!success) {
                                 downloading = false

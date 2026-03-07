@@ -70,6 +70,38 @@ class ShareClient(private val context: Context) {
     }
 
     /**
+     * Fetch and merge peer channel minimums from the share server.
+     * Merges with local data (keeps the larger value if both exist).
+     */
+    suspend fun fetchPeerLimits(host: String, port: Int = ShareServer.PORT): Int = withContext(Dispatchers.IO) {
+        try {
+            val conn = URL("http://$host:$port/peer-limits").openConnection() as HttpURLConnection
+            conn.connectTimeout = 5_000
+            conn.readTimeout = 5_000
+            if (conn.responseCode != 200) return@withContext 0
+
+            val json = JSONObject(conn.inputStream.bufferedReader().readText())
+            val prefs = context.getSharedPreferences("peer_channel_limits", Context.MODE_PRIVATE)
+            val editor = prefs.edit()
+            var merged = 0
+            json.keys().forEach { key ->
+                val remote = json.getLong(key)
+                val local = prefs.getLong(key, -1L)
+                if (remote > local) {
+                    editor.putLong(key, remote)
+                    merged++
+                }
+            }
+            editor.apply()
+            Log.i(TAG, "Merged $merged peer limits from $host")
+            merged
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to fetch peer limits from $host: ${e.message}")
+            0
+        }
+    }
+
+    /**
      * Download all chainstate files from the share server.
      * Stops bitcoind is assumed to already be stopped (fresh install).
      */
