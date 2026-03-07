@@ -54,8 +54,18 @@ class LightningService(private val context: Context) {
         val scanningForFunds: Boolean = false,
         val scanProgress: Int = 0,  // 0-100%
         // Channel error (set when a pending channel is rejected by peer)
-        val lastChannelError: String? = null
+        val lastChannelError: String? = null,
+        // Pending channel confirmation tracking
+        val pendingChannels: List<PendingChannel> = emptyList()
     ) {
+        data class PendingChannel(
+            val channelId: String,
+            val peerAlias: String,
+            val confirmations: Int,
+            val confirmationsRequired: Int,
+            val capacitySats: Long
+        )
+
         enum class Status { STOPPED, STARTING, RUNNING, ERROR, RECOVERING }
     }
 
@@ -594,6 +604,16 @@ class LightningService(private val context: Context) {
             val bestBlock = n.status().currentBestBlock
             Log.d(TAG, "updateState: onchain=${balances.totalOnchainBalanceSats} lightning=${balances.totalLightningBalanceSats} spendable=${balances.spendableOnchainBalanceSats} channels=${channels.size} ldkHeight=${bestBlock.height}")
 
+            val pending = channels.filter { it.isChannelReady == false }.map { ch ->
+                LightningState.PendingChannel(
+                    channelId = ch.channelId.toString().take(16),
+                    peerAlias = ch.counterpartyNodeId.toString().take(16),
+                    confirmations = ch.confirmations?.toInt() ?: 0,
+                    confirmationsRequired = ch.confirmationsRequired?.toInt() ?: 3,
+                    capacitySats = ch.channelValueSats.toLong()
+                )
+            }
+
             _state.value = LightningState(
                 status = LightningState.Status.RUNNING,
                 nodeId = n.nodeId(),
@@ -607,7 +627,8 @@ class LightningService(private val context: Context) {
                 error = null,
                 scanningForFunds = _state.value.scanningForFunds,
                 scanProgress = _state.value.scanProgress,
-                lastChannelError = _state.value.lastChannelError
+                lastChannelError = _state.value.lastChannelError,
+                pendingChannels = pending
             )
         } catch (e: Exception) {
             Log.e(TAG, "Failed to update state", e)

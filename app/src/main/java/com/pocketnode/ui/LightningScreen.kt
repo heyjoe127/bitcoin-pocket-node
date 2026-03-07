@@ -413,15 +413,17 @@ fun LightningScreen(
                                             style = MaterialTheme.typography.bodySmall,
                                             fontFamily = FontFamily.Monospace
                                         )
+                                        val confs = ch.confirmations?.toInt() ?: 0
+                                        val confsReq = ch.confirmationsRequired?.toInt() ?: 3
                                         val status = when {
-                                            ch.isUsable -> "Active"
+                                            ch.isUsable -> "Active ⚡"
                                             ch.isChannelReady -> "Ready"
-                                            else -> "Pending"
+                                            else -> "Confirming $confs/$confsReq"
                                         }
                                         val statusColor = when {
                                             ch.isUsable -> Color(0xFF4CAF50)
                                             ch.isChannelReady -> Color(0xFFFF9800)
-                                            else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                            else -> Color(0xFF64B5F6)
                                         }
                                         Text(status, style = MaterialTheme.typography.labelSmall, color = statusColor)
                                     }

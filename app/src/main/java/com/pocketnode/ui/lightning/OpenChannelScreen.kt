@@ -257,7 +257,7 @@ fun OpenChannelScreen(
                     }
                 },
                 modifier = Modifier.fillMaxWidth().height(48.dp),
-                enabled = !needsMaxMode && !opening && channelId == null && nodeId.isNotBlank() && address.isNotBlank() && amountSats.isNotBlank(),
+                enabled = !needsMaxMode && !opening && nodeId.isNotBlank() && address.isNotBlank() && amountSats.isNotBlank(),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color(0xFFFF9800),
                     disabledContainerColor = if (needsMaxMode) Color(0xFF607D8B).copy(alpha = 0.3f)
