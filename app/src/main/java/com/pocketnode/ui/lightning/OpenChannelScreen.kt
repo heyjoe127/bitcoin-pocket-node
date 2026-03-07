@@ -31,7 +31,8 @@ fun OpenChannelScreen(
     onNavigateToPeerBrowser: () -> Unit = {},
     prefillNodeId: String = "",
     prefillAddress: String = "",
-    prefillAlias: String = ""
+    prefillAlias: String = "",
+    peerMinChannelSats: Long = -1
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -112,6 +113,30 @@ fun OpenChannelScreen(
                 Text("\uD83D\uDD0D Browse Peers")
             }
 
+            // Minimum channel size warning
+            if (peerMinChannelSats > 0) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (lightningState.onchainBalanceSats < peerMinChannelSats)
+                            MaterialTheme.colorScheme.errorContainer
+                        else Color(0xFF1B5E20).copy(alpha = 0.15f)
+                    )
+                ) {
+                    Text(
+                        "Peer's smallest channel: ${"%,d".format(peerMinChannelSats)} sats" +
+                            if (lightningState.onchainBalanceSats < peerMinChannelSats)
+                                "\n⚠️ Your balance may be below this peer's minimum"
+                            else "",
+                        modifier = Modifier.padding(12.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (lightningState.onchainBalanceSats < peerMinChannelSats)
+                            MaterialTheme.colorScheme.error
+                        else Color(0xFF4CAF50)
+                    )
+                }
+            }
+
             // Manual peer details
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -168,7 +193,17 @@ fun OpenChannelScreen(
                             lightning.openChannel(nodeId, address, amountSats.toLong())
                         }.onSuccess {
                             channelId = it
-                            result = "Channel opening initiated! Waiting for peer to accept and funding transaction to broadcast."
+                            // Check if peer rejected (lastChannelError set during the 2s wait)
+                            val channelError = LightningService.stateFlow.value.lastChannelError
+                            if (channelError != null) {
+                                error = "Peer rejected: $channelError"
+                                channelId = null
+                                result = null
+                            } else if (LightningService.stateFlow.value.channelCount > 0) {
+                                result = "Channel opening! Funding transaction broadcasting. Wait for confirmations."
+                            } else {
+                                result = "Channel request sent. Waiting for peer response..."
+                            }
                             opening = false
                         }.onFailure {
                             error = it.message ?: "Failed to open channel"

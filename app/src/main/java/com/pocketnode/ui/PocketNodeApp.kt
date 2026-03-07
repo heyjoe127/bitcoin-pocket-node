@@ -308,22 +308,25 @@ fun PocketNodeApp(
                 val selectedNodeId = savedState.get<String>("selected_node_id") ?: ""
                 val selectedAddress = savedState.get<String>("selected_address") ?: ""
                 val selectedAlias = savedState.get<String>("selected_alias") ?: ""
+                val selectedMinChannel = savedState.get<Long>("selected_min_channel") ?: -1L
                 com.pocketnode.ui.lightning.OpenChannelScreen(
                     onNavigateBack = { navController.popBackStack() },
                     onNavigateToPeerBrowser = { navController.navigate("peer_browser") },
                     prefillNodeId = selectedNodeId,
                     prefillAddress = selectedAddress,
-                    prefillAlias = selectedAlias
+                    prefillAlias = selectedAlias,
+                    peerMinChannelSats = selectedMinChannel
                 )
             }
             composable("peer_browser") {
                 com.pocketnode.ui.lightning.PeerBrowserScreen(
                     onNavigateBack = { navController.popBackStack() },
-                    onSelectNode = { nodeId, address, alias ->
+                    onSelectNode = { nodeId, address, alias, minChannelSats ->
                         navController.previousBackStackEntry?.savedStateHandle?.apply {
                             set("selected_node_id", nodeId)
                             set("selected_address", address)
                             set("selected_alias", alias)
+                            set("selected_min_channel", minChannelSats)
                         }
                         navController.popBackStack()
                     }

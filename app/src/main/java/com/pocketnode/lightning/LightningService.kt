@@ -52,7 +52,9 @@ class LightningService(private val context: Context) {
         val recoveryWaitingForWifi: Boolean = false,
         // Background UTXO scan
         val scanningForFunds: Boolean = false,
-        val scanProgress: Int = 0  // 0-100%
+        val scanProgress: Int = 0,  // 0-100%
+        // Channel error (set when a pending channel is rejected by peer)
+        val lastChannelError: String? = null
     ) {
         enum class Status { STOPPED, STARTING, RUNNING, ERROR, RECOVERING }
     }
@@ -616,8 +618,13 @@ class LightningService(private val context: Context) {
                 is Event.PaymentSuccessful -> Log.i(TAG, "Payment successful: ${event.paymentId}")
                 is Event.PaymentFailed     -> Log.w(TAG, "Payment failed: ${event.paymentId}")
                 is Event.PaymentReceived   -> Log.i(TAG, "Payment received: ${event.amountMsat} msat")
+                is Event.ChannelPending    -> Log.i(TAG, "Channel pending: ${event.channelId} (funding txo: ${event.fundingTxo})")
                 is Event.ChannelReady      -> Log.i(TAG, "Channel ready: ${event.channelId}")
-                is Event.ChannelClosed     -> Log.i(TAG, "Channel closed: ${event.channelId}")
+                is Event.ChannelClosed     -> {
+                    val reason = event.reason?.toString() ?: "unknown"
+                    Log.w(TAG, "Channel closed: ${event.channelId} reason: $reason")
+                    _state.value = _state.value.copy(lastChannelError = "Channel closed: $reason")
+                }
                 else -> Log.d(TAG, "Event: $event")
             }
             n.eventHandled()
@@ -654,6 +661,12 @@ class LightningService(private val context: Context) {
             Log.i(TAG, "Connected. Opening channel for $amountSats sats")
             val userChannelId = n.openChannel(nodeId, address, amountSats.toULong(), null, null)
             Log.i(TAG, "Channel open initiated: $userChannelId")
+            // Clear any previous channel error
+            _state.value = _state.value.copy(lastChannelError = null)
+            updateState()
+            // Give peer time to respond, then process any events (including rejections)
+            Thread.sleep(2000)
+            handleEvents()
             updateState()
             Result.success(userChannelId)
         } catch (e: Exception) {

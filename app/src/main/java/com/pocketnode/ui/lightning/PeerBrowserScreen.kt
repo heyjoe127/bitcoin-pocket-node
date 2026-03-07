@@ -30,7 +30,7 @@ import kotlinx.coroutines.withContext
 @Composable
 fun PeerBrowserScreen(
     onNavigateBack: () -> Unit = {},
-    onSelectNode: (nodeId: String, address: String, alias: String) -> Unit = { _, _, _ -> }
+    onSelectNode: (nodeId: String, address: String, alias: String, minChannelSats: Long) -> Unit = { _, _, _, _ -> }
 ) {
     val scope = rememberCoroutineScope()
 
@@ -151,10 +151,10 @@ fun PeerBrowserScreen(
                                     NodeDirectory.getNodeDetails(node.publicKey)
                                 }
                                 if (details != null && details.address.isNotEmpty()) {
-                                    onSelectNode(details.publicKey, details.address, details.alias)
+                                    onSelectNode(details.publicKey, details.address, details.alias, details.minChannelSize)
                                 } else if (details != null) {
                                     // No clearnet address available
-                                    onSelectNode(details.publicKey, details.sockets, details.alias)
+                                    onSelectNode(details.publicKey, details.sockets, details.alias, details.minChannelSize)
                                 }
                             }
                         })
