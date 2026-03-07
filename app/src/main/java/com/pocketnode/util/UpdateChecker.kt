@@ -135,17 +135,31 @@ object UpdateChecker {
 
             Log.i(TAG, "APK downloaded: ${apkFile.length()} bytes")
 
-            // Trigger install via FileProvider
-            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", apkFile)
-            val intent = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(uri, "application/vnd.android.package-archive")
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            context.startActivity(intent)
+            // Trigger install via PackageInstaller session API
+            val installer = context.packageManager.packageInstaller
+            val params = android.content.pm.PackageInstaller.SessionParams(
+                android.content.pm.PackageInstaller.SessionParams.MODE_FULL_INSTALL
+            )
+            val sessionId = installer.createSession(params)
+            val session = installer.openSession(sessionId)
 
-            // Give the installer a moment to launch, then kill our process
-            // so the old version doesn't stay in memory after install
+            apkFile.inputStream().use { apkInput ->
+                session.openWrite("update.apk", 0, apkFile.length()).use { sessionOutput ->
+                    apkInput.copyTo(sessionOutput)
+                    session.fsync(sessionOutput)
+                }
+            }
+
+            // Create a pending intent for install result
+            val pendingIntent = android.app.PendingIntent.getActivity(
+                context, 0,
+                Intent(context, Class.forName("com.pocketnode.MainActivity")),
+                android.app.PendingIntent.FLAG_MUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT
+            )
+            session.commit(pendingIntent.intentSender)
+            Log.i(TAG, "PackageInstaller session committed")
+
+            // Kill our process so old version doesn't persist in memory
             Thread.sleep(1000)
             android.os.Process.killProcess(android.os.Process.myPid())
             true
