@@ -146,7 +146,7 @@ fun OpenChannelScreen(
                 value = amountSats,
                 onValueChange = { amountSats = it.filter { c -> c.isDigit() }; error = null; result = null },
                 label = { Text("Channel Amount (sats)") },
-                placeholder = { Text("100000") },
+                placeholder = { Text("100000", color = androidx.compose.ui.graphics.Color.Gray) },
                 modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 singleLine = true,
