@@ -68,6 +68,10 @@ class PowerModeManager(private val context: Context) {
         fun releaseInitialSyncHold() {
             _initialSyncHold.value = false
         }
+
+        fun resetHold() {
+            _initialSyncHold.value = false
+        }
     }
 
     enum class Mode(val label: String, val emoji: String, val notificationLabel: String) {
@@ -141,6 +145,18 @@ class PowerModeManager(private val context: Context) {
                 } catch (_: Exception) {}
             }
         }
+    }
+
+    /** End the initial sync hold and restore the user's previous power mode. */
+    fun endInitialSyncHold(scope: CoroutineScope) {
+        initialSyncJob?.cancel()
+        initialSyncJob = null
+        _initialSyncHold.value = false
+        val manualMode = Mode.fromString(
+            prefs.getString(PREF_KEY_MANUAL_MODE, "LOW") ?: "LOW"
+        )
+        Log.i(TAG, "Initial sync hold ended, restoring $manualMode mode")
+        setMode(manualMode, scope, isAuto = true)
     }
 
     /** Switch power mode. Applies immediately. */

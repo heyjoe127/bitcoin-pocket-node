@@ -306,8 +306,9 @@ fun NodeStatusScreen(
                     if (ibd && !PowerModeManager.initialSyncHoldFlow.value) {
                         PowerModeManager(context).startInitialSyncHold(this, rpc)
                     } else if (!ibd && PowerModeManager.initialSyncHoldFlow.value) {
-                        android.util.Log.i("NodeStatusScreen", "IBD complete, releasing initial sync hold")
-                        PowerModeManager.releaseInitialSyncHold()
+                        android.util.Log.i("NodeStatusScreen", "IBD complete, restoring previous power mode")
+                        val pmm = PowerModeManager(context)
+                        pmm.endInitialSyncHold(this)
                     }
 
                     // Calculate sync speed (for non-assumeutxo or background validation display)
