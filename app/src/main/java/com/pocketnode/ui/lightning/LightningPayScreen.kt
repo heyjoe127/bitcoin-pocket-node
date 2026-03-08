@@ -156,6 +156,57 @@ fun LightningPayScreen(
                     channelCount = lightningState.channelCount,
                     error = lightningState.error
                 )
+
+                // Pending channel close info
+                if (lightningState.pendingCloseDetails.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(24.dp))
+                    lightningState.pendingCloseDetails.forEach { close ->
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 24.dp, vertical = 4.dp),
+                            colors = CardDefaults.cardColors(containerColor = CardBg)
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(
+                                    "Channel Closing",
+                                    color = Color(0xFFFF9800),
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    "${"%,d".format(close.amountSats)} sats returning",
+                                    color = DimWhite,
+                                    fontSize = 13.sp
+                                )
+                                if (close.blocksRemaining > 0) {
+                                    val hours = (close.blocksRemaining * 10) / 60
+                                    Text(
+                                        "${close.blocksRemaining} blocks remaining (~${hours}h)",
+                                        color = SubtleGrey,
+                                        fontSize = 12.sp
+                                    )
+                                }
+                                if (close.txid != null) {
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        close.txid.take(16) + "...",
+                                        color = SubtleGrey,
+                                        fontSize = 11.sp,
+                                        fontFamily = FontFamily.Monospace
+                                    )
+                                }
+                                Text(
+                                    close.status,
+                                    color = SubtleGrey,
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
+                    }
+                }
+
                 Spacer(modifier = Modifier.weight(1f))
             }
 

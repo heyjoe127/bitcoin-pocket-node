@@ -78,7 +78,9 @@ class LightningService(private val context: Context) {
             val channelId: String,
             val amountSats: Long,
             val status: String, // "Pending broadcast", "Awaiting confirmation", "Awaiting threshold"
-            val confirmationHeight: Int = 0 // block height when confirmed (for countdown)
+            val confirmationHeight: Int = 0, // block height when confirmed (for countdown)
+            val txid: String? = null, // spending/close txid
+            val blocksRemaining: Int = 0 // blocks until spendable (for force-close timelock)
         )
 
         enum class Status { STOPPED, STARTING, RUNNING, ERROR, RECOVERING }
@@ -738,16 +740,21 @@ class LightningService(private val context: Context) {
 
             // Parse pending balances from channel closures
             val currentHeight = bestBlock.height.toInt()
+            val currentH = bestBlock.height.toInt()
             val pendingCloses = balances.pendingBalancesFromChannelClosures.map { psb ->
                 when (psb) {
                     is org.lightningdevkit.ldknode.PendingSweepBalance.PendingBroadcast ->
                         LightningState.PendingClose(psb.channelId ?: "", psb.amountSatoshis.toLong(), "Pending broadcast")
                     is org.lightningdevkit.ldknode.PendingSweepBalance.BroadcastAwaitingConfirmation ->
                         LightningState.PendingClose(psb.channelId ?: "", psb.amountSatoshis.toLong(),
-                            "Awaiting confirmation", psb.latestBroadcastHeight.toInt())
-                    is org.lightningdevkit.ldknode.PendingSweepBalance.AwaitingThresholdConfirmations ->
+                            "Awaiting confirmation", psb.latestBroadcastHeight.toInt(),
+                            txid = psb.latestSpendingTxid)
+                    is org.lightningdevkit.ldknode.PendingSweepBalance.AwaitingThresholdConfirmations -> {
+                        val blocksLeft = maxOf(0, psb.confirmationHeight.toInt() - currentH)
                         LightningState.PendingClose(psb.channelId ?: "", psb.amountSatoshis.toLong(),
-                            "Awaiting threshold", psb.confirmationHeight.toInt())
+                            "Awaiting threshold", psb.confirmationHeight.toInt(),
+                            txid = psb.latestSpendingTxid, blocksRemaining = blocksLeft)
+                    }
                     else -> LightningState.PendingClose("", 0, "Unknown")
                 }
             }.filter { it.amountSats > 0 }
