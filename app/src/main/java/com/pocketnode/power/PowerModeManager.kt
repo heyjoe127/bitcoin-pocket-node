@@ -314,7 +314,18 @@ class PowerModeManager(private val context: Context) {
         }
     }
 
-    /** Execute one sync burst with mutex to prevent concurrent runs */
+    /**
+     * Execute one sync burst. Purpose: learn if new blocks exist, download them if so.
+     *
+     * 1. Enable network
+     * 2. Wait for at least one peer connection
+     * 3. Wait for headers to advance (learning if new blocks were mined)
+     * 4. If new blocks: download them, wait for LDK to catch up
+     * 5. Network off
+     *
+     * Fast when no new blocks (peer connects, headers match blocks, done).
+     * Only holds network open as long as needed.
+     */
     private suspend fun doBurst() {
         if (!burstMutex.tryLock()) {
             Log.d(TAG, "Burst already running, skipping")
@@ -326,60 +337,95 @@ class PowerModeManager(private val context: Context) {
             return
         }
         _burstStateFlow.value = BurstState.SYNCING
-        Log.i(TAG, "Burst sync starting")
+
+        // Snapshot current state before enabling network
+        val preBlocks = try {
+            client.getBlockchainInfo()?.optLong("blocks", 0L) ?: 0L
+        } catch (_: Exception) { 0L }
+
+        Log.i(TAG, "Burst: starting at block $preBlocks")
 
         try {
+            // 1. Enable network
             setNetworkActive(client, true)
 
-            // Wait for bitcoind to sync to tip
-            val startTime = System.currentTimeMillis()
-            var synced = false
-            while (System.currentTimeMillis() - startTime < BURST_SYNC_TIMEOUT_MS) {
+            // 2. Wait for at least one peer (up to 15s)
+            var hasPeers = false
+            val peerStart = System.currentTimeMillis()
+            while (System.currentTimeMillis() - peerStart < 15_000) {
                 try {
-                    val info = client.getBlockchainInfo()
-                    val progress = info?.optDouble("verificationprogress", 0.0) ?: 0.0
-                    val headers = info?.optInt("headers", 0) ?: 0
-                    val blocks = info?.optInt("blocks", 0) ?: 0
-                    if (progress > 0.9999 && headers > 0 && blocks >= headers) {
-                        synced = true
+                    val netInfo = client.call("getnetworkinfo")
+                    val connections = netInfo?.optInt("connections", 0) ?: 0
+                    if (connections > 0) {
+                        hasPeers = true
                         break
                     }
                 } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) {}
-                delay(5_000)
+                delay(1_000)
             }
 
-            if (synced && getLdkHeight != null) {
-                // Wait for LDK to reach bitcoind's tip height
-                val info = client.getBlockchainInfo()
-                val bitcoindHeight = info?.optLong("blocks", 0L) ?: 0L
+            if (!hasPeers) {
+                Log.w(TAG, "Burst: no peers connected in 15s, aborting")
+                if (_modeFlow.value != Mode.MAX) setNetworkActive(client, false)
+                _burstStateFlow.value = BurstState.IDLE
+                burstMutex.unlock()
+                return
+            }
+
+            // 3. Wait for headers to update (peers send new headers quickly, ~1-2s)
+            delay(2_000)
+
+            // 4. Check if new blocks need downloading
+            val info = client.getBlockchainInfo()
+            val headers = info?.optLong("headers", 0L) ?: 0L
+            val blocks = info?.optLong("blocks", 0L) ?: 0L
+
+            if (headers > blocks) {
+                // New blocks to download. Wait for sync.
+                Log.i(TAG, "Burst: downloading blocks $blocks -> $headers")
+                val syncStart = System.currentTimeMillis()
+                while (System.currentTimeMillis() - syncStart < BURST_SYNC_TIMEOUT_MS) {
+                    val cur = client.getBlockchainInfo()
+                    val curBlocks = cur?.optLong("blocks", 0L) ?: 0L
+                    val curHeaders = cur?.optLong("headers", 0L) ?: 0L
+                    if (curBlocks >= curHeaders && curHeaders > 0) break
+                    delay(2_000)
+                }
+            } else if (blocks > preBlocks) {
+                Log.i(TAG, "Burst: blocks already advanced $preBlocks -> $blocks")
+            } else {
+                Log.i(TAG, "Burst: no new blocks (at $blocks)")
+            }
+
+            // 5. If LDK is running, wait for it to catch up
+            val finalBlocks = try {
+                client.getBlockchainInfo()?.optLong("blocks", 0L) ?: 0L
+            } catch (_: Exception) { 0L }
+
+            if (finalBlocks > preBlocks && getLdkHeight != null) {
                 val ldkWaitStart = System.currentTimeMillis()
-                var ldkReached = false
                 while (System.currentTimeMillis() - ldkWaitStart < 30_000) {
                     val ldkNow = getLdkHeight?.invoke() ?: 0L
-                    if (ldkNow >= bitcoindHeight && bitcoindHeight > 0) {
-                        Log.i(TAG, "LDK reached tip: $ldkNow (bitcoind: $bitcoindHeight)")
-                        ldkReached = true
+                    if (ldkNow >= finalBlocks) {
+                        Log.i(TAG, "Burst: LDK synced to $ldkNow")
                         break
                     }
                     delay(2_000)
                 }
-                if (!ldkReached) {
-                    val ldkNow = getLdkHeight?.invoke() ?: 0L
-                    Log.w(TAG, "LDK didn't reach tip in 30s: LDK=$ldkNow bitcoind=$bitcoindHeight")
-                }
             }
 
-            Log.i(TAG, "Burst sync ${if (synced) "complete" else "timed out"}")
+            Log.i(TAG, "Burst: complete (was $preBlocks, now $finalBlocks)")
 
+            // 6. Network off
             if (_modeFlow.value != Mode.MAX) {
                 setNetworkActive(client, false)
             }
         } catch (e: kotlinx.coroutines.CancellationException) {
-            Log.d(TAG, "Burst sync cancelled (mode change)")
+            Log.d(TAG, "Burst cancelled (mode change)")
             burstMutex.unlock()
             throw e
         } catch (e: Exception) {
-            Log.e(TAG, "Burst sync error: ${e.message}")
+            Log.e(TAG, "Burst error: ${e.message}")
             try { setNetworkActive(client, false) } catch (_: Exception) {}
         }
 
