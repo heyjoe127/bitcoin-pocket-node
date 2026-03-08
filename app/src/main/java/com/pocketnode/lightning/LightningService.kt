@@ -26,6 +26,10 @@ class LightningService(private val context: Context) {
         private const val STORAGE_DIR = "lightning"
         private const val RGS_URL = "https://rapidsync.lightningdevkit.org/snapshot"
 
+        // One-time restart flag for orphan balance rebroadcast (persists across LDK restarts)
+        @Volatile
+        private var hasAttemptedRebroadcastRestart = false
+
         // Singleton state for UI observation
         private val _state = MutableStateFlow(LightningState())
         val stateFlow: StateFlow<LightningState> = _state.asStateFlow()
@@ -400,7 +404,6 @@ class LightningService(private val context: Context) {
 
             // Periodic state refresh — safe to use coroutines here, LDK is running
             var lastWalletSync = 0L
-            var hasRestarted = false
             stateRefreshJob = scope.launch {
                 while (isActive) {
                     delay(10_000)
@@ -415,10 +418,10 @@ class LightningService(private val context: Context) {
                         val hasOrphanFunds = st.channelCount == 0 && st.lightningBalanceSats > 0
                         if ((hasOrphanFunds || st.pendingCloseSats > 0) && now - lastWalletSync > 300_000) {
                             lastWalletSync = now
-                            if (hasOrphanFunds && st.pendingCloseDetails.isEmpty() && !hasRestarted) {
+                            if (hasOrphanFunds && st.pendingCloseDetails.isEmpty() && !hasAttemptedRebroadcastRestart) {
                                 // Commitment tx likely never broadcast — restart LDK
                                 Log.w(TAG, "Orphan lightning balance detected with no pending sweeps. Restarting LDK to rebroadcast commitment tx (one-time).")
-                                hasRestarted = true
+                                hasAttemptedRebroadcastRestart = true
                                 val creds = com.pocketnode.util.ConfigGenerator.readCredentials(context)
                                 if (creds != null) {
                                     // Run on separate thread since stop() cancels the coroutine scope
