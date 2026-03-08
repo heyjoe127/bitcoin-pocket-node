@@ -720,12 +720,7 @@ class LightningService(private val context: Context) {
             }.filter { it.amountSats > 0 }
             val pendingCloseTotalSats = pendingCloses.sumOf { it.amountSats }
 
-            // Rotate deposit address if balance increased (new deposit received)
-            val prevBalance = _state.value.onchainBalanceSats
             val newBalance = balances.spendableOnchainBalanceSats.toLong()
-            if (newBalance > prevBalance && prevBalance >= 0) {
-                markDepositAddressUsed()
-            }
 
             _state.value = LightningState(
                 status = LightningState.Status.RUNNING,
@@ -758,10 +753,7 @@ class LightningService(private val context: Context) {
             when (event) {
                 is Event.PaymentSuccessful -> Log.i(TAG, "Payment successful: ${event.paymentId}")
                 is Event.PaymentFailed     -> Log.w(TAG, "Payment failed: ${event.paymentId}")
-                is Event.PaymentReceived   -> {
-                    Log.i(TAG, "Payment received: ${event.amountMsat} msat")
-                    markDepositAddressUsed()
-                }
+                is Event.PaymentReceived   -> Log.i(TAG, "Payment received: ${event.amountMsat} msat")
                 is Event.ChannelPending    -> {
                     Log.i(TAG, "Channel pending: ${event.channelId} (funding txo: ${event.fundingTxo})")
                     channelEventLatch?.countDown()
@@ -1056,11 +1048,12 @@ class LightningService(private val context: Context) {
             cachedDepositAddress = depositAddressPrefs.getString("current_address", null)
         }
 
-        // If we have a cached address, check if LDK's balance changed since we cached it
-        // (indicates the address was used). Also check the "used" flag set by event/balance handlers.
+        // Check if cached address has been used (has UTXOs on-chain)
         val cached = cachedDepositAddress
-        if (cached != null && !depositAddressPrefs.getBoolean("address_used", false)) {
-            return Result.success(cached)
+        if (cached != null) {
+            val used = isAddressUsed(cached)
+            if (!used) return Result.success(cached)
+            Log.i(TAG, "Deposit address used, rotating: $cached")
         }
 
         // Generate fresh address
@@ -1070,7 +1063,6 @@ class LightningService(private val context: Context) {
             cachedDepositAddress = addr
             depositAddressPrefs.edit()
                 .putString("current_address", addr)
-                .putBoolean("address_used", false)
                 .apply()
             Log.i(TAG, "New deposit address: $addr")
             Result.success(addr)
@@ -1080,9 +1072,26 @@ class LightningService(private val context: Context) {
         }
     }
 
-    private fun markDepositAddressUsed() {
-        cachedDepositAddress = null
-        depositAddressPrefs.edit().putBoolean("address_used", true).apply()
+    /** Quick check: does this address have any UTXOs? Single-address scantxoutset is fast. */
+    private fun isAddressUsed(address: String): Boolean {
+        return try {
+            val prefs = context.getSharedPreferences("pocketnode_prefs", MODE_PRIVATE)
+            val rpc = BitcoinRpcClient(
+                prefs.getString("rpc_user", "") ?: "",
+                prefs.getString("rpc_password", "") ?: "",
+                port = prefs.getInt("rpc_port", 8332)
+            )
+            val scanObj = org.json.JSONArray()
+            val desc = org.json.JSONObject()
+            desc.put("desc", "addr($address)")
+            scanObj.put(desc)
+            val result = rpc.callSync("scantxoutset", listOf("start", scanObj))
+            val unspents = result?.optJSONArray("unspents")
+            (unspents != null && unspents.length() > 0)
+        } catch (e: Exception) {
+            Log.w(TAG, "isAddressUsed check failed: ${e.message}")
+            false // Assume unused if check fails
+        }
     }
 
     fun sendOnchain(address: String, amountSats: Long, feeRate: FeeRate? = null): Result<String> {
