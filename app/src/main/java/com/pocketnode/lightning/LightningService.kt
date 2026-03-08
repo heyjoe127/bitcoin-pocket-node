@@ -661,7 +661,13 @@ class LightningService(private val context: Context) {
             } catch (_: Exception) {}
 
             val bestBlock = n.status().currentBestBlock
-            Log.d(TAG, "updateState: onchain=${balances.totalOnchainBalanceSats} lightning=${balances.totalLightningBalanceSats} spendable=${balances.spendableOnchainBalanceSats} channels=${channels.size} ldkHeight=${bestBlock.height}")
+            val outboundMsat = channels.sumOf { it.outboundCapacityMsat.toLong() }
+            val inboundMsat = channels.sumOf { it.inboundCapacityMsat.toLong() }
+            val usableChannels = channels.count { it.isUsable }
+            Log.d(TAG, "updateState: onchain=${balances.totalOnchainBalanceSats} lightning=${balances.totalLightningBalanceSats} spendable=${balances.spendableOnchainBalanceSats} channels=${channels.size} usable=$usableChannels ldkHeight=${bestBlock.height} outbound=${outboundMsat/1000}sats inbound=${inboundMsat/1000}sats")
+            channels.forEach { ch ->
+                Log.d(TAG, "  ch=${ch.channelId.take(12)} usable=${ch.isUsable} ready=${ch.isChannelReady} value=${ch.channelValueSats} outbound=${ch.outboundCapacityMsat.toLong()/1000} inbound=${ch.inboundCapacityMsat.toLong()/1000} confs=${ch.confirmations}")
+            }
 
             val pending = channels.filter { it.isChannelReady == false }.map { ch ->
                 LightningState.PendingChannel(
