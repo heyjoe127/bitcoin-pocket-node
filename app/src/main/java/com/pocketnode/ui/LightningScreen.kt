@@ -431,7 +431,19 @@ fun LightningScreen(
                             // Channel list — tap to close
                             Spacer(Modifier.height(12.dp))
                             val channels = remember(effectiveState) { lightning.listChannels() }
-                            val peerAliases = remember { context.getSharedPreferences("peer_aliases", android.content.Context.MODE_PRIVATE) }
+                            val peerAliases = remember {
+                                val prefs = context.getSharedPreferences("peer_aliases", android.content.Context.MODE_PRIVATE)
+                                // Seed known peer aliases (one-time)
+                                if (!prefs.getBoolean("_seeded", false)) {
+                                    prefs.edit()
+                                        .putString("0242a4ae0c5bef18048fbecf995094b74bfb0f7391418d71ed394784373f41e4f3", "CoinGate")
+                                        .putString("026165850492521f4ac8abd9bd8088123446d126f648ca35e60f88177dc149ceb2", "CoinGate")
+                                        .putString("f3e4413f37844739ed718d4191730ffb4bb7945099cfbe8f0418ef5b0caea442", "CoinGate")
+                                        .putBoolean("_seeded", true)
+                                        .apply()
+                                }
+                                prefs
+                            }
                             var selectedChannel by remember { mutableStateOf<org.lightningdevkit.ldknode.ChannelDetails?>(null) }
                             channels.forEach { ch ->
                                 Divider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
