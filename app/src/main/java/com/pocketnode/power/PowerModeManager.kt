@@ -75,6 +75,9 @@ class PowerModeManager(private val context: Context) {
 
         /** Callback to get current LDK block height (set by LightningService) */
         var getLdkHeight: (() -> Long)? = null
+
+        /** Whether a channel open is holding the network active */
+        @Volatile var channelHoldingNetwork = false
     }
 
     enum class Mode(val label: String, val emoji: String, val notificationLabel: String) {
@@ -98,6 +101,7 @@ class PowerModeManager(private val context: Context) {
     private var rpc: BitcoinRpcClient? = null
     private var activeScope: CoroutineScope? = null
     private var walletHoldingNetwork = false
+    // channelHoldingNetwork is on companion — see below
     private var walletIndicatorJob: Job? = null
     private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
@@ -446,6 +450,45 @@ class PowerModeManager(private val context: Context) {
             _walletConnectedFlow.value = false
         }
 
+        scope.launch(Dispatchers.IO) {
+            applyMode(mode)
+        }
+    }
+
+    /**
+     * Hold network active temporarily (e.g. for channel opens).
+     * Pauses burst cycling. Call releaseNetworkHold() when done.
+     */
+    fun holdNetwork() {
+        val mode = _modeFlow.value
+        if (mode == Mode.MAX) return  // Already connected
+        if (channelHoldingNetwork) return
+
+        channelHoldingNetwork = true
+        Log.i(TAG, "Channel open — holding network active")
+
+        burstJob?.cancel()
+        burstJob = null
+        _burstStateFlow.value = BurstState.IDLE
+        _nextBurstFlow.value = 0L
+
+        val scope = activeScope ?: return
+        scope.launch(Dispatchers.IO) {
+            setNetworkActive(rpc ?: return@launch, true)
+        }
+    }
+
+    /** Release the network hold and resume burst cycling. */
+    fun releaseNetworkHold() {
+        if (!channelHoldingNetwork) return
+        channelHoldingNetwork = false
+
+        val mode = _modeFlow.value
+        if (mode == Mode.MAX) return
+
+        Log.i(TAG, "Channel open done — resuming burst cycle")
+
+        val scope = activeScope ?: return
         scope.launch(Dispatchers.IO) {
             applyMode(mode)
         }

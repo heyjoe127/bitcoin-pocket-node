@@ -901,22 +901,17 @@ class LightningService(private val context: Context) {
         val n = node ?: return Result.failure(Exception("Node not running"))
 
         // Temporarily enable network if not in Max mode
+        val pmm = com.pocketnode.power.PowerModeManager(context)
         val needsNetworkHold = com.pocketnode.power.PowerModeManager.modeFlow.value != com.pocketnode.power.PowerModeManager.Mode.MAX
         if (needsNetworkHold) {
-            try {
-                val prefs = context.getSharedPreferences("bitcoind_config", Context.MODE_PRIVATE)
-                val user = prefs.getString("rpc_user", "pocketnode") ?: "pocketnode"
-                val pass = prefs.getString("rpc_password", "") ?: ""
-                val port = prefs.getInt("rpc_port", 8332)
-                val rpc = BitcoinRpcClient(user, pass, port = port)
-                val params = org.json.JSONArray().apply { put(true) }
-                kotlinx.coroutines.runBlocking { rpc.call("setnetworkactive", params) }
-                Log.i(TAG, "Network enabled for channel open")
-                // Give bitcoind time to establish peers
-                Thread.sleep(5_000)
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to enable network: ${e.message}")
-            }
+            pmm.setRpc(com.pocketnode.rpc.BitcoinRpcClient(
+                context.getSharedPreferences("bitcoind_config", Context.MODE_PRIVATE).getString("rpc_user", "pocketnode") ?: "pocketnode",
+                context.getSharedPreferences("bitcoind_config", Context.MODE_PRIVATE).getString("rpc_password", "") ?: "",
+                port = context.getSharedPreferences("bitcoind_config", Context.MODE_PRIVATE).getInt("rpc_port", 8332)
+            ))
+            pmm.holdNetwork()
+            // Give bitcoind time to establish peers
+            Thread.sleep(5_000)
         }
 
         return try {
@@ -960,18 +955,7 @@ class LightningService(private val context: Context) {
         } finally {
             // Restore network state if we temporarily enabled it
             if (needsNetworkHold) {
-                try {
-                    val prefs = context.getSharedPreferences("bitcoind_config", Context.MODE_PRIVATE)
-                    val user = prefs.getString("rpc_user", "pocketnode") ?: "pocketnode"
-                    val pass = prefs.getString("rpc_password", "") ?: ""
-                    val port = prefs.getInt("rpc_port", 8332)
-                    val rpc = BitcoinRpcClient(user, pass, port = port)
-                    val params = org.json.JSONArray().apply { put(false) }
-                    kotlinx.coroutines.runBlocking { rpc.call("setnetworkactive", params) }
-                    Log.i(TAG, "Network restored after channel open")
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to restore network: ${e.message}")
-                }
+                pmm.releaseNetworkHold()
             }
         }
     }
