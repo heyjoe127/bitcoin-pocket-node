@@ -43,6 +43,23 @@ fun SendPaymentScreen(
 
     var invoiceInput by remember { mutableStateOf("") }
 
+    // Hold network open while on this screen (peer connects while user reviews invoice)
+    val networkHeld = remember { mutableStateOf(false) }
+    DisposableEffect(Unit) {
+        val pmm = com.pocketnode.power.PowerModeManager(context)
+        val creds = com.pocketnode.util.ConfigGenerator.readCredentials(context)
+        if (creds != null) {
+            pmm.setRpc(com.pocketnode.rpc.BitcoinRpcClient(creds.first, creds.second))
+        }
+        pmm.holdNetwork()
+        networkHeld.value = true
+        onDispose {
+            if (networkHeld.value) {
+                pmm.releaseNetworkHold()
+            }
+        }
+    }
+
     // Apply scanned QR result when it arrives
     LaunchedEffect(scannedQr) {
         if (scannedQr != null) {
@@ -236,24 +253,12 @@ fun SendPaymentScreen(
                     error = null
                     result = null
                     scope.launch {
-                        val pmm = com.pocketnode.power.PowerModeManager(context)
-                        val creds = com.pocketnode.util.ConfigGenerator.readCredentials(context)
-                        if (creds != null) {
-                            pmm.setRpc(com.pocketnode.rpc.BitcoinRpcClient(creds.first, creds.second))
-                        }
-                        pmm.holdNetwork()
-                        // Brief wait for peer connection
-                        kotlinx.coroutines.delay(2000)
                         val payResult = withContext(Dispatchers.IO) {
-                            try {
-                                if (isOffer) {
-                                    val amountMsat = offerAmountSats.toLongOrNull()?.let { it * 1000 }
-                                    lightning.payOffer(cleanInput, amountMsat)
-                                } else {
-                                    lightning.payInvoice(cleanInput)
-                                }
-                            } finally {
-                                pmm.releaseNetworkHold()
+                            if (isOffer) {
+                                val amountMsat = offerAmountSats.toLongOrNull()?.let { it * 1000 }
+                                lightning.payOffer(cleanInput, amountMsat)
+                            } else {
+                                lightning.payInvoice(cleanInput)
                             }
                         }
                         payResult.onSuccess {
