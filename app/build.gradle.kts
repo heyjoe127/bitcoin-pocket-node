@@ -31,8 +31,8 @@ android {
         applicationId = "com.pocketnode"
         minSdk = 28
         targetSdk = 34
-        versionCode = 11
-        versionName = "0.20.1-alpha"
+        versionCode = 12
+        versionName = "0.21-alpha"
 
         // Only include ARM64 native libs (bitcoind + libbwt_jni)
         ndk {
