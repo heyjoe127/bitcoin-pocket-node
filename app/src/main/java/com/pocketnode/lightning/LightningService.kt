@@ -899,6 +899,26 @@ class LightningService(private val context: Context) {
 
     fun openChannel(nodeId: String, address: String, amountSats: Long): Result<String> {
         val n = node ?: return Result.failure(Exception("Node not running"))
+
+        // Temporarily enable network if not in Max mode
+        val needsNetworkHold = com.pocketnode.power.PowerModeManager.modeFlow.value != com.pocketnode.power.PowerModeManager.Mode.MAX
+        if (needsNetworkHold) {
+            try {
+                val prefs = context.getSharedPreferences("bitcoind_config", Context.MODE_PRIVATE)
+                val user = prefs.getString("rpc_user", "pocketnode") ?: "pocketnode"
+                val pass = prefs.getString("rpc_password", "") ?: ""
+                val port = prefs.getInt("rpc_port", 8332)
+                val rpc = BitcoinRpcClient(user, pass, port = port)
+                val params = org.json.JSONArray().apply { put(true) }
+                kotlinx.coroutines.runBlocking { rpc.call("setnetworkactive", params) }
+                Log.i(TAG, "Network enabled for channel open")
+                // Give bitcoind time to establish peers
+                Thread.sleep(5_000)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to enable network: ${e.message}")
+            }
+        }
+
         return try {
             Log.i(TAG, "Connecting to peer $nodeId at $address")
             n.connect(nodeId, address, true)
@@ -937,6 +957,22 @@ class LightningService(private val context: Context) {
             // Save floor for connection failures (peer blocked us)
             savePeerMinFloor(nodeId, amountSats)
             Result.failure(e)
+        } finally {
+            // Restore network state if we temporarily enabled it
+            if (needsNetworkHold) {
+                try {
+                    val prefs = context.getSharedPreferences("bitcoind_config", Context.MODE_PRIVATE)
+                    val user = prefs.getString("rpc_user", "pocketnode") ?: "pocketnode"
+                    val pass = prefs.getString("rpc_password", "") ?: ""
+                    val port = prefs.getInt("rpc_port", 8332)
+                    val rpc = BitcoinRpcClient(user, pass, port = port)
+                    val params = org.json.JSONArray().apply { put(false) }
+                    kotlinx.coroutines.runBlocking { rpc.call("setnetworkactive", params) }
+                    Log.i(TAG, "Network restored after channel open")
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to restore network: ${e.message}")
+                }
+            }
         }
     }
 

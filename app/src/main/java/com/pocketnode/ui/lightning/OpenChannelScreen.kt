@@ -257,37 +257,27 @@ fun OpenChannelScreen(
                     }
                 },
                 modifier = Modifier.fillMaxWidth().height(48.dp),
-                enabled = !needsMaxMode && !opening && nodeId.isNotBlank() && address.isNotBlank() && amountSats.isNotBlank(),
+                enabled = !opening && nodeId.isNotBlank() && address.isNotBlank() && amountSats.isNotBlank(),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFFFF9800),
-                    disabledContainerColor = if (needsMaxMode) Color(0xFF607D8B).copy(alpha = 0.3f)
-                        else ButtonDefaults.buttonColors().disabledContainerColor
+                    containerColor = Color(0xFFFF9800)
                 )
             ) {
                 if (opening) {
                     CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
                     Spacer(Modifier.width(8.dp))
-                    Text("Opening...")
+                    Text(if (needsMaxMode) "Connecting..." else "Opening...")
                 } else {
                     Text("⚡ Open Channel")
                 }
             }
 
-            // Power mode warning
+            // Power mode info
             if (needsMaxMode) {
-                androidx.compose.material3.Card(
-                    colors = androidx.compose.material3.CardDefaults.cardColors(
-                        containerColor = Color(0xFFFF9800).copy(alpha = 0.15f)
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        "⚡ Switch to Max Data mode to open channels",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color(0xFFFF9800),
-                        modifier = Modifier.padding(12.dp)
-                    )
-                }
+                Text(
+                    "Network will be temporarily enabled to connect and open the channel",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.Gray
+                )
             }
 
 
