@@ -120,21 +120,7 @@ fun LightningPayScreen(
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Top bar: minimal, just the gear icon
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.End
-            ) {
-                IconButton(onClick = onNavigateToLightning) {
-                    Icon(
-                        Icons.Default.Settings,
-                        contentDescription = "Lightning Settings",
-                        tint = SubtleGrey
-                    )
-                }
-            }
+
 
             // Bootstrap status (only when not ready)
             if (!isReady) {
@@ -358,7 +344,32 @@ fun LightningPayScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(48.dp))
+                Spacer(modifier = Modifier.height(24.dp))
+
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 32.dp),
+                    color = Color(0xFF333333)
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                TextButton(
+                    onClick = onNavigateToLightning,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Settings,
+                        contentDescription = null,
+                        tint = SubtleGrey,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Settings", color = SubtleGrey)
+                }
+
+                Spacer(modifier = Modifier.height(32.dp))
             }
         }
     }
