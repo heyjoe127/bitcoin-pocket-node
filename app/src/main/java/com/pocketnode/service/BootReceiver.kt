@@ -18,8 +18,12 @@ class BootReceiver : BroadcastReceiver() {
     }
 
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
+        if (intent.action != Intent.ACTION_BOOT_COMPLETED &&
+            intent.action != "android.intent.action.LOCKED_BOOT_COMPLETED") return
 
+        Log.i(TAG, "Boot broadcast received: ${intent.action}")
+
+        // Try credential-encrypted storage first (normal prefs), fall back to device-encrypted
         val prefs = context.getSharedPreferences("pocketnode_prefs", Context.MODE_PRIVATE)
         val autoStart = prefs.getBoolean(PREF_AUTO_START, false)
 
