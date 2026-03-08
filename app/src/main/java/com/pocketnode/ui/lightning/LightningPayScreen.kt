@@ -24,6 +24,7 @@ import android.content.Intent
 import com.pocketnode.lightning.LightningService
 import com.pocketnode.service.BitcoindService
 import org.lightningdevkit.ldknode.PaymentDirection
+import org.lightningdevkit.ldknode.PaymentKind
 import org.lightningdevkit.ldknode.PaymentStatus
 
 // Color scheme: dark + white, orange accent for primary action only
@@ -105,9 +106,10 @@ fun LightningPayScreen(
     val onchainSats = lightningState.onchainBalanceSats
 
     // Recent payments
+    // Recent Lightning payments only (no on-chain)
     val payments = remember(lightningState) {
         if (ldkRunning) lightning.listPayments()
-            .filter { it.status == PaymentStatus.SUCCEEDED }
+            .filter { it.status == PaymentStatus.SUCCEEDED && it.kind !is PaymentKind.Onchain }
             .sortedByDescending { it.latestUpdateTimestamp }
             .take(5)
         else emptyList()
