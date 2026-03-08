@@ -134,7 +134,21 @@ fun LightningPayScreen(
 
             // Bootstrap status (only when not ready)
             if (!isReady) {
-                Spacer(modifier = Modifier.height(60.dp))
+                // Settings access during loading (e.g. after channel close)
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    IconButton(onClick = onNavigateToLightning) {
+                        Icon(
+                            Icons.Default.Settings,
+                            contentDescription = "Settings",
+                            tint = SubtleGrey
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
 
                 BootstrapStatus(
                     nodeRunning = nodeRunning,
