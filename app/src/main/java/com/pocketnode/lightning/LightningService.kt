@@ -727,7 +727,7 @@ class LightningService(private val context: Context) {
 
             // Mark deposit address as used if on-chain balance increased
             val prevBalance = _state.value.onchainBalanceSats
-            val newBalance = balances.spendableOnchainBalanceSats.toLong()
+            val newBalance = balances.totalOnchainBalanceSats.toLong()
             if (newBalance > prevBalance && prevBalance >= 0) {
                 cachedDepositAddress?.let { markAddressUsed(it) }
                 cachedDepositAddress = null
