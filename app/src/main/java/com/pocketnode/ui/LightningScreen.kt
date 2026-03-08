@@ -358,16 +358,29 @@ fun LightningScreen(
                                 }
                             }
                             Column(horizontalAlignment = Alignment.End) {
-                                val isPendingClose = effectiveState.channelCount == 0 && effectiveState.lightningBalanceSats > 0
-                                Text(
-                                    if (isPendingClose) "Pending Close" else "Lightning",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = if (isPendingClose) Color(0xFFFF9800)
-                                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                                )
-                                Text("${"%,d".format(effectiveState.lightningBalanceSats)} sats",
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isPendingClose) Color(0xFFFF9800) else Color.Unspecified)
+                                val pendingCloseSats = effectiveState.pendingCloseSats
+                                val orphanLightning = effectiveState.channelCount == 0 && effectiveState.lightningBalanceSats > 0
+                                val effectivePending = if (orphanLightning) effectiveState.lightningBalanceSats else pendingCloseSats
+                                val activeLightning = effectiveState.lightningBalanceSats - effectivePending
+
+                                if (activeLightning > 0) {
+                                    Text("Lightning", style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                                    Text("${"%,d".format(activeLightning)} sats",
+                                        fontWeight = FontWeight.Bold)
+                                }
+                                if (effectivePending > 0) {
+                                    if (activeLightning > 0) Spacer(modifier = Modifier.height(4.dp))
+                                    Text("Pending Close", style = MaterialTheme.typography.labelSmall,
+                                        color = Color(0xFFFF9800))
+                                    Text("${"%,d".format(effectivePending)} sats",
+                                        fontWeight = FontWeight.Bold, color = Color(0xFFFF9800))
+                                }
+                                if (activeLightning <= 0 && effectivePending <= 0) {
+                                    Text("Lightning", style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                                    Text("0 sats", fontWeight = FontWeight.Bold)
+                                }
                             }
                         }
                     }
