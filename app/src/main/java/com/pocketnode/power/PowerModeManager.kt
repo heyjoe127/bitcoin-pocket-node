@@ -341,7 +341,7 @@ class PowerModeManager(private val context: Context) {
                 delay(5_000)
             }
 
-            if (synced) {
+            if (synced && getLdkHeight != null) {
                 // Wait for LDK to reach bitcoind's tip height
                 val info = client.getBlockchainInfo()
                 val bitcoindHeight = info?.optLong("blocks", 0L) ?: 0L
