@@ -191,7 +191,7 @@ fun LightningPayScreen(
             }
 
             if (isReady) {
-                Spacer(modifier = Modifier.height(200.dp))
+                Spacer(modifier = Modifier.height(400.dp))
             }
 
             // === Below the fold: details ===
