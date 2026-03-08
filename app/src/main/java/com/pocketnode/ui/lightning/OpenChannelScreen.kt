@@ -47,6 +47,18 @@ fun OpenChannelScreen(
     var error by remember { mutableStateOf<String?>(null) }
     val powerMode by PowerModeManager.modeFlow.collectAsState()
     val needsMaxMode = powerMode != PowerModeManager.Mode.MAX
+    var syncingFees by remember { mutableStateOf(false) }
+    var feeSynced by remember { mutableStateOf(false) }
+    var syncedFeeRate by remember { mutableStateOf<String?>(null) }
+
+    // Clean up network hold when leaving the screen
+    DisposableEffect(Unit) {
+        onDispose {
+            if (syncingFees) {
+                PowerModeManager(context).releaseNetworkHold()
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -272,16 +284,74 @@ fun OpenChannelScreen(
             }
 
             // Power mode info
-            if (needsMaxMode) {
+            if (needsMaxMode && !feeSynced) {
                 Text(
                     "Network will be temporarily enabled to connect and open the channel",
                     style = MaterialTheme.typography.bodySmall,
                     color = Color.Gray
                 )
+                if (!syncingFees) {
+                    Text(
+                        "⚠️ Fee estimation unavailable. Funding tx will use minimum fee rate which may be slow to confirm in high-fee environments.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFFFF9800)
+                    )
+                    OutlinedButton(
+                        onClick = {
+                            syncingFees = true
+                            val pmm = PowerModeManager(context)
+                            val creds = com.pocketnode.util.ConfigGenerator.readCredentials(context)
+                            if (creds != null) {
+                                pmm.setRpc(com.pocketnode.rpc.BitcoinRpcClient(creds.first, creds.second))
+                            }
+                            pmm.holdNetwork()
+                            scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                // Poll estimatesmartfee until it returns valid data
+                                val rpc = if (creds != null) com.pocketnode.rpc.BitcoinRpcClient(creds.first, creds.second) else null
+                                if (rpc != null) {
+                                    repeat(180) { // up to 30 min (10s intervals)
+                                        try {
+                                            val params = org.json.JSONArray().apply { put(6) }
+                                            val result = rpc.call("estimatesmartfee", params)
+                                            val feeRate = result?.optDouble("feerate", -1.0) ?: -1.0
+                                            if (feeRate > 0) {
+                                                val satPerVb = feeRate * 100_000
+                                                syncedFeeRate = if (satPerVb < 10) "%.1f sat/vB".format(satPerVb) else "%.0f sat/vB".format(satPerVb)
+                                                feeSynced = true
+                                                return@launch
+                                            }
+                                        } catch (_: Exception) {}
+                                        kotlinx.coroutines.delay(10_000)
+                                    }
+                                }
+                                // Timed out
+                                syncingFees = false
+                                pmm.releaseNetworkHold()
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("📡 Sync Fees")
+                    }
+                } else {
+                    Row(
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        Text(
+                            "Syncing fee data (network held open)...",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFFFF9800)
+                        )
+                    }
+                }
+            }
+            if (feeSynced && syncedFeeRate != null) {
                 Text(
-                    "⚠️ Fee estimation unavailable. Funding tx will use minimum fee rate which may be slow to confirm in high-fee environments.",
+                    "✅ Fee rate: $syncedFeeRate",
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color(0xFFFF9800)
+                    color = Color(0xFF4CAF50)
                 )
             }
 
