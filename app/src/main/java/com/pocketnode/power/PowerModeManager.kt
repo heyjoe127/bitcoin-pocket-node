@@ -113,7 +113,11 @@ class PowerModeManager(private val context: Context) {
     fun startInitialSyncHold(scope: CoroutineScope, rpcClient: BitcoinRpcClient) {
         if (_initialSyncHold.value) return
         _initialSyncHold.value = true
-        Log.i(TAG, "Initial sync hold: forcing Max mode until IBD completes")
+        // Preserve current manual mode so we can restore it after IBD
+        if (!prefs.contains(PREF_KEY_MANUAL_MODE)) {
+            prefs.edit().putString(PREF_KEY_MANUAL_MODE, _modeFlow.value.name).apply()
+        }
+        Log.i(TAG, "Initial sync hold: forcing Max mode until IBD completes (will restore ${prefs.getString(PREF_KEY_MANUAL_MODE, "LOW")})")
         setMode(Mode.MAX, scope, isAuto = true)
 
         initialSyncJob?.cancel()
@@ -124,9 +128,14 @@ class PowerModeManager(private val context: Context) {
                     val info = rpcClient.call("getblockchaininfo") ?: continue
                     val ibd = info.optBoolean("initialblockdownload", true)
                     if (!ibd) {
-                        Log.i(TAG, "Initial sync hold: IBD complete, releasing Max hold")
                         _initialSyncHold.value = false
                         initialSyncJob = null
+                        // Restore the user's manual mode choice (saved before IBD forced Max)
+                        val manualMode = Mode.fromString(
+                            prefs.getString(PREF_KEY_MANUAL_MODE, "LOW") ?: "LOW"
+                        )
+                        Log.i(TAG, "Initial sync hold: IBD complete, restoring $manualMode mode")
+                        setMode(manualMode, scope, isAuto = true)
                         return@launch
                     }
                 } catch (_: Exception) {}
