@@ -758,6 +758,15 @@ class LightningService(private val context: Context) {
                     else -> LightningState.PendingClose("", 0, "Unknown")
                 }
             }.filter { it.amountSats > 0 }
+            if (pendingCloses.isNotEmpty() || balances.pendingBalancesFromChannelClosures.isNotEmpty()) {
+                Log.d(TAG, "pendingCloses: raw=${balances.pendingBalancesFromChannelClosures.size} parsed=${pendingCloses.size}")
+                pendingCloses.forEach { pc ->
+                    Log.d(TAG, "  close: ${pc.amountSats}sats status=${pc.status} blocks=${pc.blocksRemaining} txid=${pc.txid?.take(16)}")
+                }
+                balances.pendingBalancesFromChannelClosures.forEach { psb ->
+                    Log.d(TAG, "  raw: ${psb::class.simpleName}")
+                }
+            }
             val pendingCloseTotalSats = pendingCloses.sumOf { it.amountSats }
 
             // Mark deposit address as used if on-chain balance increased

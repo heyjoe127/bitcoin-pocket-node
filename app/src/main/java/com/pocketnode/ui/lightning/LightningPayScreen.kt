@@ -158,9 +158,59 @@ fun LightningPayScreen(
                 )
 
                 // Pending channel close info
-                if (lightningState.pendingCloseDetails.isNotEmpty()) {
+                // Also show when lightning balance exists but no channels (force-close awaiting confirm)
+                val hasPendingFunds = lightningState.pendingCloseDetails.isNotEmpty() ||
+                    (lightningState.channelCount == 0 && lightningState.lightningBalanceSats > 0)
+                if (hasPendingFunds) {
                     Spacer(modifier = Modifier.height(24.dp))
-                    lightningState.pendingCloseDetails.forEach { close ->
+                    if (lightningState.pendingCloseDetails.isNotEmpty()) {
+                        lightningState.pendingCloseDetails.forEach { close ->
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 24.dp, vertical = 4.dp),
+                                colors = CardDefaults.cardColors(containerColor = CardBg)
+                            ) {
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Text(
+                                        "Channel Closing",
+                                        color = Color(0xFFFF9800),
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        "${"%,d".format(close.amountSats)} sats returning",
+                                        color = DimWhite,
+                                        fontSize = 13.sp
+                                    )
+                                    if (close.blocksRemaining > 0) {
+                                        val hours = (close.blocksRemaining * 10) / 60
+                                        Text(
+                                            "${close.blocksRemaining} blocks remaining (~${hours}h)",
+                                            color = SubtleGrey,
+                                            fontSize = 12.sp
+                                        )
+                                    }
+                                    if (close.txid != null) {
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            close.txid.take(16) + "...",
+                                            color = SubtleGrey,
+                                            fontSize = 11.sp,
+                                            fontFamily = FontFamily.Monospace
+                                        )
+                                    }
+                                    Text(
+                                        close.status,
+                                        color = SubtleGrey,
+                                        fontSize = 11.sp
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        // Fallback: lightning balance with no channels = force-close pending
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -176,31 +226,14 @@ fun LightningPayScreen(
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(
-                                    "${"%,d".format(close.amountSats)} sats returning",
+                                    "${"%,d".format(lightningState.lightningBalanceSats)} sats returning",
                                     color = DimWhite,
                                     fontSize = 13.sp
                                 )
-                                if (close.blocksRemaining > 0) {
-                                    val hours = (close.blocksRemaining * 10) / 60
-                                    Text(
-                                        "${close.blocksRemaining} blocks remaining (~${hours}h)",
-                                        color = SubtleGrey,
-                                        fontSize = 12.sp
-                                    )
-                                }
-                                if (close.txid != null) {
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        close.txid.take(16) + "...",
-                                        color = SubtleGrey,
-                                        fontSize = 11.sp,
-                                        fontFamily = FontFamily.Monospace
-                                    )
-                                }
                                 Text(
-                                    close.status,
+                                    "Waiting for close tx to confirm",
                                     color = SubtleGrey,
-                                    fontSize = 11.sp
+                                    fontSize = 12.sp
                                 )
                             }
                         }
