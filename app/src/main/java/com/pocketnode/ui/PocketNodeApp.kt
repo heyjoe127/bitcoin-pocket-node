@@ -99,7 +99,7 @@ fun PocketNodeApp(
         NavHost(navController = navController, startDestination = startDest) {
             composable("lightning_pay") {
                 com.pocketnode.ui.lightning.LightningPayScreen(
-                    onNavigateToDashboard = { navController.navigate("status") },
+                    onNavigateToLightning = { navController.navigate("lightning") },
                     onNavigateToScanner = { navController.navigate("lightning_send_pay") },
                     onNavigateToReceive = { navController.navigate("lightning_receive") },
                     onNavigateToPaymentHistory = { navController.navigate("lightning_history") }

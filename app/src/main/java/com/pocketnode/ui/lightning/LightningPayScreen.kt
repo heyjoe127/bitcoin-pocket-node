@@ -40,7 +40,7 @@ private val CardBg = Color(0xFF1A1A1A)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LightningPayScreen(
-    onNavigateToDashboard: () -> Unit = {},
+    onNavigateToLightning: () -> Unit = {},
     onNavigateToScanner: () -> Unit = {},
     onNavigateToReceive: () -> Unit = {},
     onNavigateToPaymentHistory: () -> Unit = {}
@@ -115,10 +115,10 @@ fun LightningPayScreen(
                     .padding(horizontal = 16.dp, vertical = 12.dp),
                 horizontalArrangement = Arrangement.End
             ) {
-                IconButton(onClick = onNavigateToDashboard) {
+                IconButton(onClick = onNavigateToLightning) {
                     Icon(
                         Icons.Default.Settings,
-                        contentDescription = "Dashboard",
+                        contentDescription = "Lightning Settings",
                         tint = SubtleGrey
                     )
                 }
