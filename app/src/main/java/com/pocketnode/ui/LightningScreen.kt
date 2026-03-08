@@ -601,6 +601,71 @@ fun LightningScreen(
                                 )
                             }
 
+                            // Pending channel closes
+                            val pendingCloses = effectiveState.pendingCloseDetails
+                            val hasOrphanLightning = effectiveState.channelCount == 0 && effectiveState.lightningBalanceSats > 0
+                            if (pendingCloses.isNotEmpty() || hasOrphanLightning) {
+                                Spacer(Modifier.height(12.dp))
+                                Divider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+                                Spacer(Modifier.height(8.dp))
+                                Text(
+                                    "Closing",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = Color(0xFFFF9800)
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                if (pendingCloses.isNotEmpty()) {
+                                    pendingCloses.forEach { close ->
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Column {
+                                                Text(
+                                                    close.txid?.take(16)?.plus("...") ?: "Pending",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    fontFamily = FontFamily.Monospace
+                                                )
+                                                val statusText = if (close.blocksRemaining > 0) {
+                                                    val hours = (close.blocksRemaining * 10) / 60
+                                                    "${close.status} (${close.blocksRemaining} blocks, ~${hours}h)"
+                                                } else close.status
+                                                Text(statusText, style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                                            }
+                                            Text(
+                                                "${"%,d".format(close.amountSats)} sats",
+                                                style = MaterialTheme.typography.bodySmall
+                                            )
+                                        }
+                                    }
+                                } else {
+                                    // Fallback: lightning balance with no channels
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column {
+                                            Text(
+                                                "Force close pending",
+                                                style = MaterialTheme.typography.bodySmall
+                                            )
+                                            Text(
+                                                "Waiting for close tx to confirm",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                            )
+                                        }
+                                        Text(
+                                            "${"%,d".format(effectiveState.lightningBalanceSats)} sats",
+                                            style = MaterialTheme.typography.bodySmall
+                                        )
+                                    }
+                                }
+                            }
+
                             Spacer(Modifier.height(4.dp))
                             OutlinedButton(onClick = onNavigateToOpenChannel) {
                                 Text("Open Another Channel")
