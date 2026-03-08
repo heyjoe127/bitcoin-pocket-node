@@ -431,6 +431,7 @@ fun LightningScreen(
                             // Channel list — tap to close
                             Spacer(Modifier.height(12.dp))
                             val channels = remember(effectiveState) { lightning.listChannels() }
+                            val peerAliases = remember { context.getSharedPreferences("peer_aliases", android.content.Context.MODE_PRIVATE) }
                             var selectedChannel by remember { mutableStateOf<org.lightningdevkit.ldknode.ChannelDetails?>(null) }
                             channels.forEach { ch ->
                                 Divider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
@@ -444,11 +445,20 @@ fun LightningScreen(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Column {
-                                        Text(
-                                            ch.counterpartyNodeId.take(12) + "...",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            fontFamily = FontFamily.Monospace
-                                        )
+                                        val peerAlias = peerAliases.getString(ch.counterpartyNodeId, null)
+                                        if (peerAlias != null) {
+                                            Text(
+                                                peerAlias,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        } else {
+                                            Text(
+                                                ch.counterpartyNodeId.take(12) + "...",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                fontFamily = FontFamily.Monospace
+                                            )
+                                        }
                                         val confs = ch.confirmations?.toInt() ?: 0
                                         val confsReq = ch.confirmationsRequired?.toInt() ?: 3
                                         val fundingFee = effectiveState.channelFeeRates[ch.channelId]

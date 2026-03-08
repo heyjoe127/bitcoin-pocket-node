@@ -253,6 +253,11 @@ fun OpenChannelScreen(
                     result = null
                     scope.launch {
                         withContext(Dispatchers.IO) {
+                            // Save peer alias for channel display
+                            if (prefillAlias.isNotEmpty()) {
+                                context.getSharedPreferences("peer_aliases", android.content.Context.MODE_PRIVATE)
+                                    .edit().putString(nodeId, prefillAlias).apply()
+                            }
                             lightning.openChannel(nodeId, address, amountSats.toLong())
                         }.onSuccess {
                             channelId = it
