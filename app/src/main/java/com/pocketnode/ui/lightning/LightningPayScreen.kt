@@ -394,15 +394,7 @@ private fun BootstrapStatus(
                 StatusStep("Lightning node", ldkStatus == LightningService.LightningState.Status.RUNNING)
                 StatusStep("Channel active", channelCount > 0 && ldkStatus == LightningService.LightningState.Status.RUNNING)
 
-                if (ldkStatus == LightningService.LightningState.Status.STARTING ||
-                    ldkStatus == LightningService.LightningState.Status.RECOVERING) {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    LinearProgressIndicator(
-                        modifier = Modifier.fillMaxWidth(),
-                        color = BitcoinOrange,
-                        trackColor = Color(0xFF333333)
-                    )
-                }
+
             }
         }
     }
