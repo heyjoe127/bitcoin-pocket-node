@@ -405,18 +405,36 @@ class LightningService(private val context: Context) {
                     delay(10_000)
                     try {
                         updateState()
-                        // Trigger wallet sync when pending close funds exist (every 5 min)
-                        // This rebroadcasts pending claims (close txs, sweeps)
+                        // Handle pending close: LDK's broadcast queue is fire-and-forget.
+                        // If the commitment tx broadcast failed (e.g. network off during burst),
+                        // the tx is lost from the queue. Only fix: restart LDK so it
+                        // reconstructs from channel monitor and rebroadcasts on startup.
                         val st = _state.value
                         val now = System.currentTimeMillis()
-                        if ((st.channelCount == 0 && st.lightningBalanceSats > 0 || st.pendingCloseSats > 0)
-                            && now - lastWalletSync > 300_000) {
-                            try {
-                                node?.syncWallets()
-                                lastWalletSync = now
-                                Log.d(TAG, "syncWallets: triggered for pending close funds")
-                            } catch (e: Exception) {
-                                Log.d(TAG, "syncWallets: ${e.message}")
+                        val hasOrphanFunds = st.channelCount == 0 && st.lightningBalanceSats > 0
+                        if ((hasOrphanFunds || st.pendingCloseSats > 0) && now - lastWalletSync > 300_000) {
+                            lastWalletSync = now
+                            if (hasOrphanFunds && st.pendingCloseDetails.isEmpty()) {
+                                // Commitment tx likely never broadcast — restart LDK
+                                Log.w(TAG, "Orphan lightning balance detected with no pending sweeps. Restarting LDK to rebroadcast commitment tx.")
+                                try {
+                                    stop()
+                                    delay(2000)
+                                    val creds = com.pocketnode.util.ConfigGenerator.readCredentials(context)
+                                    if (creds != null) {
+                                        start(creds.first, creds.second)
+                                    }
+                                } catch (e: Exception) {
+                                    Log.e(TAG, "Failed to restart LDK for rebroadcast: ${e.message}")
+                                }
+                            } else {
+                                // Pending sweeps exist, just sync wallets
+                                try {
+                                    node?.syncWallets()
+                                    Log.d(TAG, "syncWallets: triggered for pending close funds")
+                                } catch (e: Exception) {
+                                    Log.d(TAG, "syncWallets: ${e.message}")
+                                }
                             }
                         }
                     } catch (_: Exception) {}
