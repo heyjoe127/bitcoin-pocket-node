@@ -64,41 +64,43 @@ fun FeeEstimatePanel() {
             Spacer(modifier = Modifier.height(12.dp))
             val noData = nextBlockFee == null && thirtyMinFee == null && oneHourFee == null
             val powerMode by com.pocketnode.power.PowerModeManager.modeFlow.collectAsState()
-            if (noData && powerMode != com.pocketnode.power.PowerModeManager.Mode.MAX) {
+            val notMax = powerMode != com.pocketnode.power.PowerModeManager.Mode.MAX
+            if (noData && notMax) {
                 Text(
                     "Fee estimation needs Max mode (continuous mempool data)",
                     style = MaterialTheme.typography.bodySmall,
                     color = Color.Gray
                 )
                 Spacer(modifier = Modifier.height(8.dp))
-                if (!syncingFees) {
-                    androidx.compose.material3.OutlinedButton(
-                        onClick = {
-                            syncingFees = true
-                            val pmm = com.pocketnode.power.PowerModeManager(context)
-                            if (creds != null) {
-                                pmm.setRpc(BitcoinRpcClient(creds.first, creds.second))
-                            }
-                            pmm.holdNetwork()
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("📡 Sync Fees")
-                    }
-                } else {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                        Text(
-                            "Syncing fee data (network held open)...",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFFFF9800)
-                        )
-                    }
+            }
+            if (notMax && !syncingFees) {
+                androidx.compose.material3.OutlinedButton(
+                    onClick = {
+                        syncingFees = true
+                        val pmm = com.pocketnode.power.PowerModeManager(context)
+                        if (creds != null) {
+                            pmm.setRpc(BitcoinRpcClient(creds.first, creds.second))
+                        }
+                        pmm.holdNetwork()
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("📡 Sync Fees")
                 }
-            } else {
+            } else if (syncingFees) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    Text(
+                        "Syncing fee data (network held open)...",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFFFF9800)
+                    )
+                }
+            }
+            if (!noData) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     FeeEstimateItem("Next Block", formatFee(nextBlockFee), FeePriority.High, Modifier.weight(1f))
                     FeeEstimateItem("30 min", formatFee(thirtyMinFee), FeePriority.Medium, Modifier.weight(1f))
