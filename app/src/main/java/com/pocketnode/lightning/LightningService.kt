@@ -720,10 +720,17 @@ class LightningService(private val context: Context) {
             }.filter { it.amountSats > 0 }
             val pendingCloseTotalSats = pendingCloses.sumOf { it.amountSats }
 
+            // Clear cached deposit address if balance increased (new deposit received)
+            val prevBalance = _state.value.onchainBalanceSats
+            val newBalance = balances.spendableOnchainBalanceSats.toLong()
+            if (newBalance > prevBalance && prevBalance >= 0) {
+                cachedDepositAddress = null
+            }
+
             _state.value = LightningState(
                 status = LightningState.Status.RUNNING,
                 nodeId = n.nodeId(),
-                onchainBalanceSats = balances.spendableOnchainBalanceSats.toLong(),
+                onchainBalanceSats = newBalance,
                 lightningBalanceSats = balances.totalLightningBalanceSats.toLong(),
                 channelCount = channels.size,
                 totalCapacitySats = channels.sumOf { it.channelValueSats.toLong() },
@@ -751,7 +758,10 @@ class LightningService(private val context: Context) {
             when (event) {
                 is Event.PaymentSuccessful -> Log.i(TAG, "Payment successful: ${event.paymentId}")
                 is Event.PaymentFailed     -> Log.w(TAG, "Payment failed: ${event.paymentId}")
-                is Event.PaymentReceived   -> Log.i(TAG, "Payment received: ${event.amountMsat} msat")
+                is Event.PaymentReceived   -> {
+                    Log.i(TAG, "Payment received: ${event.amountMsat} msat")
+                    cachedDepositAddress = null // Clear so next request gets a fresh address
+                }
                 is Event.ChannelPending    -> {
                     Log.i(TAG, "Channel pending: ${event.channelId} (funding txo: ${event.fundingTxo})")
                     channelEventLatch?.countDown()
