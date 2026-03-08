@@ -720,7 +720,13 @@ class LightningService(private val context: Context) {
             }.filter { it.amountSats > 0 }
             val pendingCloseTotalSats = pendingCloses.sumOf { it.amountSats }
 
+            // Mark deposit address as used if on-chain balance increased
+            val prevBalance = _state.value.onchainBalanceSats
             val newBalance = balances.spendableOnchainBalanceSats.toLong()
+            if (newBalance > prevBalance && prevBalance >= 0) {
+                cachedDepositAddress?.let { markAddressUsed(it) }
+                cachedDepositAddress = null
+            }
 
             _state.value = LightningState(
                 status = LightningState.Status.RUNNING,
@@ -753,7 +759,11 @@ class LightningService(private val context: Context) {
             when (event) {
                 is Event.PaymentSuccessful -> Log.i(TAG, "Payment successful: ${event.paymentId}")
                 is Event.PaymentFailed     -> Log.w(TAG, "Payment failed: ${event.paymentId}")
-                is Event.PaymentReceived   -> Log.i(TAG, "Payment received: ${event.amountMsat} msat")
+                is Event.PaymentReceived   -> {
+                    Log.i(TAG, "Payment received: ${event.amountMsat} msat")
+                    cachedDepositAddress?.let { markAddressUsed(it) }
+                    cachedDepositAddress = null
+                }
                 is Event.ChannelPending    -> {
                     Log.i(TAG, "Channel pending: ${event.channelId} (funding txo: ${event.fundingTxo})")
                     channelEventLatch?.countDown()
@@ -1078,26 +1088,17 @@ class LightningService(private val context: Context) {
         }
     }
 
-    /** Quick check: does this address have any UTXOs? Single-address scantxoutset is fast. */
+    /** Check if address was ever used (tracked locally, no RPC needed). */
     private fun isAddressUsed(address: String): Boolean {
-        return try {
-            val prefs = context.getSharedPreferences("pocketnode_prefs", MODE_PRIVATE)
-            val rpc = BitcoinRpcClient(
-                prefs.getString("rpc_user", "") ?: "",
-                prefs.getString("rpc_password", "") ?: "",
-                port = prefs.getInt("rpc_port", 8332)
-            )
-            val scanObj = org.json.JSONArray()
-            val desc = org.json.JSONObject()
-            desc.put("desc", "addr($address)")
-            scanObj.put(desc)
-            val result = rpc.callSync("scantxoutset", listOf("start", scanObj))
-            val unspents = result?.optJSONArray("unspents")
-            (unspents != null && unspents.length() > 0)
-        } catch (e: Exception) {
-            Log.w(TAG, "isAddressUsed check failed: ${e.message}")
-            false // Assume unused if check fails
-        }
+        val usedSet = depositAddressPrefs.getStringSet("used_addresses", emptySet()) ?: emptySet()
+        return address in usedSet
+    }
+
+    private fun markAddressUsed(address: String) {
+        val usedSet = depositAddressPrefs.getStringSet("used_addresses", emptySet())?.toMutableSet() ?: mutableSetOf()
+        usedSet.add(address)
+        depositAddressPrefs.edit().putStringSet("used_addresses", usedSet).apply()
+        Log.i(TAG, "Marked deposit address as used: $address")
     }
 
     fun sendOnchain(address: String, amountSats: Long, feeRate: FeeRate? = null): Result<String> {
