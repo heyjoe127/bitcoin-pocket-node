@@ -1006,6 +1006,20 @@ class LightningService(private val context: Context) {
     fun closeChannel(userChannelId: String, counterpartyNodeId: String): Result<Unit> {
         val n = node ?: return Result.failure(Exception("Node not running"))
         return try {
+            // Bump force-close avoidance fee to accept wider peer fee range
+            // Default is very low; 1000 sats avoids force-close over fee disagreement
+            try {
+                val channels = n.listChannels()
+                val ch = channels.find { it.userChannelId == userChannelId }
+                if (ch != null) {
+                    val cfg = ch.config
+                    val updated = cfg.copy(forceCloseAvoidanceMaxFeeSatoshis = 1000UL)
+                    n.updateChannelConfig(userChannelId, counterpartyNodeId, updated)
+                    Log.i(TAG, "Set forceCloseAvoidanceMaxFeeSatoshis=1000 before cooperative close")
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not update channel config before close: ${e.message}")
+            }
             n.closeChannel(userChannelId, counterpartyNodeId)
             updateState()
             Result.success(Unit)
