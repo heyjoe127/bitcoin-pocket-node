@@ -399,17 +399,22 @@ class LightningService(private val context: Context) {
             updateState()
 
             // Periodic state refresh — safe to use coroutines here, LDK is running
+            var lastWalletSync = 0L
             stateRefreshJob = scope.launch {
                 while (isActive) {
                     delay(10_000)
                     try {
                         updateState()
-                        // Trigger wallet sync when pending close funds exist
+                        // Trigger wallet sync when pending close funds exist (every 5 min)
                         // This rebroadcasts pending claims (close txs, sweeps)
                         val st = _state.value
-                        if (st.channelCount == 0 && st.lightningBalanceSats > 0 || st.pendingCloseSats > 0) {
+                        val now = System.currentTimeMillis()
+                        if ((st.channelCount == 0 && st.lightningBalanceSats > 0 || st.pendingCloseSats > 0)
+                            && now - lastWalletSync > 300_000) {
                             try {
                                 node?.syncWallets()
+                                lastWalletSync = now
+                                Log.d(TAG, "syncWallets: triggered for pending close funds")
                             } catch (e: Exception) {
                                 Log.d(TAG, "syncWallets: ${e.message}")
                             }
