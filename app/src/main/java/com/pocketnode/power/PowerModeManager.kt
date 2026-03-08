@@ -111,18 +111,20 @@ class PowerModeManager(private val context: Context) {
     }
 
     /**
-     * Hold Max mode until initial block download completes.
-     * Call after node starts if IBD is detected.
+     * Keep network active during initial block download without changing the displayed mode.
+     * Suspends burst cycling until IBD completes, then resumes normal mode behavior.
      */
     fun startInitialSyncHold(scope: CoroutineScope, rpcClient: BitcoinRpcClient) {
         if (_initialSyncHold.value) return
         _initialSyncHold.value = true
-        // Preserve current manual mode so we can restore it after IBD
-        if (!prefs.contains(PREF_KEY_MANUAL_MODE)) {
-            prefs.edit().putString(PREF_KEY_MANUAL_MODE, _modeFlow.value.name).apply()
+
+        // Pause burst cycling and keep network on for fast sync
+        burstJob?.cancel()
+        burstJob = null
+        Log.i(TAG, "IBD detected: keeping network active (mode stays ${_modeFlow.value})")
+        scope.launch(Dispatchers.IO) {
+            setNetworkActive(rpcClient, true)
         }
-        Log.i(TAG, "Initial sync hold: forcing Max mode until IBD completes (will restore ${prefs.getString(PREF_KEY_MANUAL_MODE, "LOW")})")
-        setMode(Mode.MAX, scope, isAuto = true)
 
         initialSyncJob?.cancel()
         initialSyncJob = scope.launch(Dispatchers.IO) {
@@ -134,12 +136,9 @@ class PowerModeManager(private val context: Context) {
                     if (!ibd) {
                         _initialSyncHold.value = false
                         initialSyncJob = null
-                        // Restore the user's manual mode choice (saved before IBD forced Max)
-                        val manualMode = Mode.fromString(
-                            prefs.getString(PREF_KEY_MANUAL_MODE, "LOW") ?: "LOW"
-                        )
-                        Log.i(TAG, "Initial sync hold: IBD complete, restoring $manualMode mode")
-                        setMode(manualMode, scope, isAuto = true)
+                        Log.i(TAG, "IBD complete, resuming ${_modeFlow.value} mode behavior")
+                        // Re-apply current mode to restart burst cycling if needed
+                        applyMode(_modeFlow.value)
                         return@launch
                     }
                 } catch (_: Exception) {}
@@ -147,25 +146,19 @@ class PowerModeManager(private val context: Context) {
         }
     }
 
-    /** End the initial sync hold and restore the user's previous power mode. */
+    /** End the initial sync hold and resume normal mode behavior. */
     fun endInitialSyncHold(scope: CoroutineScope) {
         initialSyncJob?.cancel()
         initialSyncJob = null
         _initialSyncHold.value = false
-        val manualMode = Mode.fromString(
-            prefs.getString(PREF_KEY_MANUAL_MODE, "LOW") ?: "LOW"
-        )
-        Log.i(TAG, "Initial sync hold ended, restoring $manualMode mode")
-        setMode(manualMode, scope, isAuto = true)
+        Log.i(TAG, "IBD hold ended, resuming ${_modeFlow.value} mode behavior")
+        scope.launch(Dispatchers.IO) {
+            applyMode(_modeFlow.value)
+        }
     }
 
     /** Switch power mode. Applies immediately. */
     fun setMode(mode: Mode, scope: CoroutineScope, isAuto: Boolean = false) {
-        // Block non-Max changes during initial sync hold
-        if (_initialSyncHold.value && mode != Mode.MAX) {
-            Log.i(TAG, "Initial sync hold active — ignoring switch to $mode")
-            return
-        }
         val previous = _modeFlow.value
         _modeFlow.value = mode
         prefs.edit().putString(PREF_KEY_POWER_MODE, mode.name).apply()
