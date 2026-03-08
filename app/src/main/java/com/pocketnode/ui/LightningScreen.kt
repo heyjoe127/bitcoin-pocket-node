@@ -358,10 +358,16 @@ fun LightningScreen(
                                 }
                             }
                             Column(horizontalAlignment = Alignment.End) {
-                                Text("Lightning", style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                                val isPendingClose = effectiveState.channelCount == 0 && effectiveState.lightningBalanceSats > 0
+                                Text(
+                                    if (isPendingClose) "Pending Close" else "Lightning",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (isPendingClose) Color(0xFFFF9800)
+                                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                )
                                 Text("${"%,d".format(effectiveState.lightningBalanceSats)} sats",
-                                    fontWeight = FontWeight.Bold)
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isPendingClose) Color(0xFFFF9800) else Color.Unspecified)
                             }
                         }
                     }
@@ -635,7 +641,7 @@ fun LightningScreen(
                                             )
                                             val statusText = if (close.blocksRemaining > 0) {
                                                 val hours = (close.blocksRemaining * 10) / 60
-                                                "${close.status} (${close.blocksRemaining} blocks, ~${hours}h)"
+                                                "${close.confirmations}/144 confirmations (~${hours}h remaining)"
                                             } else close.status
                                             Text(statusText, style = MaterialTheme.typography.labelSmall,
                                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))

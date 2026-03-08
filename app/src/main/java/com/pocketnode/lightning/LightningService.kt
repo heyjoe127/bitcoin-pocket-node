@@ -80,7 +80,8 @@ class LightningService(private val context: Context) {
             val status: String, // "Pending broadcast", "Awaiting confirmation", "Awaiting threshold"
             val confirmationHeight: Int = 0, // block height when confirmed (for countdown)
             val txid: String? = null, // spending/close txid
-            val blocksRemaining: Int = 0 // blocks until spendable (for force-close timelock)
+            val blocksRemaining: Int = 0, // blocks until spendable (for force-close timelock)
+            val confirmations: Int = 0 // current confirmation count
         )
 
         enum class Status { STOPPED, STARTING, RUNNING, ERROR, RECOVERING }
@@ -751,9 +752,10 @@ class LightningService(private val context: Context) {
                             txid = psb.latestSpendingTxid)
                     is org.lightningdevkit.ldknode.PendingSweepBalance.AwaitingThresholdConfirmations -> {
                         val blocksLeft = maxOf(0, psb.confirmationHeight.toInt() - currentH)
+                        val confs = if (blocksLeft > 0) 144 - blocksLeft else 144  // estimate based on typical 144-block delay
                         LightningState.PendingClose(psb.channelId ?: "", psb.amountSatoshis.toLong(),
                             "Awaiting threshold", psb.confirmationHeight.toInt(),
-                            txid = psb.latestSpendingTxid, blocksRemaining = blocksLeft)
+                            txid = psb.latestSpendingTxid, blocksRemaining = blocksLeft, confirmations = confs)
                     }
                     else -> LightningState.PendingClose("", 0, "Unknown")
                 }
@@ -840,6 +842,15 @@ class LightningService(private val context: Context) {
                     val reason = event.reason?.toString() ?: "unknown"
                     Log.w(TAG, "Channel closed: ${event.channelId} reason: $reason")
                     _state.value = _state.value.copy(lastChannelError = reason)
+                    // Save channel close info for tracking
+                    try {
+                        val closePrefs = context.getSharedPreferences("channel_closes", android.content.Context.MODE_PRIVATE)
+                        closePrefs.edit()
+                            .putString("close_${event.channelId}_reason", reason)
+                            .putLong("close_${event.channelId}_time", System.currentTimeMillis())
+                            .apply()
+                        Log.i(TAG, "Saved close info for channel ${event.channelId}")
+                    } catch (_: Exception) {}
                     // Cache peer's min channel size from rejection message
                     val peerId = event.counterpartyNodeId
                     if (peerId != null) {
