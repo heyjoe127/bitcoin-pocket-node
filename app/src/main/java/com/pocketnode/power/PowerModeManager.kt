@@ -330,6 +330,9 @@ class PowerModeManager(private val context: Context) {
                 delay(5_000)
             }
 
+            // Keep network active briefly so LDK can poll for new blocks and sync wallet
+            if (synced) delay(15_000)
+
             Log.i(TAG, "Burst sync ${if (synced) "complete" else "timed out"}")
 
             // Disable network until next burst (but not if we're now in MAX mode)
