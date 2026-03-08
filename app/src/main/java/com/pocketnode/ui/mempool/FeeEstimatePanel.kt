@@ -46,10 +46,20 @@ fun FeeEstimatePanel() {
         Column(modifier = Modifier.padding(16.dp)) {
             Text("Recommended Fees", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(12.dp))
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                FeeEstimateItem("Next Block", formatFee(nextBlockFee), FeePriority.High, Modifier.weight(1f))
-                FeeEstimateItem("30 min", formatFee(thirtyMinFee), FeePriority.Medium, Modifier.weight(1f))
-                FeeEstimateItem("1 hour", formatFee(oneHourFee), FeePriority.Low, Modifier.weight(1f))
+            val noData = nextBlockFee == null && thirtyMinFee == null && oneHourFee == null
+            val powerMode by com.pocketnode.power.PowerModeManager.modeFlow.collectAsState()
+            if (noData && powerMode != com.pocketnode.power.PowerModeManager.Mode.MAX) {
+                Text(
+                    "Fee estimation needs Max mode (continuous mempool data)",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.Gray
+                )
+            } else {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    FeeEstimateItem("Next Block", formatFee(nextBlockFee), FeePriority.High, Modifier.weight(1f))
+                    FeeEstimateItem("30 min", formatFee(thirtyMinFee), FeePriority.Medium, Modifier.weight(1f))
+                    FeeEstimateItem("1 hour", formatFee(oneHourFee), FeePriority.Low, Modifier.weight(1f))
+                }
             }
         }
     }
