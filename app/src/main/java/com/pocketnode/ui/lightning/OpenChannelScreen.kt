@@ -275,11 +275,19 @@ fun OpenChannelScreen(
 
             // Power mode warning
             if (needsMaxMode) {
-                Text(
-                    "⚡ Channel opens require Max Data mode for reliable monitoring. Switch to Max to open channels.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color(0xFF607D8B)
-                )
+                androidx.compose.material3.Card(
+                    colors = androidx.compose.material3.CardDefaults.cardColors(
+                        containerColor = Color(0xFFFF9800).copy(alpha = 0.15f)
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        "⚡ Switch to Max Data mode to open channels",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color(0xFFFF9800),
+                        modifier = Modifier.padding(12.dp)
+                    )
+                }
             }
 
 
