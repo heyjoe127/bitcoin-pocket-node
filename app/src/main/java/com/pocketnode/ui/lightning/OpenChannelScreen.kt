@@ -278,6 +278,11 @@ fun OpenChannelScreen(
                     style = MaterialTheme.typography.bodySmall,
                     color = Color.Gray
                 )
+                Text(
+                    "⚠️ Fee estimation unavailable. Funding tx will use minimum fee rate which may be slow to confirm in high-fee environments.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFFFF9800)
+                )
             }
 
 
