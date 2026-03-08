@@ -318,6 +318,8 @@ fun OpenChannelScreen(
                                                 val satPerVb = feeRate * 100_000
                                                 syncedFeeRate = if (satPerVb < 10) "%.1f sat/vB".format(satPerVb) else "%.0f sat/vB".format(satPerVb)
                                                 feeSynced = true
+                                                syncingFees = false
+                                                pmm.releaseNetworkHold()
                                                 return@launch
                                             }
                                         } catch (_: Exception) {}
