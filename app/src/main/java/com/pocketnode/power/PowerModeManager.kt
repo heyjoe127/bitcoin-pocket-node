@@ -78,6 +78,9 @@ class PowerModeManager(private val context: Context) {
 
         /** Whether a channel open is holding the network active */
         @Volatile var channelHoldingNetwork = false
+
+        /** Single mutex shared across all PowerModeManager instances */
+        val burstMutex = kotlinx.coroutines.sync.Mutex()
     }
 
     enum class Mode(val label: String, val emoji: String, val notificationLabel: String) {
@@ -291,7 +294,7 @@ class PowerModeManager(private val context: Context) {
         }
     }
 
-    private val burstMutex = kotlinx.coroutines.sync.Mutex()
+    // burstMutex is on companion — see below
 
     // getLdkHeight is on the companion so it survives PowerModeManager re-creation
 
