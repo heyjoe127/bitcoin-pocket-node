@@ -400,6 +400,7 @@ class LightningService(private val context: Context) {
 
             // Periodic state refresh — safe to use coroutines here, LDK is running
             var lastWalletSync = 0L
+            var hasRestarted = false
             stateRefreshJob = scope.launch {
                 while (isActive) {
                     delay(10_000)
@@ -414,18 +415,23 @@ class LightningService(private val context: Context) {
                         val hasOrphanFunds = st.channelCount == 0 && st.lightningBalanceSats > 0
                         if ((hasOrphanFunds || st.pendingCloseSats > 0) && now - lastWalletSync > 300_000) {
                             lastWalletSync = now
-                            if (hasOrphanFunds && st.pendingCloseDetails.isEmpty()) {
+                            if (hasOrphanFunds && st.pendingCloseDetails.isEmpty() && !hasRestarted) {
                                 // Commitment tx likely never broadcast — restart LDK
-                                Log.w(TAG, "Orphan lightning balance detected with no pending sweeps. Restarting LDK to rebroadcast commitment tx.")
-                                try {
-                                    stop()
-                                    delay(2000)
-                                    val creds = com.pocketnode.util.ConfigGenerator.readCredentials(context)
-                                    if (creds != null) {
-                                        start(creds.first, creds.second)
-                                    }
-                                } catch (e: Exception) {
-                                    Log.e(TAG, "Failed to restart LDK for rebroadcast: ${e.message}")
+                                Log.w(TAG, "Orphan lightning balance detected with no pending sweeps. Restarting LDK to rebroadcast commitment tx (one-time).")
+                                hasRestarted = true
+                                val creds = com.pocketnode.util.ConfigGenerator.readCredentials(context)
+                                if (creds != null) {
+                                    // Run on separate thread since stop() cancels the coroutine scope
+                                    Thread({
+                                        try {
+                                            stop()
+                                            Thread.sleep(2000)
+                                            start(creds.first, creds.second)
+                                        } catch (e: Exception) {
+                                            Log.e(TAG, "Failed to restart LDK for rebroadcast: ${e.message}")
+                                        }
+                                    }, "ldk-rebroadcast-restart").start()
+                                    return@launch // Exit this coroutine, new one starts after restart
                                 }
                             } else {
                                 // Pending sweeps exist, just sync wallets
