@@ -92,7 +92,7 @@ fun PocketNodeApp(
             composable("lightning_pay") {
                 com.pocketnode.ui.lightning.LightningPayScreen(
                     onNavigateToLightning = { navController.navigate("lightning") },
-                    onNavigateToScanner = { navController.navigate("lightning_send_pay") },
+                    onNavigateToScanner = { navController.navigate("qr_scanner_pay") },
                     onNavigateToReceive = { navController.navigate("lightning_receive") },
                     onNavigateToPaymentHistory = { navController.navigate("lightning_history") }
                 )
@@ -320,6 +320,22 @@ fun PocketNodeApp(
                         navController.popBackStack()
                     },
                     onNavigateBack = { navController.popBackStack() }
+                )
+            }
+            // QR scanner from Lightning Pay — scan goes to send, back goes to send (manual entry)
+            composable("qr_scanner_pay") {
+                com.pocketnode.ui.lightning.QrScannerScreen(
+                    onResult = { result ->
+                        navController.navigate("lightning_send_pay") {
+                            popUpTo("lightning_pay") { inclusive = false }
+                        }
+                        navController.currentBackStackEntry?.savedStateHandle?.set("scanned_qr", result)
+                    },
+                    onNavigateBack = {
+                        navController.navigate("lightning_send_pay") {
+                            popUpTo("lightning_pay") { inclusive = false }
+                        }
+                    }
                 )
             }
             // Send from Lightning Pay screen
