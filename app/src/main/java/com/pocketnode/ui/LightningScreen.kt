@@ -96,10 +96,10 @@ fun LightningScreen(
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color(0xFFFF9800),
-                        contentColor = Color.White
+                        contentColor = Color.Black
                     )
                 ) {
-                    Text("⚡ Lightning Pay")
+                    Text("⚡ Lightning Pay View")
                 }
             }
 
