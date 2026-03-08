@@ -72,6 +72,9 @@ class PowerModeManager(private val context: Context) {
         fun resetHold() {
             _initialSyncHold.value = false
         }
+
+        /** Callback to get current LDK block height (set by LightningService) */
+        var getLdkHeight: (() -> Long)? = null
     }
 
     enum class Mode(val label: String, val emoji: String, val notificationLabel: String) {
@@ -281,39 +284,47 @@ class PowerModeManager(private val context: Context) {
         }
     }
 
+    private val burstMutex = kotlinx.coroutines.sync.Mutex()
+
+    // getLdkHeight is on the companion so it survives PowerModeManager re-creation
+
     /** Start the burst sync cycle for Low/Away mode */
     private fun startBurstCycle(intervalMs: Long) {
         burstJob?.cancel()
         val scope = activeScope ?: return
         burstJob = scope.launch(Dispatchers.IO) {
             while (isActive) {
-                // Burst: turn network on, sync, turn off
                 doBurst()
-
-                // Check if cancelled during burst (mode changed)
                 if (!isActive) break
 
-                // Schedule next burst
                 val nextBurst = System.currentTimeMillis() + intervalMs
                 _nextBurstFlow.value = nextBurst
                 _burstStateFlow.value = BurstState.WAITING
+                Log.i(TAG, "Next burst in ${intervalMs / 60000}min at ${java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US).format(java.util.Date(nextBurst))}")
 
                 delay(intervalMs)
             }
         }
     }
 
-    /** Execute one sync burst: enable network, wait for sync, disable network */
+    /** Execute one sync burst with mutex to prevent concurrent runs */
     private suspend fun doBurst() {
-        val client = rpc ?: return
+        if (!burstMutex.tryLock()) {
+            Log.d(TAG, "Burst already running, skipping")
+            return
+        }
+        val client = rpc
+        if (client == null) {
+            burstMutex.unlock()
+            return
+        }
         _burstStateFlow.value = BurstState.SYNCING
         Log.i(TAG, "Burst sync starting")
 
         try {
-            // Enable network
             setNetworkActive(client, true)
 
-            // Wait for sync or timeout
+            // Wait for bitcoind to sync to tip
             val startTime = System.currentTimeMillis()
             var synced = false
             while (System.currentTimeMillis() - startTime < BURST_SYNC_TIMEOUT_MS) {
@@ -330,26 +341,36 @@ class PowerModeManager(private val context: Context) {
                 delay(5_000)
             }
 
-            // Keep network active briefly so LDK can poll for new blocks and sync wallet
-            if (synced) delay(15_000)
+            if (synced) {
+                // Wait for LDK to catch up to bitcoind's height
+                val ldkStart = getLdkHeight?.invoke() ?: 0L
+                val ldkWaitStart = System.currentTimeMillis()
+                while (System.currentTimeMillis() - ldkWaitStart < 30_000) {
+                    val ldkNow = getLdkHeight?.invoke() ?: 0L
+                    if (ldkNow > ldkStart) {
+                        Log.i(TAG, "LDK synced: $ldkStart -> $ldkNow")
+                        break
+                    }
+                    delay(2_000)
+                }
+            }
 
             Log.i(TAG, "Burst sync ${if (synced) "complete" else "timed out"}")
 
-            // Disable network until next burst (but not if we're now in MAX mode)
             if (_modeFlow.value != Mode.MAX) {
                 setNetworkActive(client, false)
             }
         } catch (e: kotlinx.coroutines.CancellationException) {
-            // Mode changed — don't touch network state, let the new mode handle it
             Log.d(TAG, "Burst sync cancelled (mode change)")
+            burstMutex.unlock()
             throw e
         } catch (e: Exception) {
             Log.e(TAG, "Burst sync error: ${e.message}")
-            // Leave network off on error, next burst will retry
             try { setNetworkActive(client, false) } catch (_: Exception) {}
         }
 
         _burstStateFlow.value = BurstState.IDLE
+        burstMutex.unlock()
     }
 
     /** Trigger an immediate burst sync (e.g. when user opens the app or wallet connects) */

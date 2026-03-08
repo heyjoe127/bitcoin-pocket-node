@@ -374,6 +374,11 @@ class LightningService(private val context: Context) {
             lndHubServer = LndHubServer(context).also { it.start() }
             Log.i(TAG, "LNDHub server started on localhost:${LndHubServer.PORT}")
 
+            // Wire up LDK height for burst sync (so it waits for LDK, not just bitcoind)
+            com.pocketnode.power.PowerModeManager.getLdkHeight = {
+                try { ldkNode.status().currentBestBlock.height.toLong() } catch (_: Exception) { 0L }
+            }
+
             // --- Background recovery scan fallback ---
             if (needsRecoveryScan && scanDescriptors.isNotEmpty()) {
                 Thread({
