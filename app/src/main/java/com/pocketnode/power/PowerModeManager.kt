@@ -342,16 +342,23 @@ class PowerModeManager(private val context: Context) {
             }
 
             if (synced) {
-                // Wait for LDK to catch up to bitcoind's height
-                val ldkStart = getLdkHeight?.invoke() ?: 0L
+                // Wait for LDK to reach bitcoind's tip height
+                val info = client.getBlockchainInfo()
+                val bitcoindHeight = info?.optLong("blocks", 0L) ?: 0L
                 val ldkWaitStart = System.currentTimeMillis()
+                var ldkReached = false
                 while (System.currentTimeMillis() - ldkWaitStart < 30_000) {
                     val ldkNow = getLdkHeight?.invoke() ?: 0L
-                    if (ldkNow > ldkStart) {
-                        Log.i(TAG, "LDK synced: $ldkStart -> $ldkNow")
+                    if (ldkNow >= bitcoindHeight && bitcoindHeight > 0) {
+                        Log.i(TAG, "LDK reached tip: $ldkNow (bitcoind: $bitcoindHeight)")
+                        ldkReached = true
                         break
                     }
                     delay(2_000)
+                }
+                if (!ldkReached) {
+                    val ldkNow = getLdkHeight?.invoke() ?: 0L
+                    Log.w(TAG, "LDK didn't reach tip in 30s: LDK=$ldkNow bitcoind=$bitcoindHeight")
                 }
             }
 
