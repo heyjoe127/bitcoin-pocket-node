@@ -17,6 +17,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.content.Intent
 import com.pocketnode.lightning.LightningService
 import com.pocketnode.service.BitcoindService
 import org.lightningdevkit.ldknode.PaymentDirection
@@ -48,6 +49,18 @@ fun LightningPayScreen(
     val lightning = remember { LightningService.getInstance(context) }
     val lightningState by LightningService.stateFlow.collectAsState()
     val serviceRunning by BitcoindService.isRunningFlow.collectAsState()
+
+    // Auto-start node if not running
+    LaunchedEffect(serviceRunning) {
+        if (!serviceRunning) {
+            val creds = com.pocketnode.util.ConfigGenerator.readCredentials(context)
+            if (creds != null) {
+                // Node has been set up before, start it
+                val intent = Intent(context, BitcoindService::class.java)
+                context.startForegroundService(intent)
+            }
+        }
+    }
 
     // Bootstrap status
     val nodeRunning = serviceRunning
@@ -99,7 +112,16 @@ fun LightningPayScreen(
 
             // Bootstrap status (only when not ready)
             if (!isReady) {
-                Spacer(modifier = Modifier.height(40.dp))
+                Spacer(modifier = Modifier.height(60.dp))
+
+                Text(
+                    "⚡",
+                    fontSize = 48.sp,
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
                 BootstrapStatus(
                     nodeRunning = nodeRunning,
                     ldkStatus = lightningState.status,
