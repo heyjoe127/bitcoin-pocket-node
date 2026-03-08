@@ -668,6 +668,19 @@ class LightningService(private val context: Context) {
             channels.forEach { ch ->
                 Log.d(TAG, "  ch=${ch.channelId.take(12)} usable=${ch.isUsable} ready=${ch.isChannelReady} value=${ch.channelValueSats} outbound=${ch.outboundCapacityMsat.toLong()/1000} inbound=${ch.inboundCapacityMsat.toLong()/1000} confs=${ch.confirmations}")
             }
+            // Routing readiness: graph size, peers, sync timestamps
+            try {
+                val graph = n.networkGraph()
+                val graphChannels = graph.listChannels().size
+                val graphNodes = graph.listNodes().size
+                val peers = n.listPeers()
+                val status = n.status()
+                val walletSync = status.latestLightningWalletSyncTimestamp
+                val rgsSync = status.latestRgsSnapshotTimestamp
+                Log.d(TAG, "routing: graph=${graphChannels}ch/${graphNodes}nodes peers=${peers.size} walletSync=$walletSync rgsSync=$rgsSync")
+            } catch (e: Exception) {
+                Log.w(TAG, "routing info unavailable: ${e.message}")
+            }
 
             val pending = channels.filter { it.isChannelReady == false }.map { ch ->
                 LightningState.PendingChannel(
