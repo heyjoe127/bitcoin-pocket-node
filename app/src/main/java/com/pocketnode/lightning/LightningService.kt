@@ -739,7 +739,15 @@ class LightningService(private val context: Context) {
                 onchainBalanceSats = newBalance,
                 lightningBalanceSats = balances.totalLightningBalanceSats.toLong(),
                 channelCount = channels.size,
-                totalCapacitySats = channels.sumOf { it.channelValueSats.toLong() },
+                totalCapacitySats = channels.sumOf { it.channelValueSats.toLong() }.also {
+                    // Auto-unlock Lightning Pay for existing installs with channels
+                    if (channels.isNotEmpty()) {
+                        try {
+                            context.getSharedPreferences("pocketnode_prefs", android.content.Context.MODE_PRIVATE)
+                                .edit().putBoolean("lightning_unlocked", true).apply()
+                        } catch (_: Exception) {}
+                    }
+                },
                 totalInboundSats = channels.sumOf {
                     (it.channelValueSats.toLong() - (it.outboundCapacityMsat.toLong() / 1000))
                 },
@@ -775,6 +783,11 @@ class LightningService(private val context: Context) {
                 }
                 is Event.ChannelReady      -> {
                     Log.i(TAG, "Channel ready: ${event.channelId}")
+                    // Unlock Lightning Pay as default home screen
+                    try {
+                        context.getSharedPreferences("pocketnode_prefs", android.content.Context.MODE_PRIVATE)
+                            .edit().putBoolean("lightning_unlocked", true).apply()
+                    } catch (_: Exception) {}
                     channelEventLatch?.countDown()
                 }
                 is Event.ChannelClosed     -> {

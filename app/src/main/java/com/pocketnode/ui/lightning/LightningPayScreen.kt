@@ -1,0 +1,406 @@
+package com.pocketnode.ui.lightning
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.pocketnode.lightning.LightningService
+import com.pocketnode.service.BitcoindService
+import org.lightningdevkit.ldknode.PaymentDirection
+import org.lightningdevkit.ldknode.PaymentStatus
+
+// Color scheme: dark + white, orange accent for primary action only
+private val BitcoinOrange = Color(0xFFFF9800)
+private val SubtleGrey = Color(0xFF888888)
+private val DimWhite = Color(0xFFCCCCCC)
+private val SuccessGreen = Color(0xFF4CAF50)
+private val CardBg = Color(0xFF1A1A1A)
+
+/**
+ * Lightning Pay — the wallet home screen.
+ *
+ * Shown when an active Lightning channel exists.
+ * Pay and Receive up front. Details below the fold.
+ * Dark + white with orange as the single accent.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun LightningPayScreen(
+    onNavigateToDashboard: () -> Unit = {},
+    onNavigateToScanner: () -> Unit = {},
+    onNavigateToReceive: () -> Unit = {},
+    onNavigateToPaymentHistory: () -> Unit = {}
+) {
+    val context = LocalContext.current
+    val lightning = remember { LightningService.getInstance(context) }
+    val lightningState by LightningService.stateFlow.collectAsState()
+    val serviceRunning by BitcoindService.isRunningFlow.collectAsState()
+
+    // Bootstrap status
+    val nodeRunning = serviceRunning
+    val ldkRunning = lightningState.status == LightningService.LightningState.Status.RUNNING
+    val hasActiveChannel = ldkRunning && lightningState.channelCount > 0
+
+    // Ready = node running + LDK running + active channel
+    val isReady = nodeRunning && hasActiveChannel
+
+    // Balance (hidden until scrolled)
+    val sendCapacitySats = lightningState.lightningBalanceSats
+    val receiveCapacitySats = lightningState.totalInboundSats
+    val onchainSats = lightningState.onchainBalanceSats
+
+    // Recent payments
+    val payments = remember(lightningState) {
+        if (ldkRunning) lightning.listPayments()
+            .filter { it.status == PaymentStatus.SUCCEEDED }
+            .sortedByDescending { it.latestUpdateTimestamp }
+            .take(5)
+        else emptyList()
+    }
+
+    Scaffold(
+        containerColor = Color.Black
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // Top bar: minimal, just the gear icon
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.End
+            ) {
+                IconButton(onClick = onNavigateToDashboard) {
+                    Icon(
+                        Icons.Default.Settings,
+                        contentDescription = "Dashboard",
+                        tint = SubtleGrey
+                    )
+                }
+            }
+
+            // Bootstrap status (only when not ready)
+            if (!isReady) {
+                Spacer(modifier = Modifier.height(40.dp))
+                BootstrapStatus(
+                    nodeRunning = nodeRunning,
+                    ldkStatus = lightningState.status,
+                    channelCount = lightningState.channelCount,
+                    error = lightningState.error
+                )
+                Spacer(modifier = Modifier.weight(1f))
+            }
+
+            if (isReady) {
+                // Push Pay button to center of visible area
+                Spacer(modifier = Modifier.height(120.dp))
+            }
+
+            // PAY button — the hero
+            Button(
+                onClick = onNavigateToScanner,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 48.dp)
+                    .height(64.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (isReady) BitcoinOrange else BitcoinOrange.copy(alpha = 0.3f),
+                    contentColor = Color.White
+                ),
+                shape = RoundedCornerShape(16.dp),
+                enabled = isReady
+            ) {
+                Text(
+                    "Pay",
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // RECEIVE button — smaller, understated
+            OutlinedButton(
+                onClick = onNavigateToReceive,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 72.dp)
+                    .height(48.dp),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = DimWhite
+                ),
+                shape = RoundedCornerShape(12.dp),
+                enabled = isReady
+            ) {
+                Text(
+                    "Receive",
+                    fontSize = 16.sp
+                )
+            }
+
+            if (isReady) {
+                Spacer(modifier = Modifier.height(80.dp))
+            }
+
+            // === Below the fold: details ===
+            if (isReady) {
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 32.dp),
+                    color = Color(0xFF333333)
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Balance section
+                Text(
+                    "Balance",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = SubtleGrey,
+                    modifier = Modifier.padding(horizontal = 32.dp).fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp),
+                    colors = CardDefaults.cardColors(containerColor = CardBg),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(modifier = Modifier.padding(20.dp)) {
+                        BalanceRow("Can send", sendCapacitySats)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        BalanceRow("Can receive", receiveCapacitySats)
+                        if (onchainSats > 0) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            HorizontalDivider(color = Color(0xFF333333))
+                            Spacer(modifier = Modifier.height(8.dp))
+                            BalanceRow("On-chain", onchainSats)
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Recent payments
+                if (payments.isNotEmpty()) {
+                    Text(
+                        "Recent",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = SubtleGrey,
+                        modifier = Modifier.padding(horizontal = 32.dp).fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp),
+                        colors = CardDefaults.cardColors(containerColor = CardBg),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            payments.forEachIndexed { index, payment ->
+                                val isInbound = payment.direction == PaymentDirection.INBOUND
+                                val amountSats = payment.amountMsat?.let { it.toLong() / 1000 } ?: 0L
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 8.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        if (isInbound) "⬇️ Received" else "⬆️ Sent",
+                                        color = Color.White,
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                    Text(
+                                        "${if (isInbound) "+" else "-"}${"%,d".format(amountSats)} sats",
+                                        color = if (isInbound) SuccessGreen else DimWhite,
+                                        fontWeight = FontWeight.Bold,
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
+                                if (index < payments.lastIndex) {
+                                    HorizontalDivider(color = Color(0xFF333333))
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    TextButton(
+                        onClick = onNavigateToPaymentHistory,
+                        modifier = Modifier.padding(horizontal = 24.dp)
+                    ) {
+                        Text("View all payments", color = SubtleGrey)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(32.dp))
+
+                // Channel info
+                Text(
+                    "Channel",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = SubtleGrey,
+                    modifier = Modifier.padding(horizontal = 32.dp).fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                val channels = remember(lightningState) { lightning.listChannels() }
+                val peerAliases = remember {
+                    context.getSharedPreferences("peer_aliases", android.content.Context.MODE_PRIVATE)
+                }
+
+                channels.filter { it.isUsable || it.isChannelReady }.forEach { ch ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp, vertical = 4.dp),
+                        colors = CardDefaults.cardColors(containerColor = CardBg),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            val alias = peerAliases.getString(ch.counterpartyNodeId, null)
+                            Text(
+                                alias ?: ch.counterpartyNodeId.take(12) + "...",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            val capacitySats = ch.channelValueSats.toLong()
+                            Text(
+                                "${"%,d".format(capacitySats)} sats capacity",
+                                color = SubtleGrey,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                            if (ch.isUsable) {
+                                Text(
+                                    "⚡ Active",
+                                    color = SuccessGreen,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(48.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun BootstrapStatus(
+    nodeRunning: Boolean,
+    ldkStatus: LightningService.LightningState.Status,
+    channelCount: Int,
+    error: String?
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 32.dp),
+        colors = CardDefaults.cardColors(containerColor = CardBg),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                "⚡",
+                fontSize = 32.sp
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+
+            if (error != null) {
+                Text(
+                    error,
+                    color = MaterialTheme.colorScheme.error,
+                    textAlign = TextAlign.Center,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            } else {
+                // Step indicators
+                StatusStep("Bitcoin node", nodeRunning)
+                StatusStep("Lightning node", ldkStatus == LightningService.LightningState.Status.RUNNING)
+                StatusStep("Channel active", channelCount > 0 && ldkStatus == LightningService.LightningState.Status.RUNNING)
+
+                if (ldkStatus == LightningService.LightningState.Status.STARTING ||
+                    ldkStatus == LightningService.LightningState.Status.RECOVERING) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    LinearProgressIndicator(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = BitcoinOrange,
+                        trackColor = Color(0xFF333333)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatusStep(label: String, ready: Boolean) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            if (ready) "✓" else "○",
+            color = if (ready) SuccessGreen else SubtleGrey,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.width(24.dp)
+        )
+        Text(
+            label,
+            color = if (ready) Color.White else SubtleGrey,
+            style = MaterialTheme.typography.bodyMedium
+        )
+    }
+}
+
+@Composable
+private fun BalanceRow(label: String, sats: Long) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(label, color = SubtleGrey, style = MaterialTheme.typography.bodyMedium)
+        Text(
+            "${"%,d".format(sats)} sats",
+            color = Color.White,
+            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.bodyMedium
+        )
+    }
+}

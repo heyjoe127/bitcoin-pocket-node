@@ -74,7 +74,26 @@ fun PocketNodeApp(
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             val isWideScreen = maxWidth >= 550.dp
 
-        NavHost(navController = navController, startDestination = if (isFirstRun) "snapshot" else "status") {
+        // Check if Lightning has been unlocked (any channel ever opened)
+        val lightningUnlocked = remember {
+            context.getSharedPreferences("pocketnode_prefs", android.content.Context.MODE_PRIVATE)
+                .getBoolean("lightning_unlocked", false)
+        }
+        val startDest = when {
+            isFirstRun -> "snapshot"
+            lightningUnlocked -> "lightning_pay"
+            else -> "status"
+        }
+
+        NavHost(navController = navController, startDestination = startDest) {
+            composable("lightning_pay") {
+                com.pocketnode.ui.lightning.LightningPayScreen(
+                    onNavigateToDashboard = { navController.navigate("status") },
+                    onNavigateToScanner = { navController.navigate("lightning_send_pay") },
+                    onNavigateToReceive = { navController.navigate("lightning_receive") },
+                    onNavigateToPaymentHistory = { navController.navigate("lightning_history") }
+                )
+            }
             composable("status") {
                 if (isWideScreen) {
                     // Dual-pane: dashboard left, mempool right
@@ -298,6 +317,21 @@ fun PocketNodeApp(
                         navController.popBackStack()
                     },
                     onNavigateBack = { navController.popBackStack() }
+                )
+            }
+            // Send from Lightning Pay screen
+            composable("lightning_send_pay") { backStackEntry ->
+                val scannedResult = backStackEntry.savedStateHandle
+                    .get<String>("scanned_qr")
+                LaunchedEffect(scannedResult) {
+                    if (scannedResult != null) {
+                        backStackEntry.savedStateHandle.remove<String>("scanned_qr")
+                    }
+                }
+                com.pocketnode.ui.lightning.SendPaymentScreen(
+                    onNavigateBack = { navController.popBackStack() },
+                    onNavigateToScanner = { navController.navigate("qr_scanner") },
+                    scannedQr = scannedResult
                 )
             }
             composable("lightning_receive") {
