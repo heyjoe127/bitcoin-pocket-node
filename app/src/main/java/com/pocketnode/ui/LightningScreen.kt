@@ -1,7 +1,9 @@
 package com.pocketnode.ui
 
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.withContext
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -552,8 +554,21 @@ fun LightningScreen(
                                                 closing = true
                                                 closeError = null
                                                 scope.launch {
-                                                    lightning.closeChannel(ch.userChannelId, ch.counterpartyNodeId)
-                                                        .onSuccess { selectedChannel = null }
+                                                    val pmm = com.pocketnode.power.PowerModeManager(context)
+                                                    val creds = com.pocketnode.util.ConfigGenerator.readCredentials(context)
+                                                    if (creds != null) {
+                                                        pmm.setRpc(com.pocketnode.rpc.BitcoinRpcClient(creds.first, creds.second))
+                                                    }
+                                                    pmm.holdNetwork()
+                                                    kotlinx.coroutines.delay(2000)
+                                                    val result = withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                                        try {
+                                                            lightning.closeChannel(ch.userChannelId, ch.counterpartyNodeId)
+                                                        } finally {
+                                                            pmm.releaseNetworkHold()
+                                                        }
+                                                    }
+                                                    result.onSuccess { selectedChannel = null }
                                                         .onFailure { closing = false; closeError = it.message }
                                                 }
                                             },
