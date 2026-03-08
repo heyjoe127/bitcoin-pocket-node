@@ -341,8 +341,6 @@ class LightningService(private val context: Context) {
             try {
                 val bestBlock = ldkNode.status().currentBestBlock
                 Log.i(TAG, "LDK best block: height=${bestBlock.height} hash=${bestBlock.blockHash}")
-                val newAddr = ldkNode.onchainPayment().newAddress()
-                Log.i(TAG, "LDK new deposit address (for verification): $newAddr")
 
                 // Save wallet birthday on first creation (not on restore — scan handles that)
                 if (!birthdayFile.exists() && !needsRecoveryScan) {
@@ -1037,10 +1035,15 @@ class LightningService(private val context: Context) {
 
     // === On-chain wallet ===
 
+    private var cachedDepositAddress: String? = null
+
     fun getOnchainAddress(): Result<String> {
+        cachedDepositAddress?.let { return Result.success(it) }
         val n = node ?: return Result.failure(Exception("Node not running"))
         return try {
-            Result.success(n.onchainPayment().newAddress())
+            val addr = n.onchainPayment().newAddress()
+            cachedDepositAddress = addr
+            Result.success(addr)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to get address", e)
             Result.failure(e)
