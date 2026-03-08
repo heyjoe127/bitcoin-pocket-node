@@ -284,6 +284,7 @@ fun PocketNodeApp(
             composable("lightning") {
                 LightningScreen(
                     onNavigateBack = { navController.navigate("status") { popUpTo("lightning_pay") { inclusive = false } } },
+                    onNavigateToLightningPay = { navController.navigate("lightning_pay") { popUpTo("lightning") { inclusive = true } } },
                     onNavigateToSend = { navController.navigate("lightning_send") },
                     onNavigateToReceive = { navController.navigate("lightning_receive") },
                     onNavigateToHistory = { navController.navigate("lightning_history") },

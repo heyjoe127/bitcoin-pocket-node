@@ -39,7 +39,8 @@ fun LightningScreen(
     onNavigateToHistory: () -> Unit = {},
     onNavigateToOpenChannel: () -> Unit = {},
     onNavigateToSeedBackup: () -> Unit = {},
-    onNavigateToWatchtower: () -> Unit = {}
+    onNavigateToWatchtower: () -> Unit = {},
+    onNavigateToLightningPay: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -87,6 +88,21 @@ fun LightningScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // Lightning Pay button — shown when channel is active
+            if (effectiveState.status == LightningService.LightningState.Status.RUNNING &&
+                effectiveState.channelCount > 0) {
+                Button(
+                    onClick = onNavigateToLightningPay,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFFF9800),
+                        contentColor = Color.White
+                    )
+                ) {
+                    Text("⚡ Lightning Pay")
+                }
+            }
+
             // Status banner — shown for starting, recovering, and error states (not stopped or running)
             if (effectiveState.status != LightningService.LightningState.Status.RUNNING &&
                 effectiveState.status != LightningService.LightningState.Status.STOPPED) {
