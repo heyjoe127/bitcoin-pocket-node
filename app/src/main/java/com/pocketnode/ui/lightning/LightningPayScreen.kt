@@ -62,6 +62,20 @@ fun LightningPayScreen(
         }
     }
 
+    // Auto-start Lightning once bitcoind is running
+    LaunchedEffect(serviceRunning, lightningState.status) {
+        if (serviceRunning && lightningState.status == LightningService.LightningState.Status.STOPPED) {
+            // Small delay to let bitcoind fully initialize
+            kotlinx.coroutines.delay(3000)
+            val creds = com.pocketnode.util.ConfigGenerator.readCredentials(context)
+            if (creds != null) {
+                try {
+                    lightning.start(creds.first, creds.second)
+                } catch (_: Exception) {}
+            }
+        }
+    }
+
     // Bootstrap status
     val nodeRunning = serviceRunning
     val ldkRunning = lightningState.status == LightningService.LightningState.Status.RUNNING
