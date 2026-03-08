@@ -13,12 +13,23 @@ import com.pocketnode.rpc.BitcoinRpcClient
 import com.pocketnode.util.ConfigGenerator
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import org.json.JSONArray
 
 @Composable
 fun FeeEstimatePanel() {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val creds = remember { ConfigGenerator.readCredentials(context) }
+    var syncingFees by remember { mutableStateOf(false) }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            if (syncingFees) {
+                com.pocketnode.power.PowerModeManager(context).releaseNetworkHold()
+            }
+        }
+    }
 
     var nextBlockFee by remember { mutableStateOf<Double?>(null) }
     var thirtyMinFee by remember { mutableStateOf<Double?>(null) }
@@ -54,6 +65,34 @@ fun FeeEstimatePanel() {
                     style = MaterialTheme.typography.bodySmall,
                     color = Color.Gray
                 )
+                Spacer(modifier = Modifier.height(8.dp))
+                if (!syncingFees) {
+                    androidx.compose.material3.OutlinedButton(
+                        onClick = {
+                            syncingFees = true
+                            val pmm = com.pocketnode.power.PowerModeManager(context)
+                            if (creds != null) {
+                                pmm.setRpc(BitcoinRpcClient(creds.first, creds.second))
+                            }
+                            pmm.holdNetwork()
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("📡 Sync Fees")
+                    }
+                } else {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        Text(
+                            "Syncing fee data (network held open)...",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFFFF9800)
+                        )
+                    }
+                }
             } else {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     FeeEstimateItem("Next Block", formatFee(nextBlockFee), FeePriority.High, Modifier.weight(1f))
