@@ -82,7 +82,18 @@ fun LightningPayScreen(
     val hasActiveChannel = ldkRunning && lightningState.channelCount > 0
 
     // Ready = node running + LDK running + active channel
-    val isReady = nodeRunning && hasActiveChannel
+    val allChecked = nodeRunning && hasActiveChannel
+    var isReady by remember { mutableStateOf(false) }
+
+    // Brief delay after all checks pass so user sees the ticks
+    LaunchedEffect(allChecked) {
+        if (allChecked) {
+            kotlinx.coroutines.delay(1500)
+            isReady = true
+        } else {
+            isReady = false
+        }
+    }
 
     // Balance (hidden until scrolled)
     val sendCapacitySats = lightningState.lightningBalanceSats
@@ -127,14 +138,6 @@ fun LightningPayScreen(
             // Bootstrap status (only when not ready)
             if (!isReady) {
                 Spacer(modifier = Modifier.height(60.dp))
-
-                Text(
-                    "⚡",
-                    fontSize = 48.sp,
-                    textAlign = TextAlign.Center
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
 
                 BootstrapStatus(
                     nodeRunning = nodeRunning,
@@ -370,12 +373,6 @@ private fun BootstrapStatus(
             modifier = Modifier.padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(
-                "⚡",
-                fontSize = 32.sp
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-
             if (error != null) {
                 Text(
                     error,

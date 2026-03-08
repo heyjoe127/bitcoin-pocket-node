@@ -85,16 +85,8 @@ fun PocketNodeApp(
             else -> "status"
         }
 
-        // Auto-navigate to Lightning Pay when unlocked mid-session
-        val lightningState by com.pocketnode.lightning.LightningService.stateFlow.collectAsState()
-        LaunchedEffect(lightningState.channelCount) {
-            if (!lightningUnlocked && lightningState.channelCount > 0 &&
-                lightningState.status == com.pocketnode.lightning.LightningService.LightningState.Status.RUNNING) {
-                navController.navigate("lightning_pay") {
-                    popUpTo("status") { inclusive = true }
-                }
-            }
-        }
+        // Lightning Pay unlocks on next app restart after first channel opens
+        // (pref set by LightningService.updateState and ChannelReady event)
 
         NavHost(navController = navController, startDestination = startDest) {
             composable("lightning_pay") {
