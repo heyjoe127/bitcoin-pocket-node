@@ -83,14 +83,15 @@ fun LightningPayScreen(
 
     // Ready = node running + LDK running + active channel
     val allChecked = nodeRunning && hasActiveChannel
-    var isReady by remember { mutableStateOf(false) }
+    // Initialize as ready if already running (e.g. returning from another screen)
+    var isReady by remember { mutableStateOf(allChecked) }
 
-    // Brief delay after all checks pass so user sees the ticks
+    // Brief delay after all checks pass so user sees the ticks (only on cold start)
     LaunchedEffect(allChecked) {
-        if (allChecked) {
+        if (allChecked && !isReady) {
             kotlinx.coroutines.delay(1500)
             isReady = true
-        } else {
+        } else if (!allChecked) {
             isReady = false
         }
     }
