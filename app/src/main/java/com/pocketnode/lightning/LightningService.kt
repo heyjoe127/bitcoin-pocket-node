@@ -720,11 +720,11 @@ class LightningService(private val context: Context) {
             }.filter { it.amountSats > 0 }
             val pendingCloseTotalSats = pendingCloses.sumOf { it.amountSats }
 
-            // Clear cached deposit address if balance increased (new deposit received)
+            // Rotate deposit address if balance increased (new deposit received)
             val prevBalance = _state.value.onchainBalanceSats
             val newBalance = balances.spendableOnchainBalanceSats.toLong()
             if (newBalance > prevBalance && prevBalance >= 0) {
-                cachedDepositAddress = null
+                markDepositAddressUsed()
             }
 
             _state.value = LightningState(
@@ -760,7 +760,7 @@ class LightningService(private val context: Context) {
                 is Event.PaymentFailed     -> Log.w(TAG, "Payment failed: ${event.paymentId}")
                 is Event.PaymentReceived   -> {
                     Log.i(TAG, "Payment received: ${event.amountMsat} msat")
-                    cachedDepositAddress = null // Clear so next request gets a fresh address
+                    markDepositAddressUsed()
                 }
                 is Event.ChannelPending    -> {
                     Log.i(TAG, "Channel pending: ${event.channelId} (funding txo: ${event.fundingTxo})")
@@ -1046,18 +1046,43 @@ class LightningService(private val context: Context) {
     // === On-chain wallet ===
 
     private var cachedDepositAddress: String? = null
+    private val depositAddressPrefs by lazy {
+        context.getSharedPreferences("deposit_address", MODE_PRIVATE)
+    }
 
     fun getOnchainAddress(): Result<String> {
-        cachedDepositAddress?.let { return Result.success(it) }
+        // Restore from prefs if no in-memory cache (app restarted)
+        if (cachedDepositAddress == null) {
+            cachedDepositAddress = depositAddressPrefs.getString("current_address", null)
+        }
+
+        // If we have a cached address, check if LDK's balance changed since we cached it
+        // (indicates the address was used). Also check the "used" flag set by event/balance handlers.
+        val cached = cachedDepositAddress
+        if (cached != null && !depositAddressPrefs.getBoolean("address_used", false)) {
+            return Result.success(cached)
+        }
+
+        // Generate fresh address
         val n = node ?: return Result.failure(Exception("Node not running"))
         return try {
             val addr = n.onchainPayment().newAddress()
             cachedDepositAddress = addr
+            depositAddressPrefs.edit()
+                .putString("current_address", addr)
+                .putBoolean("address_used", false)
+                .apply()
+            Log.i(TAG, "New deposit address: $addr")
             Result.success(addr)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to get address", e)
             Result.failure(e)
         }
+    }
+
+    private fun markDepositAddressUsed() {
+        cachedDepositAddress = null
+        depositAddressPrefs.edit().putBoolean("address_used", true).apply()
     }
 
     fun sendOnchain(address: String, amountSats: Long, feeRate: FeeRate? = null): Result<String> {
