@@ -145,7 +145,7 @@ fun LightningPayScreen(
                     textAlign = TextAlign.Center
                 )
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(40.dp))
             }
 
             // PAY button — the hero
@@ -191,7 +191,7 @@ fun LightningPayScreen(
             }
 
             if (isReady) {
-                Spacer(modifier = Modifier.height(80.dp))
+                Spacer(modifier = Modifier.height(120.dp))
             }
 
             // === Below the fold: details ===
