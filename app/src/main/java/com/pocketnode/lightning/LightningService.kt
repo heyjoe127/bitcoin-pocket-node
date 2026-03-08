@@ -402,7 +402,19 @@ class LightningService(private val context: Context) {
             stateRefreshJob = scope.launch {
                 while (isActive) {
                     delay(10_000)
-                    try { updateState() } catch (_: Exception) {}
+                    try {
+                        updateState()
+                        // Trigger wallet sync when pending close funds exist
+                        // This rebroadcasts pending claims (close txs, sweeps)
+                        val st = _state.value
+                        if (st.channelCount == 0 && st.lightningBalanceSats > 0 || st.pendingCloseSats > 0) {
+                            try {
+                                node?.syncWallets()
+                            } catch (e: Exception) {
+                                Log.d(TAG, "syncWallets: ${e.message}")
+                            }
+                        }
+                    } catch (_: Exception) {}
                 }
             }
 
