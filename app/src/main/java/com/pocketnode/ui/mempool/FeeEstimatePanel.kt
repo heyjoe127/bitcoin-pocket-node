@@ -45,6 +45,11 @@ fun FeeEstimatePanel() {
                 nextBlockFee = estimateFee(rpc, 1)
                 thirtyMinFee = estimateFee(rpc, 3)
                 oneHourFee = estimateFee(rpc, 6)
+                // Release network hold once we have fee data
+                if (syncingFees && (nextBlockFee != null || thirtyMinFee != null || oneHourFee != null)) {
+                    syncingFees = false
+                    com.pocketnode.power.PowerModeManager(context).releaseNetworkHold()
+                }
             } catch (_: Exception) {}
             delay(30_000)
         }
