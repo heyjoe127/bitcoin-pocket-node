@@ -85,10 +85,15 @@ fun LightningPayScreen(
     val ldkRunning = lightningState.status == LightningService.LightningState.Status.RUNNING
     val hasActiveChannel = ldkRunning && lightningState.channelCount > 0
 
+    // Chain sync status
+    val chainSynced = lightningState.chainSynced
+
     // Ready = node running + LDK running + active channel
     val allChecked = nodeRunning && hasActiveChannel
     // Initialize as ready if already running (e.g. returning from another screen)
     var isReady by remember { mutableStateOf(allChecked) }
+    // Pay requires chain sync
+    val payReady = isReady && chainSynced
 
     // Brief delay after all checks pass so user sees the ticks (only on cold start)
     LaunchedEffect(allChecked) {
@@ -161,17 +166,32 @@ fun LightningPayScreen(
                     .padding(horizontal = 48.dp)
                     .height(64.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isReady) BitcoinOrange else BitcoinOrange.copy(alpha = 0.3f),
+                    containerColor = if (payReady) BitcoinOrange else BitcoinOrange.copy(alpha = 0.3f),
                     contentColor = Color.White
                 ),
                 shape = RoundedCornerShape(16.dp),
-                enabled = isReady
+                enabled = payReady
             ) {
-                Text(
-                    "Pay",
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                if (isReady && !chainSynced) {
+                    // Bootstrap done but waiting for chain sync
+                    androidx.compose.material3.CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        color = Color.White,
+                        strokeWidth = 2.dp
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        "Syncing...",
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                } else {
+                    Text(
+                        "Pay",
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))

@@ -61,7 +61,10 @@ class LightningService(private val context: Context) {
         val channelFeeRates: Map<String, Long> = emptyMap(),
         // Pending balances from channel closures
         val pendingCloseSats: Long = 0,
-        val pendingCloseDetails: List<PendingClose> = emptyList()
+        val pendingCloseDetails: List<PendingClose> = emptyList(),
+        // Chain sync status for payment readiness
+        val ldkHeight: Long = 0,
+        val chainSynced: Boolean = false
     ) {
         data class PendingChannel(
             val channelId: String,
@@ -661,6 +664,12 @@ class LightningService(private val context: Context) {
             } catch (_: Exception) {}
 
             val bestBlock = n.status().currentBestBlock
+            val ldkH = bestBlock.height.toLong()
+            // Check if LDK is synced with bitcoind
+            val bitcoindH = try {
+                rpcClient?.callSync("getblockcount", org.json.JSONArray())?.optLong("value", 0) ?: 0
+            } catch (_: Exception) { 0L }
+            val synced = ldkH > 0 && (bitcoindH == 0L || ldkH >= bitcoindH)
             val outboundMsat = channels.sumOf { it.outboundCapacityMsat.toLong() }
             val inboundMsat = channels.sumOf { it.inboundCapacityMsat.toLong() }
             val usableChannels = channels.count { it.isUsable }
@@ -777,7 +786,9 @@ class LightningService(private val context: Context) {
                 pendingChannels = pending,
                 channelFeeRates = feeRates,
                 pendingCloseSats = pendingCloseTotalSats,
-                pendingCloseDetails = pendingCloses
+                pendingCloseDetails = pendingCloses,
+                ldkHeight = ldkH,
+                chainSynced = synced
             )
         } catch (e: Exception) {
             Log.e(TAG, "Failed to update state", e)
