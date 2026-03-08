@@ -178,6 +178,9 @@ class PowerModeManager(private val context: Context) {
         }
         Log.i(TAG, "Power mode: $previous -> $mode${if (isAuto) " (auto)" else ""}")
 
+        // Store scope for burst cycling
+        activeScope = scope
+
         // Cancel existing burst cycle
         burstJob?.cancel()
         burstJob = null
