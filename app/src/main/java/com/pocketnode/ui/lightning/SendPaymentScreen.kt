@@ -236,12 +236,24 @@ fun SendPaymentScreen(
                     error = null
                     result = null
                     scope.launch {
+                        val pmm = com.pocketnode.power.PowerModeManager(context)
+                        val creds = com.pocketnode.util.ConfigGenerator.readCredentials(context)
+                        if (creds != null) {
+                            pmm.setRpc(com.pocketnode.rpc.BitcoinRpcClient(creds.first, creds.second))
+                        }
+                        pmm.holdNetwork()
+                        // Brief wait for peer connection
+                        kotlinx.coroutines.delay(2000)
                         val payResult = withContext(Dispatchers.IO) {
-                            if (isOffer) {
-                                val amountMsat = offerAmountSats.toLongOrNull()?.let { it * 1000 }
-                                lightning.payOffer(cleanInput, amountMsat)
-                            } else {
-                                lightning.payInvoice(cleanInput)
+                            try {
+                                if (isOffer) {
+                                    val amountMsat = offerAmountSats.toLongOrNull()?.let { it * 1000 }
+                                    lightning.payOffer(cleanInput, amountMsat)
+                                } else {
+                                    lightning.payInvoice(cleanInput)
+                                }
+                            } finally {
+                                pmm.releaseNetworkHold()
                             }
                         }
                         payResult.onSuccess {
