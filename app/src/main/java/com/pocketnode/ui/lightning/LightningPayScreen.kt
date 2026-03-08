@@ -150,7 +150,15 @@ fun LightningPayScreen(
 
             if (isReady) {
                 // Push Pay button to center of visible area
-                Spacer(modifier = Modifier.height(120.dp))
+                Spacer(modifier = Modifier.height(80.dp))
+
+                Text(
+                    "⚡",
+                    fontSize = 48.sp,
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
             }
 
             // PAY button — the hero
