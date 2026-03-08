@@ -1176,7 +1176,11 @@ class LightningService(private val context: Context) {
             synchronized(this) { starting = false }
         }
 
-        context.getSharedPreferences("watchtower_prefs", MODE_PRIVATE).edit().clear().apply()
+        // Only clear the sweep address (new node = new keys). Keep tower connection settings.
+        val wtPrefs = context.getSharedPreferences("watchtower_prefs", MODE_PRIVATE)
+        wtPrefs.edit().also { editor ->
+            wtPrefs.all.keys.filter { it.startsWith("sweep_address_") }.forEach { editor.remove(it) }
+        }.apply()
     }
 
     /**
