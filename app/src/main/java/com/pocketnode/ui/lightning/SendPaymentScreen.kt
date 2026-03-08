@@ -245,7 +245,7 @@ fun SendPaymentScreen(
                             }
                         }
                         payResult.onSuccess {
-                            result = "Payment sent!"
+                            result = "⚡ Payment successful!"
                             sending = false
                         }.onFailure {
                             error = it.message ?: "Payment failed"

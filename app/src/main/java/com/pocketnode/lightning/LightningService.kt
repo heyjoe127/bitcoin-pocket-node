@@ -1014,11 +1014,42 @@ class LightningService(private val context: Context) {
         return try {
             val invoice = Bolt11Invoice.fromStr(invoiceStr)
             val paymentId = n.bolt11Payment().send(invoice, null)
-            Result.success(paymentId)
+            Log.i(TAG, "Payment queued: $paymentId, waiting for result...")
+            // Poll payment status until it resolves
+            val result = waitForPayment(n, paymentId, 30)
+            if (result) {
+                Log.i(TAG, "Payment confirmed successful: $paymentId")
+                Result.success(paymentId)
+            } else {
+                Log.w(TAG, "Payment failed or timed out: $paymentId")
+                Result.failure(Exception("Payment failed or timed out"))
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to pay invoice", e)
             Result.failure(e)
         }
+    }
+
+    /**
+     * Poll payment status until SUCCEEDED or FAILED (up to timeoutSecs).
+     * Returns true if succeeded, false if failed/timed out.
+     */
+    private fun waitForPayment(n: Node, paymentId: String, timeoutSecs: Int): Boolean {
+        val deadline = System.currentTimeMillis() + timeoutSecs * 1000L
+        while (System.currentTimeMillis() < deadline) {
+            // Process any pending events first
+            try { handleEvents() } catch (_: Exception) {}
+            val payment = n.listPayments().find { it.id == paymentId }
+            if (payment != null) {
+                when (payment.status) {
+                    PaymentStatus.SUCCEEDED -> return true
+                    PaymentStatus.FAILED -> return false
+                    else -> {} // PENDING, keep waiting
+                }
+            }
+            Thread.sleep(500)
+        }
+        return false // timed out
     }
 
     fun createInvoice(amountMsat: Long, description: String, expirySecs: Int = 3600): Result<String> {
@@ -1069,7 +1100,16 @@ class LightningService(private val context: Context) {
                 n.bolt12Payment().sendUsingAmount(offer, amountMsat.toULong(), null, null, null)
             else
                 n.bolt12Payment().send(offer, null, null, null)
-            Result.success(paymentId.toString())
+            val id = paymentId.toString()
+            Log.i(TAG, "BOLT12 payment queued: $id, waiting for result...")
+            val result = waitForPayment(n, id, 30)
+            if (result) {
+                Log.i(TAG, "BOLT12 payment confirmed successful: $id")
+                Result.success(id)
+            } else {
+                Log.w(TAG, "BOLT12 payment failed or timed out: $id")
+                Result.failure(Exception("Payment failed or timed out"))
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to pay offer", e)
             Result.failure(e)
