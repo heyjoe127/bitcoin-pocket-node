@@ -1056,15 +1056,21 @@ class LightningService(private val context: Context) {
             Log.i(TAG, "Deposit address used, rotating: $cached")
         }
 
-        // Generate fresh address
+        // Generate fresh unused address (skip any that already have UTXOs)
         val n = node ?: return Result.failure(Exception("Node not running"))
         return try {
-            val addr = n.onchainPayment().newAddress()
+            var addr: String
+            var attempts = 0
+            do {
+                addr = n.onchainPayment().newAddress()
+                attempts++
+                if (attempts > 20) break // safety limit
+            } while (isAddressUsed(addr))
             cachedDepositAddress = addr
             depositAddressPrefs.edit()
                 .putString("current_address", addr)
                 .apply()
-            Log.i(TAG, "New deposit address: $addr")
+            Log.i(TAG, "New deposit address: $addr (after $attempts attempts)")
             Result.success(addr)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to get address", e)
