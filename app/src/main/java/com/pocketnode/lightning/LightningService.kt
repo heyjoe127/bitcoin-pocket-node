@@ -1118,6 +1118,12 @@ class LightningService(private val context: Context) {
             val peer = n.listPeers().find { it.nodeId == nodeId }
             val anchors = peer?.supportsAnchors ?: false
             Log.i(TAG, "Connected. Peer anchors=$anchors. Opening channel for $amountSats sats")
+            // Enforce anchor-only if enabled
+            val anchorOnly = context.getSharedPreferences("pocketnode_prefs", Context.MODE_PRIVATE)
+                .getBoolean("anchor_channels_only", true)
+            if (anchorOnly && !anchors) {
+                return Result.failure(Exception("Peer doesn't support anchor channels. Disable 'Anchor channels only' in settings to allow legacy channels."))
+            }
             val userChannelId = n.openChannel(nodeId, address, amountSats.toULong(), null, null)
             Log.i(TAG, "Channel open initiated: $userChannelId")
             // Clear any previous channel error
