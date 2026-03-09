@@ -56,7 +56,6 @@ fun PeerBrowserScreen(
             if (cached.isNotEmpty()) {
                 nodes = cached
                 loading = false
-                enrichKey++
             } else {
                 nodes = withContext(Dispatchers.IO) {
                     val fetched = when (selectedTab) {
@@ -70,7 +69,6 @@ fun PeerBrowserScreen(
                 }
                 loading = false
                 lastUpdate = getCacheAge(context)
-                enrichKey++
             }
         }
     }
