@@ -46,6 +46,7 @@ fun PeerBrowserScreen(
     var selectedTab by remember { mutableStateOf(0) }
     val tabs = listOf("Most Connected", "Largest", "Lowest Fee", "Search")
     var lastUpdate by remember { mutableStateOf(getCacheAge(context)) }
+    var enrichKey by remember { mutableStateOf(0) }
 
     // Load from cache first, fetch from network only if no cache
     LaunchedEffect(selectedTab) {
@@ -55,6 +56,7 @@ fun PeerBrowserScreen(
             if (cached.isNotEmpty()) {
                 nodes = cached
                 loading = false
+                enrichKey++
             } else {
                 nodes = withContext(Dispatchers.IO) {
                     val fetched = when (selectedTab) {
@@ -68,6 +70,32 @@ fun PeerBrowserScreen(
                 }
                 loading = false
                 lastUpdate = getCacheAge(context)
+                enrichKey++
+            }
+        }
+    }
+
+    // Enrich nodes with anchor data from mempool.space (background)
+    LaunchedEffect(enrichKey) {
+        val toEnrich = nodes.filter { it.supportsAnchors == null && it.publicKey.isNotEmpty() }
+        if (toEnrich.isNotEmpty()) {
+            withContext(Dispatchers.IO) {
+                val enriched = nodes.toMutableList()
+                for (i in enriched.indices) {
+                    if (enriched[i].supportsAnchors == null && enriched[i].publicKey.isNotEmpty()) {
+                        try {
+                            val details = NodeDirectory.getNodeDetails(enriched[i].publicKey)
+                            if (details?.supportsAnchors != null) {
+                                enriched[i] = enriched[i].copy(
+                                    supportsAnchors = details.supportsAnchors,
+                                    sockets = if (enriched[i].sockets.isEmpty()) details.sockets else enriched[i].sockets
+                                )
+                                withContext(Dispatchers.Main) { nodes = enriched.toList() }
+                            }
+                        } catch (_: Exception) {}
+                    }
+                }
+                if (selectedTab < 3) saveCachedNodes(context, selectedTab, enriched)
             }
         }
     }
@@ -87,6 +115,7 @@ fun PeerBrowserScreen(
             }
             loading = false
             lastUpdate = getCacheAge(context)
+            enrichKey++
         }
     }
 
@@ -175,6 +204,7 @@ fun PeerBrowserScreen(
                                             NodeDirectory.search(searchQuery)
                                         }
                                         loading = false
+                                        enrichKey++
                                     }
                                 }
                             }) {
