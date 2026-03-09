@@ -936,12 +936,13 @@ class LightningService(private val context: Context) {
                 lightningBalanceSats = balances.totalLightningBalanceSats.toLong(),
                 channelCount = channels.size,
                 totalCapacitySats = channels.sumOf { it.channelValueSats.toLong() }.also {
-                    // Auto-unlock Lightning Pay for existing installs with channels
+                    val prefs = context.getSharedPreferences("pocketnode_prefs", android.content.Context.MODE_PRIVATE)
                     if (channels.isNotEmpty()) {
-                        try {
-                            context.getSharedPreferences("pocketnode_prefs", android.content.Context.MODE_PRIVATE)
-                                .edit().putBoolean("lightning_unlocked", true).apply()
-                        } catch (_: Exception) {}
+                        // Auto-unlock Lightning Pay when channels exist
+                        try { prefs.edit().putBoolean("lightning_unlocked", true).apply() } catch (_: Exception) {}
+                    } else if (balances.totalLightningBalanceSats == 0UL && pendingCloseTotalSats == 0L) {
+                        // Re-lock when no channels, no lightning balance, no pending close
+                        try { prefs.edit().putBoolean("lightning_unlocked", false).apply() } catch (_: Exception) {}
                     }
                 },
                 totalInboundSats = channels.sumOf {
