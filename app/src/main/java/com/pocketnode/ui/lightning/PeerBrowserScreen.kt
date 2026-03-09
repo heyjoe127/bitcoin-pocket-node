@@ -179,14 +179,12 @@ fun PeerBrowserScreen(
                     )
                 }
             }
-            if (anchorOnly) {
-                Text(
-                    "Anchor channels use zero-fee commitments, eliminating fee disagreements that can force-close your channel. Essential for mobile nodes with intermittent connectivity.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
-                )
-            }
+            Text(
+                "Anchor channels use zero-fee commitments, eliminating fee disagreements that can force-close your channel. Essential for mobile nodes with intermittent connectivity.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
+            )
             val displayNodes = if (anchorOnly) nodes.filter { it.supportsAnchors != false } else nodes
 
             // Search bar (visible on Search tab)
