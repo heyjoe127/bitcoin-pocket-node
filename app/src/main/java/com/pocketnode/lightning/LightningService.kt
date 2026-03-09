@@ -248,15 +248,17 @@ class LightningService(private val context: Context) {
             val hasPersistedState = File(storageDir, "bdk_wallet").exists()
             val hasMnemonic = File(storageDir, "mnemonic").exists()
             // Recovery: if wallet has a birthday but no persisted BDK state,
-            // we need to scan from the birthday height to find old UTXOs.
-            // setWalletBirthdayHeight is a no-op (BDK TODO), and recovery mode
-            // scans from genesis which fails on pruned nodes ("Block not found").
-            // Instead: start normally (creates wallet at current tip), then after
-            // startup we'll feed historical blocks to find the UTXOs.
+            // set the wallet birthday height so BDK creates its first checkpoint
+            // at that block instead of the current tip. This lets the chain
+            // listener sync from the birthday forward, finding historical UTXOs
+            // even on pruned nodes.
             val needsBirthdayScan = (seedFile.exists() || hasMnemonic) && !hasPersistedState && birthdayFile.exists()
             if (needsBirthdayScan) {
-                val birthdayHeight = try { birthdayFile.readText().trim().toInt() } catch (_: Exception) { 0 }
-                Log.i(TAG, "Wallet birthday found: $birthdayHeight. Will feed historical blocks after startup.")
+                val birthdayHeight = try { birthdayFile.readText().trim().toUInt() } catch (_: Exception) { 0u }
+                if (birthdayHeight > 0u) {
+                    Log.i(TAG, "Wallet birthday found: $birthdayHeight. Setting birthday checkpoint.")
+                    builder.setWalletBirthdayHeight(birthdayHeight)
+                }
             }
 
             // --- Seed / Entropy ---
@@ -347,75 +349,10 @@ class LightningService(private val context: Context) {
             Log.i(TAG, "Lightning node started. Node ID: $nodeId")
             Log.i(TAG, "Initial balances: onchain=${initBalances.totalOnchainBalanceSats} spendable=${initBalances.spendableOnchainBalanceSats} lightning=${initBalances.totalLightningBalanceSats}")
 
-            // Birthday block recovery: on pruned nodes, BDK can't rescan from genesis.
-            // Instead, use bitcoind's importdescriptors + rescanblockchain to re-download
-            // needed blocks, then syncWallets() to pick up the UTXOs.
-            if (needsBirthdayScan && initBalances.totalOnchainBalanceSats == 0UL) {
-                val birthdayHeight = try { birthdayFile.readText().trim().toInt() } catch (_: Exception) { 0 }
-                if (birthdayHeight > 0) {
-                    try {
-                        Log.i(TAG, "Recovery: feeding historical blocks from $birthdayHeight to BDK")
-                        // Generate a few addresses so BDK knows about them
-                        // (the deposit might be at index 0, 1, or 2)
-                        for (i in 0 until 5) {
-                            try { ldkNode.onchainPayment().newAddress() } catch (_: Exception) { break }
-                        }
-                        // Trigger a wallet sync to pick up any UTXOs at those addresses
-                        ldkNode.syncWallets()
-                        val afterSync = ldkNode.listBalances()
-                        Log.i(TAG, "Recovery: after syncWallets: onchain=${afterSync.totalOnchainBalanceSats}")
-                        if (afterSync.totalOnchainBalanceSats > 0UL) {
-                            Log.i(TAG, "Recovery: found ${afterSync.totalOnchainBalanceSats} sats!")
-                            birthdayFile.delete() // Don't repeat
-                        } else {
-                            // syncWallets didn't help (pruned blocks). Try importdescriptors.
-                            Log.w(TAG, "Recovery: syncWallets found nothing. Trying bitcoind rescanblockchain...")
-                            val mnemonicFile = File(storageDir, "mnemonic")
-                            if (mnemonicFile.exists()) {
-                                val words = mnemonicFile.readText().trim()
-                                val recoveryService = WalletRecoveryService(context)
-                                val descs = recoveryService.descriptorsFromMnemonic(words)
-                                // Import descriptors into bitcoind's wallet
-                                for (desc in descs) {
-                                    try {
-                                        val importParams = org.json.JSONArray()
-                                        val descArray = org.json.JSONArray()
-                                        val descObj = org.json.JSONObject()
-                                        descObj.put("desc", desc)
-                                        descObj.put("timestamp", birthdayHeight.toLong())
-                                        descObj.put("range", 20)
-                                        descObj.put("watchonly", true)
-                                        descObj.put("internal", desc.contains("/1/*"))
-                                        descArray.put(descObj)
-                                        importParams.put(descArray)
-                                        rpc.callSync("importdescriptors", importParams, readTimeoutMs = 30_000)
-                                    } catch (e: Exception) {
-                                        Log.d(TAG, "importdescriptors: ${e.message}")
-                                    }
-                                }
-                                // Rescan from birthday (re-downloads pruned blocks from peers)
-                                try {
-                                    val rescanParams = org.json.JSONArray()
-                                    rescanParams.put(birthdayHeight)
-                                    Log.i(TAG, "Recovery: rescanblockchain from $birthdayHeight...")
-                                    rpc.callSync("rescanblockchain", rescanParams, readTimeoutMs = 300_000)
-                                    Log.i(TAG, "Recovery: rescanblockchain complete")
-                                } catch (e: Exception) {
-                                    Log.w(TAG, "Recovery: rescanblockchain failed: ${e.message}")
-                                }
-                                // Sync again after rescan
-                                ldkNode.syncWallets()
-                                val afterRescan = ldkNode.listBalances()
-                                Log.i(TAG, "Recovery: after rescan+sync: onchain=${afterRescan.totalOnchainBalanceSats}")
-                                if (afterRescan.totalOnchainBalanceSats > 0UL) {
-                                    birthdayFile.delete()
-                                }
-                            }
-                        }
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Recovery block scan failed: ${e.message}")
-                    }
-                }
+            // After birthday-based recovery, check if balance was found and clean up
+            if (needsBirthdayScan && initBalances.totalOnchainBalanceSats > 0UL) {
+                Log.i(TAG, "Birthday recovery: found ${initBalances.totalOnchainBalanceSats} sats on first sync!")
+                birthdayFile.delete()
             }
 
             // Check if a seed restore just happened and needs a recovery scan.
