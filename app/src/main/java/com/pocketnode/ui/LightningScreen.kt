@@ -789,7 +789,8 @@ fun LightningScreen(
 
                 // Watchtower status card
                 val wtPrefs = remember { context.getSharedPreferences("watchtower_prefs", android.content.Context.MODE_PRIVATE) }
-                val towerConfigured = remember { wtPrefs.getString("tower_pubkey", null) != null }
+                val wtManager = remember { com.pocketnode.service.WatchtowerManager(context) }
+                val towerConfigured = remember { wtManager.isConfigured() }
 
                 // Check monitor backup status
                 val backupMonitorsDir = remember { java.io.File(context.filesDir, "lightning_backup/monitors") }
@@ -801,9 +802,11 @@ fun LightningScreen(
                 ) {
                     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (towerConfigured) {
-                            Text("\uD83D\uDEE1\uFE0F Watchtower Connected", fontWeight = FontWeight.Bold, color = Color(0xFF4CAF50))
+                            val wtStatus = wtManager.getStatus()
+                            val nodeOs = if (wtStatus is com.pocketnode.service.WatchtowerManager.WatchtowerStatus.Configured) wtStatus.nodeOs else null
+                            Text("\uD83D\uDEE1\uFE0F Watchtower Configured", fontWeight = FontWeight.Bold, color = Color(0xFF4CAF50))
                             Text(
-                                "Your home node watches your channels when this phone is offline and justice data is pushed after each payment.",
+                                "Your home node${if (nodeOs != null) " ($nodeOs)" else ""} watches your channels when this phone is offline.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                             )
