@@ -524,6 +524,10 @@ class LightningService(private val context: Context) {
                                 }
                             }
                         }
+                        // Periodic monitor backup (every 5 min if channels exist)
+                        if (st.channelCount > 0 && now - lastWalletSync > 300_000) {
+                            backupChannelMonitors()
+                        }
                     } catch (_: Exception) {}
                 }
             }
@@ -991,6 +995,7 @@ class LightningService(private val context: Context) {
             if (event is Event.ChannelReady || event is Event.ChannelClosed
                 || event is Event.PaymentSuccessful || event is Event.PaymentReceived) {
                 drainWatchtowerBlobs()
+                backupChannelMonitors()
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error handling events", e)
@@ -1520,6 +1525,25 @@ class LightningService(private val context: Context) {
             }
         }
 
+        // Restore channel monitors from backup if mnemonic matches
+        val backupMonitorsDir = File(context.filesDir, "${STORAGE_DIR}_backup/monitors")
+        if (backupMonitorsDir.exists() && mnemonicStr != null && backupMnemonicFile.exists()) {
+            if (backupMnemonicFile.readText().trim() == mnemonicStr) {
+                val monitorsDir = File(storageDir, "monitors")
+                if (!monitorsDir.exists()) monitorsDir.mkdirs()
+                var restored = 0
+                backupMonitorsDir.listFiles()?.forEach { file ->
+                    if (file.name.endsWith(".bin")) {
+                        file.copyTo(File(monitorsDir, file.nameWithoutExtension), overwrite = true)
+                        restored++
+                    }
+                }
+                if (restored > 0) {
+                    Log.i(TAG, "Restored $restored channel monitor(s) from backup")
+                }
+            }
+        }
+
         pendingMnemonic.delete()
         pendingFile.delete()
         // Mark as restored wallet so we trigger recovery scan (not birthday save) on first start
@@ -1747,5 +1771,48 @@ class LightningService(private val context: Context) {
         if (pad && bits > 0) result.add(((acc shl (toBits - bits)) and maxv).toByte())
         else if (bits >= fromBits || ((acc shl (toBits - bits)) and maxv) != 0) return null
         return result.toByteArray()
+    }
+
+    /**
+     * Back up channel monitors to the backup directory.
+     * This preserves the full serialized monitor data so it can survive
+     * a seed restore (which clears the lightning/ directory).
+     * Should be called on channel open, channel update, and periodically.
+     */
+    fun backupChannelMonitors() {
+        val n = node ?: return
+        try {
+            val monitors = n.watchtowerExportMonitors()
+            if (monitors.isEmpty()) return
+
+            val backupDir = File(context.filesDir, "${STORAGE_DIR}_backup/monitors")
+            if (!backupDir.exists()) backupDir.mkdirs()
+
+            for (monitor in monitors) {
+                val file = File(backupDir, "${monitor.channelId}.bin")
+                val existingSize = if (file.exists()) file.length() else 0
+                // Only write if data changed (updateId increased or file missing)
+                if (!file.exists() || file.length() != monitor.monitorBytes.size.toLong()) {
+                    file.writeBytes(monitor.monitorBytes)
+                    Log.i(TAG, "Backed up monitor ${monitor.channelId.take(12)} " +
+                            "(update=${monitor.latestUpdateId}, ${monitor.monitorBytes.size}b)")
+                }
+            }
+
+            // Also save monitor metadata for restore
+            val metaFile = File(context.filesDir, "${STORAGE_DIR}_backup/monitors_meta.json")
+            val meta = org.json.JSONArray()
+            for (monitor in monitors) {
+                val obj = org.json.JSONObject()
+                obj.put("channel_id", monitor.channelId)
+                obj.put("counterparty", monitor.counterpartyNodeId)
+                obj.put("update_id", monitor.latestUpdateId)
+                obj.put("size", monitor.monitorBytes.size)
+                meta.put(obj)
+            }
+            metaFile.writeText(meta.toString(2))
+        } catch (e: Exception) {
+            Log.w(TAG, "backupChannelMonitors: ${e.message}")
+        }
     }
 }
