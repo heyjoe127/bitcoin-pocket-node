@@ -811,7 +811,18 @@ fun LightningScreen(
                         if (towerConfigured) {
                             val wtStatus = wtManager.getStatus()
                             val nodeOs = if (wtStatus is com.pocketnode.service.WatchtowerManager.WatchtowerStatus.Configured) wtStatus.nodeOs else null
-                            Text("\uD83D\uDEE1\uFE0F Watchtower Configured", fontWeight = FontWeight.Bold, color = Color(0xFF4CAF50))
+                            val towerReachable = effectiveState.watchtowerReachable
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text("\uD83D\uDEE1\uFE0F Watchtower", fontWeight = FontWeight.Bold, color = Color(0xFF4CAF50))
+                                when (towerReachable) {
+                                    true -> Text("● Connected", style = MaterialTheme.typography.bodySmall, color = Color(0xFF4CAF50))
+                                    false -> Text("● Offline", style = MaterialTheme.typography.bodySmall, color = Color(0xFFFF9800))
+                                    null -> Text("● Checking...", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
+                                }
+                            }
                             Text(
                                 "Your home node${if (nodeOs != null) " ($nodeOs)" else ""} watches your channels when this phone is offline.",
                                 style = MaterialTheme.typography.bodySmall,

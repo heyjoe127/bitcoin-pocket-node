@@ -68,7 +68,9 @@ class LightningService(private val context: Context) {
         val pendingCloseDetails: List<PendingClose> = emptyList(),
         // Chain sync status for payment readiness
         val ldkHeight: Long = 0,
-        val chainSynced: Boolean = false
+        val chainSynced: Boolean = false,
+        // Watchtower bridge connectivity
+        val watchtowerReachable: Boolean? = null  // null=unknown, true=connected, false=failed
     ) {
         data class PendingChannel(
             val channelId: String,
@@ -461,8 +463,10 @@ class LightningService(private val context: Context) {
                 try {
                     val reachable = watchtowerBridge?.initialize() ?: false
                     Log.i(TAG, "Watchtower bridge initialized: reachable=$reachable")
+                    _state.value = _state.value.copy(watchtowerReachable = reachable)
                 } catch (e: Exception) {
                     Log.w(TAG, "Watchtower bridge init failed: ${e.message}")
+                    _state.value = _state.value.copy(watchtowerReachable = false)
                 }
             }.start()
 
