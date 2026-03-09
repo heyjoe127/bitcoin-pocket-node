@@ -1364,10 +1364,41 @@ class LightningService(private val context: Context) {
         }
     }
 
-    /** Check if address was ever used (tracked locally, no RPC needed). */
+    /**
+     * Check if address was ever used. Checks:
+     * 1. Local tracking set (fast, survives restarts)
+     * 2. On-chain via scantxoutset single-address check (catches usage missed by local tracking,
+     *    e.g. after seed restore clears local state)
+     */
     private fun isAddressUsed(address: String): Boolean {
         val usedSet = depositAddressPrefs.getStringSet("used_addresses", emptySet()) ?: emptySet()
-        return address in usedSet
+        if (address in usedSet) return true
+
+        // Also check on-chain: has this address ever received funds?
+        // Use scantxoutset for a single address — fast (only checks live UTXO set)
+        // and works on pruned nodes.
+        val rpc = rpcClient ?: return false
+        try {
+            val params = org.json.JSONArray().apply {
+                put("start")
+                put(org.json.JSONArray().apply { put("addr($address)") })
+            }
+            val result = rpc.callSync("scantxoutset", params, readTimeoutMs = 5_000)
+            val resultObj = result?.optJSONObject("result")
+            if (resultObj != null) {
+                val totalAmount = resultObj.optDouble("total_amount", 0.0)
+                val unspents = resultObj.optJSONArray("unspents")
+                if (totalAmount > 0 || (unspents != null && unspents.length() > 0)) {
+                    // Address has unspent outputs — mark locally too
+                    markAddressUsed(address)
+                    Log.i(TAG, "Address $address has on-chain UTXOs, marking as used")
+                    return true
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "scantxoutset check failed for address, falling back to local only: ${e.message}")
+        }
+        return false
     }
 
     fun markDepositAddressUsed(address: String) = markAddressUsed(address)
@@ -1548,6 +1579,10 @@ class LightningService(private val context: Context) {
 
         pendingMnemonic.delete()
         pendingFile.delete()
+        // Clear deposit address cache (stale after restore)
+        context.getSharedPreferences("deposit_address", MODE_PRIVATE)
+            .edit().clear().apply()
+        cachedDepositAddress = null
         // Mark as restored wallet so we trigger recovery scan (not birthday save) on first start
         context.getSharedPreferences("pocketnode_prefs", MODE_PRIVATE)
             .edit().putBoolean("pending_recovery_scan", true).apply()
