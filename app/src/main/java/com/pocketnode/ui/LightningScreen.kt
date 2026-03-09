@@ -860,36 +860,6 @@ fun LightningScreen(
                     }
                 }
 
-                // Anchor channels only toggle
-                val anchorPrefs = remember { context.getSharedPreferences("pocketnode_prefs", android.content.Context.MODE_PRIVATE) }
-                var anchorOnly by remember { mutableStateOf(anchorPrefs.getBoolean("anchor_channels_only", true)) }
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("Anchor Channels Only", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
-                            Text(
-                                "Reject peers without anchor support. Safer fee handling for mobile.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                            )
-                        }
-                        Switch(
-                            checked = anchorOnly,
-                            onCheckedChange = {
-                                anchorOnly = it
-                                anchorPrefs.edit().putBoolean("anchor_channels_only", it).apply()
-                            }
-                        )
-                    }
-                }
-
                 // Wallet backup
                 OutlinedButton(
                     onClick = onNavigateToSeedBackup,

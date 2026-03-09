@@ -1,6 +1,7 @@
 package com.pocketnode.ui.lightning
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -252,6 +253,31 @@ fun OpenChannelScreen(
                 ) {
                     Text(error!!, modifier = Modifier.padding(12.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                 }
+            }
+
+            // Anchor channels only toggle
+            val anchorPrefs = remember { context.getSharedPreferences("pocketnode_prefs", android.content.Context.MODE_PRIVATE) }
+            var anchorOnly by remember { mutableStateOf(anchorPrefs.getBoolean("anchor_channels_only", true)) }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("⚓ Anchor channels only", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                    Text(
+                        "Safer fee handling for mobile",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                    )
+                }
+                Switch(
+                    checked = anchorOnly,
+                    onCheckedChange = {
+                        anchorOnly = it
+                        anchorPrefs.edit().putBoolean("anchor_channels_only", it).apply()
+                    }
+                )
             }
 
             // Open button
