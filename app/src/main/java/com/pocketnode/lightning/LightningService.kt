@@ -363,6 +363,16 @@ class LightningService(private val context: Context) {
             val activeMonitors = File(storageDir, "monitors")
             val archivedMonitors = File(storageDir, "archived_monitors")
             Log.i(TAG, "Active monitors: ${activeMonitors.listFiles()?.size ?: 0}, Archived: ${archivedMonitors.listFiles()?.size ?: 0}")
+            // Check watchtower blobs (stored outside lightning/ dir, may survive restore)
+            val wtBlobDir = File(context.filesDir, "watchtower_blobs")
+            if (wtBlobDir.exists()) {
+                val blobs = wtBlobDir.listFiles()?.map { "${it.name} (${it.length()}b)" } ?: emptyList()
+                Log.i(TAG, "Watchtower blobs: $blobs")
+            } else {
+                Log.i(TAG, "No watchtower_blobs directory")
+            }
+            val wtKeyFile = File(context.filesDir, "watchtower_client_key")
+            Log.i(TAG, "Watchtower client key: ${if (wtKeyFile.exists()) "${wtKeyFile.length()}b" else "missing"}")
 
             // After birthday-based recovery, check if balance was found and clean up
             if (needsBirthdayScan && initBalances.totalOnchainBalanceSats > 0UL) {
@@ -449,14 +459,12 @@ class LightningService(private val context: Context) {
             // If there are channel monitors with unbroadcast commitment txs
             // (e.g., force-close happened while network was off in burst mode),
             // broadcast them now. This is safe to call even with no pending closes.
-            // TODO: Enable once AAR Kotlin bindings include broadcastHolderCommitmentTxns()
-            // The Rust .so has it (commit 494af28) but current bindings were generated before.
-            // try {
-            //     ldkNode.broadcastHolderCommitmentTxns()
-            //     Log.i(TAG, "Broadcast holder commitment txns check complete")
-            // } catch (e: Exception) {
-            //     Log.w(TAG, "broadcastHolderCommitmentTxns: ${e.message}")
-            // }
+            try {
+                ldkNode.broadcastHolderCommitmentTxns()
+                Log.i(TAG, "Broadcast holder commitment txns check complete")
+            } catch (e: Exception) {
+                Log.w(TAG, "broadcastHolderCommitmentTxns: ${e.message}")
+            }
 
             // --- Background recovery scan fallback ---
             if (needsRecoveryScan && scanDescriptors.isNotEmpty()) {
@@ -506,13 +514,13 @@ class LightningService(private val context: Context) {
                                     return@launch // Exit this coroutine, new one starts after restart
                                 }
                             } else {
-                                // Pending sweeps exist: sync wallets + broadcast stuck commitment txs
+                                // Pending sweeps exist: broadcast stuck commitment txs + sync wallets
                                 try {
-                                    // TODO: node?.broadcastHolderCommitmentTxns() once bindings updated
+                                    node?.broadcastHolderCommitmentTxns()
                                     node?.syncWallets()
-                                    Log.d(TAG, "syncWallets: triggered for pending close funds")
+                                    Log.d(TAG, "syncWallets+broadcast: triggered for pending close funds")
                                 } catch (e: Exception) {
-                                    Log.d(TAG, "syncWallets: ${e.message}")
+                                    Log.d(TAG, "syncWallets+broadcast: ${e.message}")
                                 }
                             }
                         }
