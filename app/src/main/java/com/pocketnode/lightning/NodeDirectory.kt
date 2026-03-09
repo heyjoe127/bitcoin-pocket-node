@@ -29,7 +29,8 @@ object NodeDirectory {
         val sockets: String, // comma-separated ip:port addresses
         val country: String,
         val feeRate: Long = -1, // ppm (parts per million), -1 = unknown
-        val minChannelSize: Long = -1 // sats, smallest open channel as proxy for minimum
+        val minChannelSize: Long = -1, // sats, smallest open channel as proxy for minimum
+        val supportsAnchors: Boolean? = null // null=unknown, from mempool.space features bit 23
     ) {
         /** First clearnet address, or first .onion, or empty */
         val address: String get() {
@@ -159,13 +160,15 @@ object NodeDirectory {
         return getNodeChannelStats(publicKey).medianFeeRate
     }
 
-    /** Get full node details including socket addresses */
+    /** Get full node details including socket addresses and anchor support */
     fun getNodeDetails(publicKey: String): LightningNode? {
         return try {
             val json = fetch("$BASE_URL/nodes/$publicKey")
             val obj = JSONObject(json)
             val pk = obj.getString("public_key")
             val stats = getNodeChannelStats(pk)
+            // Check features for anchors-zero-fee-htlc-tx (bit 23)
+            val anchors = parseAnchorSupport(obj.optJSONArray("features"))
             LightningNode(
                 publicKey = pk,
                 alias = obj.optString("alias", ""),
@@ -174,12 +177,25 @@ object NodeDirectory {
                 sockets = obj.optString("sockets", ""),
                 country = obj.optJSONObject("country")?.optString("en", "") ?: "",
                 feeRate = stats.medianFeeRate,
-                minChannelSize = stats.minChannelSize
+                minChannelSize = stats.minChannelSize,
+                supportsAnchors = anchors
             )
         } catch (e: Exception) {
             Log.e(TAG, "Failed to fetch node details", e)
             null
         }
+    }
+
+    /** Check if features array contains anchors-zero-fee-htlc-tx (bit 22 or 23) */
+    private fun parseAnchorSupport(features: JSONArray?): Boolean? {
+        if (features == null) return null
+        for (i in 0 until features.length()) {
+            val f = features.getJSONObject(i)
+            val bit = f.optInt("bit", -1)
+            // Bit 22 (required) or 23 (optional) = anchors-zero-fee-htlc-tx
+            if (bit == 22 || bit == 23) return true
+        }
+        return false
     }
 
     private fun parseRankingNode(obj: JSONObject): LightningNode {

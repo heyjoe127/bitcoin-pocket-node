@@ -187,15 +187,18 @@ fun PeerBrowserScreen(
                         NodeCard(node = node, onSelect = {
                             // Need to fetch details for sockets if not available
                             scope.launch {
-                                val details = if (node.sockets.isNotEmpty()) node
+                                val details = if (node.sockets.isNotEmpty() && node.supportsAnchors != null) node
                                 else withContext(Dispatchers.IO) {
                                     NodeDirectory.getNodeDetails(node.publicKey)
                                 }
-                                if (details != null && details.address.isNotEmpty()) {
-                                    onSelectNode(details.publicKey, details.address, details.alias, details.minChannelSize)
-                                } else if (details != null) {
-                                    // No clearnet address available
-                                    onSelectNode(details.publicKey, details.sockets, details.alias, details.minChannelSize)
+                                if (details != null) {
+                                    // Cache anchor status from mempool.space
+                                    if (details.supportsAnchors != null) {
+                                        context.getSharedPreferences("peer_channel_limits", Context.MODE_PRIVATE)
+                                            .edit().putBoolean("${details.publicKey}_anchors", details.supportsAnchors).apply()
+                                    }
+                                    val addr = if (details.address.isNotEmpty()) details.address else details.sockets
+                                    onSelectNode(details.publicKey, addr, details.alias, details.minChannelSize)
                                 }
                             }
                         })
@@ -225,8 +228,7 @@ private fun NodeCard(
     val cachedMin = prefs.getLong(node.publicKey, -1L)
     val isFloor = prefs.getBoolean("${node.publicKey}_floor", false)
     val isCeiling = prefs.getBoolean("${node.publicKey}_ceiling", false)
-    val hasAnchorData = prefs.contains("${node.publicKey}_anchors")
-    val supportsAnchors = if (hasAnchorData) prefs.getBoolean("${node.publicKey}_anchors", false) else null
+    val supportsAnchors = node.supportsAnchors
 
     Card(
         modifier = Modifier
@@ -322,6 +324,7 @@ private fun saveCachedNodes(context: Context, tab: Int, nodes: List<LightningNod
             put("feeRate", n.feeRate)
             put("sockets", n.sockets)
             put("minChannelSize", n.minChannelSize)
+            if (n.supportsAnchors != null) put("supportsAnchors", n.supportsAnchors)
         })
     }
     context.getSharedPreferences("peer_cache", Context.MODE_PRIVATE).edit()
@@ -345,7 +348,8 @@ private fun loadCachedNodes(context: Context, tab: Int): List<LightningNode> {
                 country = o.optString("country", ""),
                 feeRate = o.optLong("feeRate", -1),
                 sockets = o.optString("sockets", ""),
-                minChannelSize = o.optLong("minChannelSize", 0)
+                minChannelSize = o.optLong("minChannelSize", 0),
+                supportsAnchors = if (o.has("supportsAnchors")) o.getBoolean("supportsAnchors") else null
             )
         }
     } catch (_: Exception) { emptyList() }
