@@ -255,31 +255,6 @@ fun OpenChannelScreen(
                 }
             }
 
-            // Anchor channels only toggle
-            val anchorPrefs = remember { context.getSharedPreferences("pocketnode_prefs", android.content.Context.MODE_PRIVATE) }
-            var anchorOnly by remember { mutableStateOf(anchorPrefs.getBoolean("anchor_channels_only", true)) }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("⚓ Anchor channels only", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
-                    Text(
-                        "Safer fee handling for mobile",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                    )
-                }
-                Switch(
-                    checked = anchorOnly,
-                    onCheckedChange = {
-                        anchorOnly = it
-                        anchorPrefs.edit().putBoolean("anchor_channels_only", it).apply()
-                    }
-                )
-            }
-
             // Open button
             Button(
                 onClick = {

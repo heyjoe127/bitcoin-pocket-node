@@ -125,12 +125,32 @@ fun PeerBrowserScreen(
                 }
             }
 
-            Text(
-                "Data from mempool.space" + if (lastUpdate.isNotEmpty()) " · $lastUpdate" else "",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-            )
+            // Anchor-only filter
+            val anchorPrefs = remember { context.getSharedPreferences("pocketnode_prefs", Context.MODE_PRIVATE) }
+            var anchorOnly by remember { mutableStateOf(anchorPrefs.getBoolean("anchor_channels_only", true)) }
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Data from mempool.space" + if (lastUpdate.isNotEmpty()) " · $lastUpdate" else "",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("⚓ Only", style = MaterialTheme.typography.labelSmall)
+                    Switch(
+                        checked = anchorOnly,
+                        onCheckedChange = {
+                            anchorOnly = it
+                            anchorPrefs.edit().putBoolean("anchor_channels_only", it).apply()
+                        },
+                        modifier = Modifier.height(32.dp)
+                    )
+                }
+            }
+            val displayNodes = if (anchorOnly) nodes.filter { it.supportsAnchors != false } else nodes
 
             // Search bar (visible on Search tab)
             if (selectedTab == 3) {
@@ -170,10 +190,12 @@ fun PeerBrowserScreen(
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = Color(0xFFFF9800))
                 }
-            } else if (nodes.isEmpty()) {
+            } else if (displayNodes.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
-                        if (selectedTab == 3) "Search for a node by name or pubkey" else "No nodes found",
+                        if (selectedTab == 3) "Search for a node by name or pubkey"
+                        else if (anchorOnly && nodes.isNotEmpty()) "No anchor-capable peers found"
+                        else "No nodes found",
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                     )
                 }
@@ -183,7 +205,7 @@ fun PeerBrowserScreen(
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(nodes) { node ->
+                    items(displayNodes) { node ->
                         NodeCard(node = node, onSelect = {
                             // Need to fetch details for sockets if not available
                             scope.launch {
