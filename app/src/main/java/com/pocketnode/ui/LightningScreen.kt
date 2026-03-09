@@ -12,6 +12,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -726,13 +727,27 @@ fun LightningScreen(
                                 fontFamily = FontFamily.Monospace
                             )
                             Spacer(Modifier.height(8.dp))
-                            OutlinedButton(
-                                onClick = { clipboardManager.setText(AnnotatedString(depositAddress!!)) },
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
-                            ) {
-                                Icon(Icons.Default.ContentCopy, "Copy", modifier = Modifier.size(14.dp))
-                                Spacer(Modifier.width(4.dp))
-                                Text("Copy Address", style = MaterialTheme.typography.labelSmall)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedButton(
+                                    onClick = { clipboardManager.setText(AnnotatedString(depositAddress!!)) },
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                                ) {
+                                    Icon(Icons.Default.ContentCopy, "Copy", modifier = Modifier.size(14.dp))
+                                    Spacer(Modifier.width(4.dp))
+                                    Text("Copy Address", style = MaterialTheme.typography.labelSmall)
+                                }
+                                OutlinedButton(
+                                    onClick = {
+                                        lightning.markDepositAddressUsed(depositAddress!!)
+                                        depositAddress = null
+                                        lightning.getOnchainAddress().onSuccess { depositAddress = it }
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                                ) {
+                                    Icon(Icons.Default.Refresh, "Skip", modifier = Modifier.size(14.dp))
+                                    Spacer(Modifier.width(4.dp))
+                                    Text("Skip Address", style = MaterialTheme.typography.labelSmall)
+                                }
                             }
                         } else {
                             OutlinedButton(

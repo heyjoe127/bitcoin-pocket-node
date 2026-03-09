@@ -1370,6 +1370,8 @@ class LightningService(private val context: Context) {
         return address in usedSet
     }
 
+    fun markDepositAddressUsed(address: String) = markAddressUsed(address)
+
     private fun markAddressUsed(address: String) {
         val usedSet = depositAddressPrefs.getStringSet("used_addresses", emptySet())?.toMutableSet() ?: mutableSetOf()
         usedSet.add(address)
