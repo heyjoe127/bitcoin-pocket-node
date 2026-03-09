@@ -1174,7 +1174,12 @@ class LightningService(private val context: Context) {
             } catch (e: Exception) {
                 Log.w(TAG, "Could not update channel config before close: ${e.message}")
             }
-            n.closeChannel(userChannelId, counterpartyNodeId)
+            // Use minimum relay feerate (253 sat/kw = ~1 sat/vB) to maximize
+            // cooperative close success. Mobile nodes have stale fee estimates;
+            // defer to the always-online peer's fee judgment rather than risk
+            // force-close over a few sats disagreement.
+            n.closeChannelWithTargetFeerate(userChannelId, counterpartyNodeId, 253u)
+            Log.i(TAG, "Cooperative close initiated with min feerate (253 sat/kw)")
             updateState()
             Result.success(Unit)
         } catch (e: Exception) {
