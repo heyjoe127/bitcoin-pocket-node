@@ -246,11 +246,15 @@ class LightningService(private val context: Context) {
             val seedFile = File(storageDir, "keys_seed")
             val birthdayFile = File(storageDir, "wallet_birthday")
             val hasPersistedState = File(storageDir, "bdk_wallet").exists()
-            if (seedFile.exists() && !hasPersistedState && birthdayFile.exists()) {
+            val hasMnemonic = File(storageDir, "mnemonic").exists()
+            // Recovery mode: if wallet has a birthday but no persisted BDK state,
+            // enable recovery mode so BDK syncs from genesis (finds old UTXOs).
+            // setWalletBirthdayHeight is a no-op in this LDK version.
+            if ((seedFile.exists() || hasMnemonic) && !hasPersistedState && birthdayFile.exists()) {
                 try {
                     val birthdayHeight = birthdayFile.readText().trim().toUInt()
-                    Log.i(TAG, "Wallet birthday found: $birthdayHeight. Setting for recovery sync.")
-                    builder.setWalletBirthdayHeight(birthdayHeight)
+                    Log.i(TAG, "Wallet birthday found: $birthdayHeight. Enabling recovery mode.")
+                    builder.setWalletRecoveryMode()
                 } catch (e: Exception) {
                     Log.w(TAG, "Invalid wallet_birthday file: ${e.message}")
                 }
@@ -266,6 +270,12 @@ class LightningService(private val context: Context) {
             val entropy: NodeEntropy
             if (mnemonicFile.exists()) {
                 // BIP39 path: mnemonic -> PBKDF2 -> 64-byte seed (fully recoverable)
+                // Delete any stale keys_seed so ldk-node re-derives from the mnemonic.
+                // Different LDK versions may write incompatible keys_seed files.
+                if (seedFile.exists()) {
+                    seedFile.delete()
+                    Log.w(TAG, "Deleted stale keys_seed to force re-derivation from mnemonic")
+                }
                 val words = mnemonicFile.readText().trim()
                 entropy = NodeEntropy.Companion.fromBip39Mnemonic(words, "")
                 Log.i(TAG, "Using BIP39 mnemonic entropy (${words.split(" ").size} words)")
@@ -284,6 +294,30 @@ class LightningService(private val context: Context) {
                 entropy = NodeEntropy.Companion.fromBip39Mnemonic(mnemonic, "")
                 Log.i(TAG, "New BIP39 wallet created (${mnemonic.split(" ").size} words)")
             }
+            // --- Restore archived channel monitors ---
+            // LDK may archive monitors it considers "fully resolved", but if the
+            // commitment tx was never broadcast, the monitor is still needed.
+            // Move any archived monitors back to active before building the node.
+            val monitorsDir = File(storageDir, "monitors")
+            val archivedDir = File(storageDir, "archived_monitors")
+            if (archivedDir.exists() && archivedDir.isDirectory) {
+                val archivedFiles = archivedDir.listFiles()
+                if (archivedFiles != null && archivedFiles.isNotEmpty()) {
+                    if (!monitorsDir.exists()) monitorsDir.mkdirs()
+                    for (f in archivedFiles) {
+                        val dest = File(monitorsDir, f.name)
+                        if (!dest.exists()) {
+                            f.copyTo(dest)
+                            f.delete()
+                            Log.w(TAG, "Restored archived channel monitor: ${f.name}")
+                        } else {
+                            Log.d(TAG, "Monitor already active, removing archive: ${f.name}")
+                            f.delete()
+                        }
+                    }
+                }
+            }
+
             val ldkNode = builder.build(entropy)
 
             // --- Start LDK (sync, blocks until tokio runtime is running) ---
@@ -514,7 +548,7 @@ class LightningService(private val context: Context) {
      * On next start, LDK will sync from the current chain tip instead of the stale height.
      */
     private fun resetChainState(storageDir: File) {
-        val preserveNames = setOf("keys_seed", "keys_seed.bak", "channel_manager", "monitors", "wallet_birthday")
+        val preserveNames = setOf("keys_seed", "keys_seed.bak", "mnemonic", "channel_manager", "monitors", "wallet_birthday")
         storageDir.listFiles()?.forEach { file ->
             if (file.name !in preserveNames) {
                 val deleted = if (file.isDirectory) file.deleteRecursively() else file.delete()
