@@ -817,10 +817,10 @@ fun LightningScreen(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                             )
-                            val sshHost = wtPrefs.getString("ssh_host", "") ?: ""
-                            if (sshHost.isNotEmpty()) {
+                            val towerOnion = wtPrefs.getString("tower_onion", "") ?: ""
+                            if (towerOnion.isNotEmpty()) {
                                 Text(
-                                    "Node: $sshHost",
+                                    "\uD83E\uDDA7 ${towerOnion.take(16)}...onion",
                                     style = MaterialTheme.typography.bodySmall,
                                     fontFamily = FontFamily.Monospace,
                                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
