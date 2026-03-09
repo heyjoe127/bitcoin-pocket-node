@@ -45,6 +45,7 @@ fun OpenChannelScreen(
     var result by remember { mutableStateOf<String?>(null) }
     var channelId by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    var anchorWarning by remember { mutableStateOf<String?>(null) }
     val powerMode by PowerModeManager.modeFlow.collectAsState()
     val needsMaxMode = powerMode != PowerModeManager.Mode.MAX
     var syncingFees by remember { mutableStateOf(false) }
@@ -231,6 +232,19 @@ fun OpenChannelScreen(
                     }
                 }
             }
+            if (anchorWarning != null) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFF9800).copy(alpha = 0.15f))
+                ) {
+                    Text(
+                        "⚠️ $anchorWarning",
+                        modifier = Modifier.padding(12.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFFFF9800)
+                    )
+                }
+            }
             if (error != null) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -251,6 +265,7 @@ fun OpenChannelScreen(
                     opening = true
                     error = null
                     result = null
+                    anchorWarning = null
                     scope.launch {
                         withContext(Dispatchers.IO) {
                             // Save peer alias for channel display
@@ -265,6 +280,13 @@ fun OpenChannelScreen(
                                 "Channel opening! Funding transaction broadcasting."
                             } else {
                                 "Channel accepted by peer. Waiting for funding confirmation."
+                            }
+                            // Check if peer supports anchors
+                            val supportsAnchors = lightning.peerSupportsAnchors(nodeId)
+                            if (supportsAnchors == false) {
+                                anchorWarning = "Legacy channel (no anchors). Fee negotiation carries higher risk on mobile."
+                            } else if (supportsAnchors == true) {
+                                anchorWarning = null // Anchor channel, all good
                             }
                             opening = false
                         }.onFailure {

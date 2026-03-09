@@ -1114,7 +1114,10 @@ class LightningService(private val context: Context) {
         return try {
             Log.i(TAG, "Connecting to peer $nodeId at $address")
             n.connect(nodeId, address, true)
-            Log.i(TAG, "Connected. Opening channel for $amountSats sats")
+            // Check anchor support after connecting
+            val peer = n.listPeers().find { it.nodeId == nodeId }
+            val anchors = peer?.supportsAnchors ?: false
+            Log.i(TAG, "Connected. Peer anchors=$anchors. Opening channel for $amountSats sats")
             val userChannelId = n.openChannel(nodeId, address, amountSats.toULong(), null, null)
             Log.i(TAG, "Channel open initiated: $userChannelId")
             // Clear any previous channel error
@@ -1404,6 +1407,14 @@ class LightningService(private val context: Context) {
             Log.w(TAG, "scantxoutset check failed for address, falling back to local only: ${e.message}")
         }
         return false
+    }
+
+    /** Check if a connected peer supports anchor channels. Returns null if not connected. */
+    fun peerSupportsAnchors(nodeId: String): Boolean? {
+        val n = node ?: return null
+        val peer = n.listPeers().find { it.nodeId == nodeId }
+        if (peer == null || !peer.isConnected) return null
+        return peer.supportsAnchors
     }
 
     fun markDepositAddressUsed(address: String) = markAddressUsed(address)
