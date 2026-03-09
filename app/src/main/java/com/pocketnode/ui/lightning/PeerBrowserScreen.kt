@@ -225,6 +225,8 @@ private fun NodeCard(
     val cachedMin = prefs.getLong(node.publicKey, -1L)
     val isFloor = prefs.getBoolean("${node.publicKey}_floor", false)
     val isCeiling = prefs.getBoolean("${node.publicKey}_ceiling", false)
+    val hasAnchorData = prefs.contains("${node.publicKey}_anchors")
+    val supportsAnchors = if (hasAnchorData) prefs.getBoolean("${node.publicKey}_anchors", false) else null
 
     Card(
         modifier = Modifier
@@ -276,6 +278,12 @@ private fun NodeCard(
                     )
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (supportsAnchors != null) {
+                        Text(
+                            if (supportsAnchors) "⚓" else "⚠️",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
                     if (cachedMin > 0) {
                         val suffix = if (isCeiling) "-" else if (isFloor) "+" else ""
                         Text(

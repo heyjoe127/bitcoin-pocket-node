@@ -1114,9 +1114,10 @@ class LightningService(private val context: Context) {
         return try {
             Log.i(TAG, "Connecting to peer $nodeId at $address")
             n.connect(nodeId, address, true)
-            // Check anchor support after connecting
+            // Check and cache anchor support after connecting
             val peer = n.listPeers().find { it.nodeId == nodeId }
             val anchors = peer?.supportsAnchors ?: false
+            savePeerAnchors(nodeId, anchors)
             Log.i(TAG, "Connected. Peer anchors=$anchors. Opening channel for $amountSats sats")
             // Enforce anchor-only if enabled
             val anchorOnly = context.getSharedPreferences("pocketnode_prefs", Context.MODE_PRIVATE)
@@ -1415,12 +1416,24 @@ class LightningService(private val context: Context) {
         return false
     }
 
-    /** Check if a connected peer supports anchor channels. Returns null if not connected. */
+    /** Check if a connected peer supports anchor channels. Returns null if not connected and no cached value. */
     fun peerSupportsAnchors(nodeId: String): Boolean? {
-        val n = node ?: return null
+        val n = node ?: return getCachedPeerAnchors(nodeId)
         val peer = n.listPeers().find { it.nodeId == nodeId }
-        if (peer == null || !peer.isConnected) return null
+        if (peer == null || !peer.isConnected) return getCachedPeerAnchors(nodeId)
+        // Cache the result persistently
+        savePeerAnchors(nodeId, peer.supportsAnchors)
         return peer.supportsAnchors
+    }
+
+    private fun savePeerAnchors(peerId: String, supportsAnchors: Boolean) {
+        val prefs = context.getSharedPreferences("peer_channel_limits", MODE_PRIVATE)
+        prefs.edit().putBoolean("${peerId}_anchors", supportsAnchors).apply()
+    }
+
+    fun getCachedPeerAnchors(peerId: String): Boolean? {
+        val prefs = context.getSharedPreferences("peer_channel_limits", MODE_PRIVATE)
+        return if (prefs.contains("${peerId}_anchors")) prefs.getBoolean("${peerId}_anchors", false) else null
     }
 
     fun markDepositAddressUsed(address: String) = markAddressUsed(address)
