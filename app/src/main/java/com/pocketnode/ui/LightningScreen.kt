@@ -12,6 +12,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Refresh
@@ -739,11 +741,15 @@ fun LightningScreen(
                                     )
                                 }
                                 Spacer(Modifier.height(8.dp))
-                                Text(
-                                    depositAddress!!,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontFamily = FontFamily.Monospace
-                                )
+                                SelectionContainer {
+                                    Text(
+                                        depositAddress!!,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontFamily = FontFamily.Monospace,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Visible
+                                    )
+                                }
                                 Spacer(Modifier.height(8.dp))
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     OutlinedButton(
@@ -785,19 +791,19 @@ fun LightningScreen(
                 val wtPrefs = remember { context.getSharedPreferences("watchtower_prefs", android.content.Context.MODE_PRIVATE) }
                 val towerConfigured = remember { wtPrefs.getString("tower_pubkey", null) != null }
 
+                // Check monitor backup status
+                val backupMonitorsDir = remember { java.io.File(context.filesDir, "lightning_backup/monitors") }
+                val backupCount = remember { backupMonitorsDir.listFiles()?.count { it.name.endsWith(".bin") } ?: 0 }
+
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (towerConfigured)
-                            Color(0xFF1B5E20).copy(alpha = 0.15f)
-                        else MaterialTheme.colorScheme.surfaceVariant
-                    )
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                 ) {
                     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (towerConfigured) {
-                            Text("🛡️ Watchtower Active", fontWeight = FontWeight.Bold, color = Color(0xFF4CAF50))
+                            Text("\uD83D\uDEE1\uFE0F Watchtower Connected", fontWeight = FontWeight.Bold, color = Color(0xFF4CAF50))
                             Text(
-                                "Your wallet is automatically protected. Your home node watches your channels when this phone is offline and justice data is pushed after each payment.",
+                                "Your home node watches your channels when this phone is offline and justice data is pushed after each payment.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                             )
@@ -811,12 +817,20 @@ fun LightningScreen(
                                 )
                             }
                         } else {
-                            Text("🛡️ Watchtower", fontWeight = FontWeight.Bold)
+                            Text("\uD83D\uDEE1\uFE0F Watchtower", fontWeight = FontWeight.Bold)
                             Text(
-                                "Protect your channels when your phone is offline. " +
-                                    "Connect to your home node's watchtower to automatically back up channel states.",
+                                "Not connected. Connect to your home node's watchtower to protect your channels when this phone is offline.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
+                        }
+                        // Show local backup status
+                        val channelCount = LightningService.stateFlow.value.channelCount
+                        if (channelCount > 0 || backupCount > 0) {
+                            Text(
+                                "\uD83D\uDCBE Local backup: $backupCount channel monitor${if (backupCount != 1) "s" else ""} saved",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (backupCount > 0) Color(0xFF4CAF50) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                             )
                         }
                         OutlinedButton(onClick = onNavigateToWatchtower) {
