@@ -349,6 +349,21 @@ class LightningService(private val context: Context) {
             Log.i(TAG, "Lightning node started. Node ID: $nodeId")
             Log.i(TAG, "Initial balances: onchain=${initBalances.totalOnchainBalanceSats} spendable=${initBalances.spendableOnchainBalanceSats} lightning=${initBalances.totalLightningBalanceSats}")
 
+            // Diagnostic: list backup directory contents
+            val backupDir = File(context.filesDir, "${STORAGE_DIR}_backup")
+            if (backupDir.exists()) {
+                val files = backupDir.listFiles()?.map { f ->
+                    "${f.name}${if (f.isDirectory) "/ (${f.listFiles()?.size ?: 0} files)" else " (${f.length()}b)"}"
+                } ?: emptyList()
+                Log.i(TAG, "Backup dir contents: $files")
+            } else {
+                Log.i(TAG, "No backup directory found")
+            }
+            // Also check active storage for monitors
+            val activeMonitors = File(storageDir, "monitors")
+            val archivedMonitors = File(storageDir, "archived_monitors")
+            Log.i(TAG, "Active monitors: ${activeMonitors.listFiles()?.size ?: 0}, Archived: ${archivedMonitors.listFiles()?.size ?: 0}")
+
             // After birthday-based recovery, check if balance was found and clean up
             if (needsBirthdayScan && initBalances.totalOnchainBalanceSats > 0UL) {
                 Log.i(TAG, "Birthday recovery: found ${initBalances.totalOnchainBalanceSats} sats on first sync!")
@@ -430,6 +445,19 @@ class LightningService(private val context: Context) {
                 try { ldkNode.status().currentBestBlock.height.toLong() } catch (_: Exception) { 0L }
             }
 
+            // --- Broadcast stuck force-close commitment transactions ---
+            // If there are channel monitors with unbroadcast commitment txs
+            // (e.g., force-close happened while network was off in burst mode),
+            // broadcast them now. This is safe to call even with no pending closes.
+            // TODO: Enable once AAR Kotlin bindings include broadcastHolderCommitmentTxns()
+            // The Rust .so has it (commit 494af28) but current bindings were generated before.
+            // try {
+            //     ldkNode.broadcastHolderCommitmentTxns()
+            //     Log.i(TAG, "Broadcast holder commitment txns check complete")
+            // } catch (e: Exception) {
+            //     Log.w(TAG, "broadcastHolderCommitmentTxns: ${e.message}")
+            // }
+
             // --- Background recovery scan fallback ---
             if (needsRecoveryScan && scanDescriptors.isNotEmpty()) {
                 Thread({
@@ -478,8 +506,9 @@ class LightningService(private val context: Context) {
                                     return@launch // Exit this coroutine, new one starts after restart
                                 }
                             } else {
-                                // Pending sweeps exist, just sync wallets
+                                // Pending sweeps exist: sync wallets + broadcast stuck commitment txs
                                 try {
+                                    // TODO: node?.broadcastHolderCommitmentTxns() once bindings updated
                                     node?.syncWallets()
                                     Log.d(TAG, "syncWallets: triggered for pending close funds")
                                 } catch (e: Exception) {
