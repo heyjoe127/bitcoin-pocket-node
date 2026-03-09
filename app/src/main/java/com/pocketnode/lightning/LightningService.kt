@@ -374,6 +374,15 @@ class LightningService(private val context: Context) {
             val wtKeyFile = File(context.filesDir, "watchtower_client_key")
             Log.i(TAG, "Watchtower client key: ${if (wtKeyFile.exists()) "${wtKeyFile.length()}b" else "missing"}")
 
+            // Dump watchtower_prefs for diagnostics
+            val wtDiagPrefs = context.getSharedPreferences("watchtower_prefs", MODE_PRIVATE)
+            val wtAll = wtDiagPrefs.all
+            Log.i(TAG, "Watchtower prefs (${wtAll.size} entries):")
+            for ((k, v) in wtAll) {
+                val display = if (k.contains("pubkey") || k.contains("onion")) "${v.toString().take(20)}..." else v.toString()
+                Log.i(TAG, "  wt_pref: $k = $display")
+            }
+
             // After birthday-based recovery, check if balance was found and clean up
             if (needsBirthdayScan && initBalances.totalOnchainBalanceSats > 0UL) {
                 Log.i(TAG, "Birthday recovery: found ${initBalances.totalOnchainBalanceSats} sats on first sync!")
@@ -446,6 +455,16 @@ class LightningService(private val context: Context) {
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to set watchtower sweep address: ${e.message}")
             }
+
+            // Initialize watchtower bridge (create client key, test connectivity)
+            Thread {
+                try {
+                    val reachable = watchtowerBridge?.initialize() ?: false
+                    Log.i(TAG, "Watchtower bridge initialized: reachable=$reachable")
+                } catch (e: Exception) {
+                    Log.w(TAG, "Watchtower bridge init failed: ${e.message}")
+                }
+            }.start()
 
             lndHubServer = LndHubServer(context).also { it.start() }
             Log.i(TAG, "LNDHub server started on localhost:${LndHubServer.PORT}")
@@ -524,9 +543,10 @@ class LightningService(private val context: Context) {
                                 }
                             }
                         }
-                        // Periodic monitor backup (every 5 min if channels exist)
+                        // Periodic monitor backup + watchtower drain (every 5 min if channels exist)
                         if (st.channelCount > 0 && now - lastWalletSync > 300_000) {
                             backupChannelMonitors()
+                            drainWatchtowerBlobs()
                         }
                     } catch (_: Exception) {}
                 }
@@ -992,7 +1012,8 @@ class LightningService(private val context: Context) {
             }
             n.eventHandled()
             updateState()
-            if (event is Event.ChannelReady || event is Event.ChannelClosed
+            if (event is Event.ChannelPending || event is Event.ChannelReady
+                || event is Event.ChannelClosed
                 || event is Event.PaymentSuccessful || event is Event.PaymentReceived) {
                 drainWatchtowerBlobs()
                 backupChannelMonitors()

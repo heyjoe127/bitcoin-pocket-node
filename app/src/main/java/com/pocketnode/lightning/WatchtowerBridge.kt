@@ -125,6 +125,80 @@ class WatchtowerBridge(private val context: Context) {
      *
      * @return number of blobs successfully pushed, or -1 on error
      */
+    /**
+     * Initialize the watchtower bridge: create client key and verify tower connectivity.
+     * Call once at startup (after LDK node is built) so the bridge is ready when blobs arrive.
+     * Returns true if tower is reachable, false otherwise (key is still created for later).
+     */
+    fun initialize(): Boolean {
+        val prefs = context.getSharedPreferences("watchtower_prefs", Context.MODE_PRIVATE)
+        val towerPubKey = prefs.getString("tower_pubkey", null)
+        val towerOnion = prefs.getString("tower_onion", null)
+        val towerPort = prefs.getInt("tower_port", 9911)
+        val sshHost = prefs.getString("ssh_host", null)
+        val sshPort = prefs.getInt("ssh_port", 22)
+        val sshUser = prefs.getString("ssh_user", null)
+
+        if (towerPubKey == null) {
+            Log.i(TAG, "initialize: no tower configured, skipping")
+            return false
+        }
+
+        // Create client key if it doesn't exist (the key fix)
+        val clientKey = getOrCreateClientKey()
+        Log.i(TAG, "initialize: client key ready (${clientKey.size} bytes)")
+
+        val towerPubKeyBytes = hexToBytes(towerPubKey)
+        val sweepFeeRate = estimateSweepFeeRate()
+        val native = WatchtowerNative.INSTANCE
+
+        // Test Tor connectivity
+        val torOk = if (towerOnion != null && towerOnion.endsWith(".onion")) {
+            try {
+                val ok = connectViaTor(native, towerOnion, towerPort, towerPubKeyBytes, clientKey, sweepFeeRate)
+                if (ok) {
+                    native.wtclient_disconnect()
+                    sessionFeeRate = sweepFeeRate
+                    Log.i(TAG, "initialize: Tor connection to tower verified ✓")
+                }
+                ok
+            } catch (e: Exception) {
+                Log.w(TAG, "initialize: Tor connection test failed: ${e.message}")
+                false
+            }
+        } else false
+
+        // Test SSH fallback if Tor failed
+        val sshOk = if (!torOk && sshHost != null && sshUser != null) {
+            try {
+                val result = connectViaSsh(native, sshHost, sshPort, sshUser, towerOnion ?: "127.0.0.1",
+                    towerPort, towerPubKeyBytes, clientKey, sweepFeeRate, prefs)
+                val session = result.first
+                val port = result.second
+                val ok = result.third
+                if (ok) {
+                    native.wtclient_disconnect()
+                    sessionFeeRate = sweepFeeRate
+                    Log.i(TAG, "initialize: SSH tunnel to tower verified ✓")
+                }
+                try {
+                    if (port > 0) session?.delPortForwardingL(port)
+                    session?.disconnect()
+                } catch (_: Exception) {}
+                ok
+            } catch (e: Exception) {
+                Log.w(TAG, "initialize: SSH connection test failed: ${e.message}")
+                false
+            }
+        } else false
+
+        val reachable = torOk || sshOk
+        if (!reachable) {
+            Log.w(TAG, "initialize: tower not reachable (client key created for later)")
+        }
+        return reachable
+    }
+
     fun drainAndPush(node: Node): Int {
         val blobs = node.watchtowerDrainJusticeBlobs()
         if (blobs.isEmpty()) {
