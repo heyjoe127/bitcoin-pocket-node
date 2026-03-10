@@ -92,7 +92,7 @@ Three bootstrap paths. Pick whichever suits your situation:
 ### 🔒 Path 3: Download from Internet (AssumeUTXO) (3-6 hours, on-chain only)
 1. Download a UTXO snapshot (~9 GB) from utxo.download
 2. App loads it via `loadtxoutset` (cryptographically verified by Bitcoin Core)
-3. Phone syncs forward from the snapshot height (~25 min to load, ~2 hours to reach tip)
+3. Phone syncs forward from the snapshot height (~30 min to load, 2-5 hours to reach tip)
 4. Background validation confirms everything independently from genesis
 
 > **Note:** AssumeUTXO does not build block filter indexes, so Lightning is not available until background validation completes. Good for on-chain use (BlueWallet, Electrum) while validation runs.
