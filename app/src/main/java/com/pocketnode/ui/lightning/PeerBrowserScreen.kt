@@ -312,11 +312,22 @@ private fun NodeCard(
                     )
                 }
                 Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        "${node.channels} ch",
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        if (supportsAnchors != null) {
+                            Text(
+                                if (supportsAnchors) "⚓" else "⚠️",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                        Text(
+                            "${node.channels} ch",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                     Text(
                         node.capacityBtc,
                         style = MaterialTheme.typography.bodySmall,
@@ -336,12 +347,6 @@ private fun NodeCard(
                     )
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (supportsAnchors != null) {
-                        Text(
-                            if (supportsAnchors) "⚓" else "⚠️",
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
                     if (cachedMin > 0) {
                         val suffix = if (isCeiling) "-" else if (isFloor) "+" else ""
                         Text(
