@@ -1,10 +1,10 @@
 # Direct Chainstate Copy
 
-**The fastest way to bootstrap a Bitcoin full node on a phone: ~20 minutes from zero to chain tip.**
+**The fastest way to bootstrap a Bitcoin full node on a phone: under an hour from zero to chain tip.**
 
 ## Overview
 
-Instead of downloading a UTXO snapshot and using AssumeUTXO (which requires ~3 hours of background validation), we copy the essential database files directly from an existing Bitcoin node. The phone starts as a fully-validated node at the chain tip. no background validation, no catch-up sync.
+Instead of downloading a UTXO snapshot and using AssumeUTXO (which requires 3-6 hours of background validation), we copy the essential database files directly from an existing Bitcoin node. The phone starts as a fully-validated node at the chain tip. no background validation, no catch-up sync.
 
 ## Why It Works
 
@@ -134,8 +134,8 @@ Node starts at chain tip. Connects to peers, begins syncing any new blocks since
 
 The app will offer "Sync from your node" with two sub-options:
 
-1. **Direct Copy** (fastest, ~20 min). SSH to home node, stop bitcoind briefly, archive + transfer chainstate/index/xor/tip blocks, create stubs, start
-2. **AssumeUTXO** (trustless, ~3 hours). existing flow via `dumptxoutset rollback` + `loadtxoutset`
+1. **Direct Copy** (fastest, under 1 hour). SSH to home node, stop bitcoind briefly, archive + transfer chainstate/index/xor/tip blocks, create stubs, start
+2. **AssumeUTXO** (trustless, 3-6 hours, on-chain only). existing flow via `dumptxoutset rollback` + `loadtxoutset`
 
 The direct copy flow will:
 - Detect available space and estimate transfer size
@@ -148,7 +148,7 @@ The direct copy flow will:
 
 | | Direct Chainstate Copy | AssumeUTXO |
 |---|---|---|
-| **Total time** | ~20 minutes | ~3 hours |
+| **Total time** | under an hour | 3-6 hours |
 | **Transfer size** | ~15 GB (chainstate + index + tip blocks) | ~9 GB (UTXO snapshot) |
 | **Background validation** | None needed | Runs from genesis (~days to complete) |
 | **Node state after setup** | Full node at tip, fully validated | Full node at tip, background-validating |

@@ -239,6 +239,6 @@ Distribution:
 
 ## The Pitch
 
-> Same app. Same UI. Same sovereign experience. Phone or desktop, one codebase. Your Bitcoin node runs wherever you do. Bootstrap from your home node in 20 minutes on any platform. Pick your consensus rules with one tap.
+> Same app. Same UI. Same sovereign experience. Phone or desktop, one codebase. Your Bitcoin node runs wherever you do. Bootstrap from your home node in under an hour on any platform. Pick your consensus rules with one tap.
 
 The desktop port isn't a separate product. It's proof that Pocket Node's architecture is platform-agnostic. The chainstate copy, version selection, UTXOracle, and setup flow work everywhere. The phone just happened to be first.

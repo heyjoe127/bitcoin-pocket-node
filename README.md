@@ -1,6 +1,6 @@
 # Bitcoin Pocket Node
 
-**Bitcoin node in your pocket in under 20 minutes.**
+**Bitcoin node in your pocket in under an hour.**
 
 Turn any Android phone into a fully-validating Bitcoin full node. No server dependency, no ongoing tethering. Your phone becomes a sovereign Bitcoin node.
 
@@ -8,7 +8,7 @@ Turn any Android phone into a fully-validating Bitcoin full node. No server depe
 
 ## ✅ Proven
 
-- **Two proven bootstrap paths:** sync from home node (~30 min) or download from internet (~3 hours)
+- **Two proven bootstrap paths:** sync from home node (under 1 hour) or download from internet (3-6 hours, on-chain only)
 - **Phone-to-phone sharing (built, untested on second device):** scan a QR code, get a full node. No servers, no accounts
 - **3 Bitcoin implementations:** Core 28.1, Core 30, Knots 29.3 (with BIP 110 toggle). Switch with one tap, same chainstate
 - **No thermal load:** phone shows no sign of load or overheat during normal operation
@@ -77,23 +77,25 @@ Turn any Android phone into a fully-validating Bitcoin full node. No server depe
 
 Three bootstrap paths. Pick whichever suits your situation:
 
-### ⚡ Path 1: Sync from Your Home Node (~30 min)
+### ⚡ Path 1: Sync from Your Home Node (under 1 hour)
 1. App connects to your home node (Umbrel, Start9, any Bitcoin node) via SSH
 2. Briefly stops bitcoind, archives chainstate + block index + block filters
 3. Downloads the archive (~24 GB with Lightning filters), extracts, starts bitcoind
 4. **Full node at chain tip.** Includes block filters for Lightning if your node has them
 
-### 📱 Path 2: Copy from a Nearby Phone (~30 min)
+### 📱 Path 2: Copy from a Nearby Phone (under 1 hour)
 1. A friend with Pocket Node opens Share, which shows a QR code
 2. You scan it (or visit the URL on any browser to download the app first)
 3. Chainstate + block filters transfer directly over WiFi, phone to phone
 4. **No home node needed.** Zero accounts, zero servers, just two phones on the same network
 
-### 🔒 Path 3: Download from Internet (AssumeUTXO) (~3 hours)
+### 🔒 Path 3: Download from Internet (AssumeUTXO) (3-6 hours, on-chain only)
 1. Download a UTXO snapshot (~9 GB) from utxo.download
 2. App loads it via `loadtxoutset` (cryptographically verified by Bitcoin Core)
 3. Phone syncs forward from the snapshot height (~25 min to load, ~2 hours to reach tip)
 4. Background validation confirms everything independently from genesis
+
+> **Note:** AssumeUTXO does not build block filter indexes, so Lightning is not available until background validation completes. Good for on-chain use (BlueWallet, Electrum) while validation runs.
 
 See [Direct Chainstate Copy](docs/direct-chainstate-copy.md) for a detailed comparison.
 
@@ -153,7 +155,7 @@ The app connects to your home node via SSH, briefly stops bitcoind, and copies:
 - `blocks/xor.dat` (block file obfuscation key)
 - Tip block/rev files (latest block data)
 
-Total transfer ~13 GB over LAN (~5 min). Node operational in ~20 minutes including setup.
+Total transfer ~13 GB over LAN (~5 min). Node operational in under an hour including setup.
 
 #### AssumeUTXO Snapshot
 1. Generates a UTXO snapshot using `dumptxoutset rollback`
@@ -391,7 +393,7 @@ app/src/main/java/com/pocketnode/
 
 ## Roadmap
 
-- **Phone-to-phone node sharing:** Share your validated node with nearby phones over WiFi. Scan a QR code, download the chainstate, full node in ~20 minutes. Works for people who don't have the app yet: the QR opens a landing page where they download the APK first. Up to 2 concurrent transfers. See [design doc](docs/PHONE-TO-PHONE.md)
+- **Phone-to-phone node sharing:** Share your validated node with nearby phones over WiFi. Scan a QR code, download the chainstate, full node in under an hour. Works for people who don't have the app yet: the QR opens a landing page where they download the APK first. Up to 2 concurrent transfers. See [design doc](docs/PHONE-TO-PHONE.md)
 - **iOS port:** Burst sync + watchtower + in-process LDK make iOS viable. No one has shipped a full node on iOS because everyone assumed continuous background execution was required. Burst sync removes that assumption. See [feasibility analysis](docs/IOS-PORT.md)
 - **LDK upstream contribution:** improving watchtower API in rust-lightning ChannelMonitor ([#813](https://github.com/lightningdevkit/ldk-node/issues/813)). Draft PR submitted.
 - **Standalone Electrum server:** Extract the pruned-node Electrum server into a standalone JVM application. Connect to any Bitcoin Core node over RPC and serve BlueWallet. No full archival node required.

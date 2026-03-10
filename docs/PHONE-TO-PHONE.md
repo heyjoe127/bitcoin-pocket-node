@@ -19,7 +19,7 @@ A Pocket Node user can onboard others by sharing their validated chainstate dire
 2. Connects to sender's WiFi hotspot (or same WiFi network)
 3. Scans QR code from sender's screen (or enters IP manually)
 4. Normal chainstate copy flow runs, pulling from the sender's phone
-5. Full node in ~20 minutes
+5. Full node in under an hour
 
 ### Connection Options
 
@@ -101,18 +101,18 @@ Realistic scenario at a Bitcoin meetup:
 4. **Alice** installs the APK (Brad sends via nearby share)
 5. Alice opens app, connects to Brad's hotspot
 6. Scans QR code, chainstate copy starts
-7. 20 minutes later: Alice has a full node
+7. under an hour later: Alice has a full node
 8. **Bob** sees this, installs APK, also scans Brad's QR
 9. Brad is now serving two downloads simultaneously
 10. Later: Alice can share with others the same way
 
-**With Lightning:** if Brad has block filters, Alice gets them too. She walks away with a full node AND Lightning-ready in 20 minutes. Set up a wallet, open a channel, start paying.
+**With Lightning:** if Brad has block filters, Alice gets them too. She walks away with a full node AND Lightning-ready in under an hour. Set up a wallet, open a channel, start paying.
 
 **Viral loop:** every new user becomes a potential sender. The network grows without any central infrastructure.
 
 ## Multi-Receiver
 
-Maximum 2 simultaneous transfers. This keeps download times short (~30 minutes each), and those 2 can immediately start sharing with others. Exponential spread: 1→2→4→8.
+Maximum 2 simultaneous transfers. This keeps download times short (under 1 hourutes each), and those 2 can immediately start sharing with others. Exponential spread: 1→2→4→8.
 
 The sender's screen shows anonymous transfer progress so they know when it's safe to leave:
 
