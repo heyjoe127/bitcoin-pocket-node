@@ -44,13 +44,13 @@ fun PeerBrowserScreen(
     var nodes by remember { mutableStateOf<List<LightningNode>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var selectedTab by remember { mutableStateOf(0) }
-    val tabs = listOf("Most Connected", "Largest", "Lowest Fee", "Search")
+    val tabs = listOf("Most Connected", "Largest", "Search")
     var lastUpdate by remember { mutableStateOf(getCacheAge(context)) }
     var enrichKey by remember { mutableStateOf(0) }
 
     // Load from cache first, fetch from network only if no cache
     LaunchedEffect(selectedTab) {
-        if (selectedTab < 3) {
+        if (selectedTab < 2) {
             loading = true
             val cached = loadCachedNodes(context, selectedTab)
             if (cached.isNotEmpty()) {
@@ -61,7 +61,6 @@ fun PeerBrowserScreen(
                     val fetched = when (selectedTab) {
                         0 -> NodeDirectory.getTopNodes(30)
                         1 -> NodeDirectory.getTopByCapacity(30)
-                        2 -> NodeDirectory.getTopByLowestFee(20)
                         else -> emptyList()
                     }
                     if (fetched.isNotEmpty()) saveCachedNodes(context, selectedTab, fetched)
@@ -93,7 +92,7 @@ fun PeerBrowserScreen(
                         } catch (_: Exception) {}
                     }
                 }
-                if (selectedTab < 3) saveCachedNodes(context, selectedTab, enriched)
+                if (selectedTab < 2) saveCachedNodes(context, selectedTab, enriched)
             }
         }
     }
@@ -105,7 +104,6 @@ fun PeerBrowserScreen(
                 val fetched = when (selectedTab) {
                     0 -> NodeDirectory.getTopNodes(30)
                     1 -> NodeDirectory.getTopByCapacity(30)
-                    2 -> NodeDirectory.getTopByLowestFee(20)
                     else -> emptyList()
                 }
                 if (fetched.isNotEmpty()) saveCachedNodes(context, selectedTab, fetched)
@@ -127,7 +125,7 @@ fun PeerBrowserScreen(
                     }
                 },
                 actions = {
-                    if (selectedTab < 3) {
+                    if (selectedTab < 2) {
                         IconButton(onClick = { refreshNodes() }) {
                             Icon(Icons.Default.Refresh, "Refresh from mempool.space")
                         }
@@ -186,7 +184,7 @@ fun PeerBrowserScreen(
             val displayNodes = if (anchorOnly) nodes.filter { it.supportsAnchors != false } else nodes
 
             // Search bar (visible on Search tab)
-            if (selectedTab == 3) {
+            if (selectedTab == 2) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -227,7 +225,7 @@ fun PeerBrowserScreen(
             } else if (displayNodes.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
-                        if (selectedTab == 3) "Search for a node by name or pubkey"
+                        if (selectedTab == 2) "Search for a node by name or pubkey"
                         else if (anchorOnly && nodes.isNotEmpty()) "No anchor-capable peers found"
                         else "No nodes found",
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
