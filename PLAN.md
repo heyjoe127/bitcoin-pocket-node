@@ -98,6 +98,13 @@ Block filter support enables Lightning on pruned nodes. Filters are copied from 
 - [x] IBD hold: forces Max mode during initial block download
 - [x] Wallet hold: network stays active while Electrum client connected
 
+### BIP-110 Universal Toggle ✅
+- [x] Cross-compiled Bitcoin Core 29.3 with BIP 110 support (v72t's port)
+- [x] Core 30 vanilla build (no BIP 110 patches needed for vanilla)
+- [x] Universal `-signalbip110` toggle works on both Core 29.3 and Knots 29.3
+- [x] 3 binaries, ~78 MB APK
+- [x] All three implementations share chainstate, switch without re-syncing
+
 ### Technical Risks (Resolved)
 - [x] **bitcoind ARM64 compilation**: Works with NDK r27 clang wrappers
 - [x] **Android background process limits**: Foreground service handles it
@@ -112,7 +119,7 @@ Block filter support enables Lightning on pruned nodes. Filters are copied from 
 ## Roadmap
 
 ### Phase 6: Polish & Release
-- [ ] Project website (features, screenshots, download, docs)
+- [x] Project website (features, screenshots, download, docs)
 - [ ] Storage management (prune depth configuration)
 - [ ] Peer management UI
 - [ ] Beta testing on multiple Pixel devices
@@ -255,7 +262,7 @@ See [Desktop Port Design](docs/DESKTOP-PORT.md) for the full design document.
 1. Add Compose Multiplatform to existing project (shared `commonMain` module)
 2. Move UI + business logic to shared module
 3. Android and desktop targets with platform-specific service layers
-4. Bundle x86_64 bitcoind binaries (same version selection: Core 28.1, Core 30, Knots, BIP 110)
+4. Bundle x86_64 bitcoind binaries (same version selection: Core 29.3, Core 30, Knots 29.3)
 5. Single codebase, two platforms
 
 **Estimated effort:** 2-3 weeks for a working desktop build with dashboard + chainstate copy + version selection.
@@ -286,6 +293,29 @@ Compose Multiplatform targets iOS (same shared UI as desktop port). bitcoind cro
 - [ ] Expanded device testing beyond Pixel line
 - [ ] Block visualization: animated graphic showing stub creation → pruning → backfill
 - [ ] Mempool home screen widget
+
+### Tor for All Traffic
+Route all Pocket Node traffic through embedded Arti SOCKS proxy. One toggle for full network privacy.
+
+See [Tor Integration](docs/tor-integration.md) for the full design document.
+
+| Phase | Component | Effort | Value |
+|-------|-----------|--------|-------|
+| 1 | Arti SOCKS proxy service | Small | Foundation for everything |
+| 2 | bitcoind `-proxy` | Trivial | Biggest privacy win |
+| 3 | HTTP calls through SOCKS | Small | No more clearnet API leaks |
+| 4 | LDK peers via .onion | Moderate | Full Lightning privacy |
+| 5 | Electrum hidden service | Hard | Remote access |
+
+Phase 1-3 could ship together. Phase 4 separately. Phase 5 is future.
+
+### Upstream Contributions
+- **rust-lightning [#4453](https://github.com/lightningdevkit/rust-lightning/pull/4453):** Justice transaction API improvements for watchtower use. Draft, waiting on review.
+- **ldk-node [#822](https://github.com/lightningdevkit/ldk-node/pull/822):** Wallet birthday support for seed restore. Draft, waiting on review.
+
+### Grant Applications
+- **OpenSats:** Application submitted ($36k / 12 months)
+- **HRF Bitcoin Development Fund:** Application submitted ($36k / 12 months)
 
 ### Hardening
 - [ ] Block LDK startup until prune recovery confirms completion (not just triggered)
@@ -339,4 +369,4 @@ rpcpassword=<generated>
 
 **Why no `blocksonly=1`?** Partial mempool (50MB cap) for fee estimation, payment detection, privacy cover traffic, and compact block reconstruction.
 
-**Why v28.1 as default?** Core 30 changed OP_RETURN policy. v28.1 with patched AssumeUTXO heights gives snapshot flexibility while preserving standard transaction relay. Users can switch to Core 30, Knots, or Knots BIP 110 from the dashboard.
+**Why Core 29.3 as default?** Includes BIP 110 consensus code (v72t's port from vanilla Core), standard relay rules, and universal `-signalbip110` toggle. Users who want the latest Core features (relaxed OP_RETURN) can switch to Core 30. Users who want stricter relay policy can switch to Knots 29.3. BIP 110 signaling works on both 29.3 binaries.

@@ -10,7 +10,7 @@ Turn any Android phone into a fully-validating Bitcoin full node. No server depe
 
 - **Two proven bootstrap paths:** sync from home node (under 1 hour) or download from internet (3-6 hours, on-chain only)
 - **Phone-to-phone sharing (built, untested on second device):** scan a QR code, get a full node. No servers, no accounts
-- **3 Bitcoin implementations:** Core 28.1, Core 30, Knots 29.3 (with BIP 110 toggle). Switch with one tap, same chainstate
+- **3 Bitcoin implementations:** Core 30, Core 29.3, Knots 29.3 (all with BIP 110 toggle). Switch with one tap, same chainstate
 - **No thermal load:** phone shows no sign of load or overheat during normal operation
 - ~26 GB total disk with Lightning (11 GB chainstate + 2 GB pruned blocks + 13 GB block filters), ~13 GB without
 - **Pure Kotlin Electrum server** with wallet tracking: balance, transactions, UTXOs all served from your own pruned node
@@ -105,19 +105,21 @@ Your node, your rules. Choose which Bitcoin implementation runs on your phone:
 
 | Implementation | Size | Policy |
 |---|---|---|
-| **Bitcoin Core 28.1** | 13 MB | Neutral: standard relay rules |
+| **Bitcoin Core 29.3** | 8 MB | Standard relay rules, BIP 110 compatible (v72t's port) |
 | **Bitcoin Core 30** | 8.6 MB | Permissive: larger OP_RETURN data allowed |
-| **Bitcoin Knots 29.3** | 9 MB | Restrictive: filters non-standard transactions. Optional BIP 110 toggle |
+| **Bitcoin Knots 29.3** | 12 MB | Restrictive: filters non-standard transactions |
+
+All implementations support the universal BIP-110 signaling toggle.
 
 All three share the same chainstate format. Switch without re-syncing. Tap "Change" on the dashboard, confirm, and the node restarts with the new binary.
 
-**BIP 110** ([bip110.dev](https://bip110.dev/)) temporarily limits arbitrary data embedding at the consensus level. When running Knots, a toggle enables version bit 4 signaling and peer preference for reduced data carriers. Built from Dathon Ohm's [reference implementation](https://github.com/bitcoinknots/bitcoin/compare/29.x-knots...dathonohm:bitcoin:uasf-modified-bip9) with a 55% activation threshold.
+**BIP 110** ([bip110.dev](https://bip110.dev/)) temporarily limits arbitrary data embedding at the consensus level. A universal toggle enables version bit 4 signaling and peer preference for reduced data carriers on both Core 29.3 and Knots. Built from Dathon Ohm's [reference implementation](https://github.com/bitcoinknots/bitcoin/compare/29.x-knots...dathonohm:bitcoin:uasf-modified-bip9) with a 55% activation threshold.
 
 See [Version Selection Design](docs/VERSION-SELECTION.md) and [BIP 110 Research](docs/BIP110-RESEARCH.md) for details.
 
 ## Features
 
-- **3 Bitcoin implementations** with one-tap switching: Core 28.1, Core 30, Knots 29.3 (BIP 110 toggle)
+- **3 Bitcoin implementations** with one-tap switching: Core 30, Core 29.3, Knots 29.3. Universal BIP 110 signaling toggle
 - **Two proven bootstrap paths:** home node or internet download (phone-to-phone built, untested)
 - **Pure Kotlin Electrum server** purpose-built for pruned nodes: the only Electrum server that works with `prune=2048`. Balances from the UTXO set, transaction history persisted forever (survives pruning), unsolicited notifications push new transactions to BlueWallet in real time
 - **Built-in Lightning node** powered by LDK (send, receive, channels, peer browser, seed backup/restore with automatic fund recovery)
@@ -182,7 +184,8 @@ Download from `https://utxo.download/utxo-910000.dat` (9 GB). Same `loadtxoutset
 │       │              │              │            │
 │  ┌────┴──────────────┴──────────────┴─────────┐  │
 │  │  bitcoind (ARM64), user selects:           │  │
-│  │  Core 28.1 | Core 30 | Knots (+BIP 110)   │  │
+│  │  Core 30 | Core 29.3 | Knots 29.3           │  │
+│  │  (all with BIP 110 toggle)                 │  │
 │  │  Foreground service, local RPC             │  │
 │  └────────────────┬───────────────────────────┘  │
 │                   │ RPC                          │
@@ -270,8 +273,8 @@ Built-in peer browser using mempool.space API. Browse nodes by:
 
 - **OS:** Android 7+ (tested on GrapheneOS, EMUI, Samsung OneUI)
 - **Hardware:** Any ARM64 device (tested on Pixel, Samsung, Huawei)
-- **Default:** Bitcoin Core v28.1 (non-controversial baseline)
-- **Also bundled:** Core 30, Knots 29.3 with BIP 110 toggle (user selects from dashboard)
+- **Default:** Bitcoin Core 29.3 (BIP 110 compatible, standard relay rules)
+- **Also bundled:** Core 30, Knots 29.3 (user selects from dashboard, all with BIP 110 toggle)
 - **AssumeUTXO heights:** 840k (upstream) + 880k, 910k (backported from Core 30)
 
 ## Building
@@ -280,10 +283,10 @@ Built-in peer browser using mempool.space API. Browse nodes by:
 - macOS or Linux build machine
 - Android SDK + NDK r27
 - JDK 17
-- Bitcoin Core v28.1 source (with chainparams patch)
+- Bitcoin Core 29.3 source (with BIP 110 and chainparams patches)
 
 ### Build bitcoind for ARM64
-See [docs/build-android-arm64.md](docs/build-android-arm64.md)
+See [docs/cross-compile-android.md](docs/cross-compile-android.md)
 
 ### Build the Android app
 ```bash
@@ -372,6 +375,8 @@ app/src/main/java/com/pocketnode/
 ## Documentation
 
 - [Build Guide](docs/build-android-arm64.md)
+- [Cross-Compile Guide](docs/cross-compile-android.md)
+- [Tor Integration](docs/tor-integration.md)
 - [Chainparams Patch](docs/chainparams-patch.md)
 - [Direct Chainstate Copy](docs/direct-chainstate-copy.md)
 - [Snapshot Testing](docs/snapshot-testing.md)
@@ -395,10 +400,11 @@ app/src/main/java/com/pocketnode/
 
 - **Phone-to-phone node sharing:** Share your validated node with nearby phones over WiFi. Scan a QR code, download the chainstate, full node in under an hour. Works for people who don't have the app yet: the QR opens a landing page where they download the APK first. Up to 2 concurrent transfers. See [design doc](docs/PHONE-TO-PHONE.md)
 - **iOS port:** Burst sync + watchtower + in-process LDK make iOS viable. No one has shipped a full node on iOS because everyone assumed continuous background execution was required. Burst sync removes that assumption. See [feasibility analysis](docs/IOS-PORT.md)
+- **Tor for all traffic:** route bitcoind, LDK peers, and HTTP calls through embedded Arti SOCKS proxy. One toggle for full network privacy. See [design doc](docs/tor-integration.md)
 - **LDK upstream contribution:** improving watchtower API in rust-lightning ChannelMonitor ([#813](https://github.com/lightningdevkit/ldk-node/issues/813)). Draft PR submitted.
+- **Upstream PRs:** rust-lightning [#4453](https://github.com/lightningdevkit/rust-lightning/pull/4453) (justice tx API), ldk-node [#822](https://github.com/lightningdevkit/ldk-node/pull/822) (wallet birthday)
 - **Standalone Electrum server:** Extract the pruned-node Electrum server into a standalone JVM application. Connect to any Bitcoin Core node over RPC and serve BlueWallet. No full archival node required.
 - **Desktop port:** Same app on Linux, macOS, Windows via Compose Multiplatform. See [design doc](docs/DESKTOP-PORT.md)
-- **Tor for RGS and peer connections:** route Lightning gossip and peer traffic through embedded Arti
 
 ## Tested On
 
