@@ -25,49 +25,54 @@ object BinaryExtractor {
     /**
      * Available Bitcoin implementations.
      *
-     * Each entry maps to a pre-compiled ARM64 binary in jniLibs/.
-     * Not all versions may be bundled yet -- check isAvailable() before use.
-     *
-     * Knots includes BIP 110 consensus code (always compiled in, BIP9-gated).
-     * Signaling is controlled separately via the signalbip110 toggle.
+     * Both include BIP 110 consensus code (always compiled in, BIP9-gated).
+     * BIP 110 signaling is controlled separately via the signalbip110 toggle
+     * and works with either implementation.
      */
     enum class BitcoinVersion(
         val libraryName: String,
         val displayName: String,
         val versionString: String,
         val description: String,
-        val policyStance: String
+        val policyStance: String,
+        val supportsBip110: Boolean
     ) {
-        CORE_28_1(
-            "libbitcoind_v28_1.so",
+        CORE(
+            "libbitcoind_core.so",
             "Bitcoin Core",
-            "28.1",
-            "Stable release. Pre-OP_RETURN policy changes. Universal network acceptance.",
-            "Neutral -- standard relay rules"
+            "29.3",
+            "Reference implementation with BIP 110 consensus code. Standard relay rules.",
+            "Standard -- default relay policy",
+            true
         ),
         CORE_30(
             "libbitcoind_v30.so",
             "Bitcoin Core",
-            "30.x",
-            "Latest release. Relaxed OP_RETURN data size limits. New standardness rules.",
-            "Permissive -- larger OP_RETURN data allowed"
+            "30.0",
+            "Latest release. Relaxed OP_RETURN data size limits. No BIP 110 support.",
+            "Permissive -- larger OP_RETURN data allowed",
+            false
         ),
         KNOTS(
             "libbitcoind_knots.so",
             "Bitcoin Knots",
             "29.3",
-            "Alternative implementation by Luke Dashjr. Stricter transaction filtering and relay policy. Includes BIP 110 consensus code (enable signaling in settings).",
-            "Restrictive -- filters non-standard transactions"
+            "Alternative implementation by Luke Dashjr. Stricter transaction filtering and relay policy. Includes BIP 110 consensus code.",
+            "Restrictive -- filters non-standard transactions",
+            true
         );
 
         companion object {
-            val DEFAULT = CORE_28_1
+            val DEFAULT = CORE
 
             fun fromName(name: String): BitcoinVersion {
                 return try {
-                    // Handle legacy KNOTS_BIP110 selection: map to KNOTS
-                    if (name == "KNOTS_BIP110") return KNOTS
-                    valueOf(name)
+                    // Handle legacy selections
+                    when (name) {
+                        "KNOTS_BIP110" -> KNOTS
+                        "CORE_28_1" -> CORE
+                        else -> valueOf(name)
+                    }
                 } catch (_: IllegalArgumentException) {
                     DEFAULT
                 }
@@ -105,8 +110,6 @@ object BinaryExtractor {
     /**
      * Set the user's selected Bitcoin version.
      */
-    // Persisted in SharedPreferences so the choice survives app restarts and service re-launches.
-    // The service reads this on every start, allowing version switches without reinstalling.
     fun setSelectedVersion(context: Context, version: BitcoinVersion) {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
@@ -117,9 +120,21 @@ object BinaryExtractor {
 
     /**
      * Get BIP 110 signaling preference.
-     * Only relevant when running Knots (the consensus code is always compiled in).
+     * Only effective on implementations that include BIP 110 consensus code (Core 29.3, Knots).
+     * Returns false for implementations without BIP 110 support (Core 30).
      */
     fun isSignalBip110(context: Context): Boolean {
+        val selected = getSelectedVersion(context)
+        if (!selected.supportsBip110) return false
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getBoolean(KEY_SIGNAL_BIP110, false)
+    }
+
+    /**
+     * Get the raw BIP 110 toggle state (ignoring implementation support).
+     * Used by UI to show the toggle state even when current implementation doesn't support it.
+     */
+    fun isSignalBip110Raw(context: Context): Boolean {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         return prefs.getBoolean(KEY_SIGNAL_BIP110, false)
     }

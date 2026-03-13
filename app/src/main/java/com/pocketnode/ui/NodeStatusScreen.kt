@@ -1225,7 +1225,7 @@ private fun ActionButtons(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface
                 )
-                val isBip110Active = selectedVersion == com.pocketnode.util.BinaryExtractor.BitcoinVersion.KNOTS && signalBip110
+                val isBip110Active = signalBip110
                 Text(
                     "${selectedVersion.displayName} ${selectedVersion.versionString}${if (isBip110Active) " + BIP 110" else ""}",
                     style = MaterialTheme.typography.bodySmall,
@@ -1240,105 +1240,123 @@ private fun ActionButtons(
             }
         }
 
+
+
         if (showVersionPicker) {
             AlertDialog(
                 onDismissRequest = { showVersionPicker = false },
                 title = { Text("Choose Implementation") },
                 text = {
+                    val bip110Versions = allVersions.filter { it.supportsBip110 }
+                    val otherVersions = allVersions.filter { !it.supportsBip110 }
+
+                    @Composable
+                    fun VersionCard(version: com.pocketnode.util.BinaryExtractor.BitcoinVersion) {
+                        val isAvailable = version in availableVersions
+                        val isSelected = version == selectedVersion
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (isSelected)
+                                    Color(0xFFFF9800).copy(alpha = 0.15f)
+                                else MaterialTheme.colorScheme.surfaceVariant
+                            ),
+                            onClick = {
+                                if (isAvailable && !isSelected) {
+                                    pendingVersion = version
+                                    showVersionPicker = false
+                                }
+                            },
+                            enabled = isAvailable
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp)) {
+                                Row(
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        "${version.displayName} ${version.versionString}",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (isAvailable)
+                                            MaterialTheme.colorScheme.onSurface
+                                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                                    )
+                                    if (isSelected) {
+                                        Text("✓", color = Color(0xFFFF9800), fontWeight = FontWeight.Bold)
+                                    }
+                                    if (!isAvailable) {
+                                        Text("Coming soon", style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
+                                    }
+                                }
+                                Text(
+                                    version.policyStance,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Medium,
+                                    color = if (isAvailable)
+                                        Color(0xFFFF9800).copy(alpha = 0.8f)
+                                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                                )
+                            }
+                        }
+                    }
+
                     Column(
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                         modifier = Modifier.verticalScroll(rememberScrollState())
                     ) {
+                        // Latest first
+                        otherVersions.forEach { version -> VersionCard(version) }
+
+                        // Separator
+                        Spacer(Modifier.height(4.dp))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+                        Spacer(Modifier.height(2.dp))
+
+                        // BIP 110 section
                         Text(
-                            "Switch quickly and safely. Your node, your rules.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                            "BIP 110 Compatible",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFF7931A)
                         )
-                        allVersions.forEach { version ->
-                            val isAvailable = version in availableVersions
-                            val isSelected = version == selectedVersion
-                            Card(
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = if (isSelected)
-                                        Color(0xFFFF9800).copy(alpha = 0.15f)
-                                    else MaterialTheme.colorScheme.surfaceVariant
-                                ),
-                                onClick = {
-                                    if (isAvailable && !isSelected) {
-                                        pendingVersion = version
-                                        showVersionPicker = false
-                                    }
-                                },
-                                enabled = isAvailable
-                            ) {
-                                Column(modifier = Modifier.padding(10.dp)) {
-                                    Row(
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Text(
-                                            "${version.displayName} ${version.versionString}",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                            color = if (isAvailable)
-                                                MaterialTheme.colorScheme.onSurface
-                                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
-                                        )
-                                        if (isSelected) {
-                                            Text("✓", color = Color(0xFFFF9800), fontWeight = FontWeight.Bold)
-                                        }
-                                        if (!isAvailable) {
-                                            Text("Coming soon", style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
-                                        }
-                                    }
-                                    Text(
-                                        version.policyStance,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.Medium,
-                                        color = if (isAvailable)
-                                            Color(0xFFFF9800).copy(alpha = 0.8f)
-                                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
-                                    )
-                                    // BIP 110 toggle: visible on Knots card, greyed out unless selected
-                                    if (version == com.pocketnode.util.BinaryExtractor.BitcoinVersion.KNOTS) {
-                                        Spacer(Modifier.height(6.dp))
-                                        HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(top = 6.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.SpaceBetween
-                                        ) {
-                                            Column(modifier = Modifier.weight(1f)) {
-                                                Text(
-                                                    "Signal BIP 110",
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    fontWeight = FontWeight.Bold
-                                                )
-                                                Text(
-                                                    "Version bit 4 signaling + peer preference for reduced data carriers. Requires restart.",
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                                                )
-                                            }
-                                            Switch(
-                                                checked = signalBip110,
-                                                onCheckedChange = { enabled ->
-                                                    pendingBip110Toggle = enabled
-                                                },
-                                                enabled = isSelected,
-                                                colors = SwitchDefaults.colors(
-                                                    checkedThumbColor = Color(0xFFF7931A),
-                                                    checkedTrackColor = Color(0xFFF7931A).copy(alpha = 0.3f)
-                                                )
-                                            )
-                                        }
-                                    }
-                                }
+                        bip110Versions.forEach { version -> VersionCard(version) }
+
+                        // BIP 110 toggle
+                        Spacer(Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    "Signal BIP 110",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    if (signalBip110) "Signaling reduced data support"
+                                    else "Not signaling",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (signalBip110) Color(0xFFF7931A)
+                                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                )
                             }
+                            Switch(
+                                checked = signalBip110,
+                                onCheckedChange = { enabled ->
+                                    pendingBip110Toggle = enabled
+                                },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = Color(0xFFF7931A),
+                                    checkedTrackColor = Color(0xFFF7931A).copy(alpha = 0.3f)
+                                )
+                            )
                         }
                     }
                 },
