@@ -87,7 +87,8 @@ Route all Pocket Node traffic through Tor. One toggle: "Route all traffic throug
 **What:** Route all outbound HTTPS through Arti SOCKS proxy
 **Calls that go external:**
 - `UpdateChecker.kt` - GitHub API (`api.github.com`)
-- `AddressIndex.kt` - mempool.space history recovery
+- `AddressIndex.kt` - mempool.space history recovery (**biggest privacy leak**: sends your addresses to mempool.space)
+- `ElectrumServer.kt` - mempool.space tx fetch for pruned blocks (**privacy sensitive**: reveals which transactions you're querying)
 - `PeerBrowserScreen.kt` - mempool.space node/channel data
 - `FeeEstimatePanel.kt` - mempool.space fee estimates (Max mode only)
 - `NodeDirectory.kt` - mempool.space anchor support check
