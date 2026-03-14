@@ -241,7 +241,9 @@ fun PocketNodeApp(
                 InternetDownloadScreen(
                     onBack = { navController.popBackStack() },
                     onComplete = {
-                        navController.popBackStack("status", inclusive = false)
+                        navController.navigate("status") {
+                            popUpTo(0) { inclusive = true }
+                        }
                     }
                 )
             }
