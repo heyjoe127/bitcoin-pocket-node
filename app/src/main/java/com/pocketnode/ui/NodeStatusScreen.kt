@@ -4,7 +4,10 @@ import android.content.Intent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.res.painterResource
+import com.pocketnode.R
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Switch
@@ -1794,15 +1797,14 @@ private fun AboutCard() {
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Box(
+                        Image(
+                            painter = painterResource(id = R.drawable.avatar_freeonlineuser),
+                            contentDescription = "FreeOnlineUser",
                             modifier = Modifier
                                 .size(40.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFFFF9800)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("F", fontWeight = FontWeight.Bold, color = Color.Black, fontSize = 20.sp)
-                        }
+                                .clip(CircleShape),
+                            contentScale = ContentScale.Crop
+                        )
                         Text(
                             "Built by @FreeOnlineUser",
                             style = MaterialTheme.typography.bodyMedium,
