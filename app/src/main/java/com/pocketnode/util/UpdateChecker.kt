@@ -20,13 +20,15 @@ import java.net.URL
 object UpdateChecker {
     private const val TAG = "UpdateChecker"
     private const val RELEASES_URL = "https://api.github.com/repos/FreeOnlineUser/bitcoin-pocket-node/releases/latest"
+    private const val ALL_RELEASES_URL = "https://api.github.com/repos/FreeOnlineUser/bitcoin-pocket-node/releases?per_page=20"
 
     data class UpdateInfo(
         val latestVersion: String,
         val currentVersion: String,
         val htmlUrl: String,
         val apkUrl: String?,
-        val hasUpdate: Boolean
+        val hasUpdate: Boolean,
+        val releaseNotes: String = ""
     )
 
     /**
@@ -52,6 +54,7 @@ object UpdateChecker {
             val json = JSONObject(body)
             val tagName = json.getString("tag_name").removePrefix("v")
             val htmlUrl = json.getString("html_url")
+            val releaseBody = json.optString("body", "")
 
             // Find APK asset
             var apkUrl: String? = null
@@ -79,12 +82,20 @@ object UpdateChecker {
                 }
             }
 
+            // Collect release notes from all versions since current
+            val combinedNotes = if (hasUpdate) {
+                collectReleaseNotes(currentVersion)
+            } else {
+                releaseBody
+            }
+
             UpdateInfo(
                 latestVersion = tagName,
                 currentVersion = currentVersion,
                 htmlUrl = htmlUrl,
                 apkUrl = apkUrl,
-                hasUpdate = hasUpdate
+                hasUpdate = hasUpdate,
+                releaseNotes = combinedNotes
             )
         } catch (e: Exception) {
             Log.w(TAG, "Update check failed: ${e.message}")
@@ -158,6 +169,46 @@ object UpdateChecker {
         } catch (e: Exception) {
             Log.e(TAG, "Download/install failed: ${e.message}", e)
             false
+        }
+    }
+
+    /**
+     * Fetch release notes from all versions newer than the current version.
+     * Returns combined notes with version headers, newest first.
+     */
+    private fun collectReleaseNotes(currentVersion: String): String {
+        return try {
+            val conn = URL(ALL_RELEASES_URL).openConnection() as HttpURLConnection
+            conn.requestMethod = "GET"
+            conn.setRequestProperty("Accept", "application/vnd.github+json")
+            conn.connectTimeout = 10_000
+            conn.readTimeout = 10_000
+
+            if (conn.responseCode != 200) return ""
+
+            val body = conn.inputStream.bufferedReader().readText()
+            val releases = org.json.JSONArray(body)
+            val notes = StringBuilder()
+
+            for (i in 0 until releases.length()) {
+                val release = releases.getJSONObject(i)
+                val tag = release.getString("tag_name").removePrefix("v")
+                val releaseBody = release.optString("body", "").trim()
+
+                // Stop when we reach the current version or older
+                if (!isNewer(tag, currentVersion)) break
+
+                if (releaseBody.isNotEmpty()) {
+                    if (notes.isNotEmpty()) notes.append("\n\n")
+                    notes.append("v$tag\n")
+                    notes.append(releaseBody)
+                }
+            }
+
+            notes.toString()
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not fetch release notes: ${e.message}")
+            ""
         }
     }
 

@@ -1126,6 +1126,8 @@ private fun ActionButtons(
         var downloading by remember { mutableStateOf(false) }
         var downloadProgress by remember { mutableIntStateOf(0) }
         val currentAppVersion = remember { try { updateContext.packageManager.getPackageInfo(updateContext.packageName, 0).versionName ?: "?" } catch (_: Exception) { "?" } }
+        var installReady by remember { mutableStateOf(false) }
+        var dismissed by remember { mutableStateOf(false) }
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -1157,7 +1159,6 @@ private fun ActionButtons(
                     )
                 }
             }
-            var installReady by remember { mutableStateOf(false) }
             if (downloading) {
                 // Show progress, no button needed
             } else if (installReady) {
@@ -1166,33 +1167,11 @@ private fun ActionButtons(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary
                 )
-            } else if (updateInfo?.hasUpdate == true && updateInfo?.apkUrl != null) {
-                OutlinedButton(
-                    onClick = {
-                        downloading = true
-                        downloadProgress = 0
-                        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
-                            val success = com.pocketnode.util.UpdateChecker.downloadAndInstall(
-                                updateContext, updateInfo!!.apkUrl!!
-                            ) { progress -> downloadProgress = progress }
-                            downloading = false
-                            if (success) installReady = true
-                        }
-                    }
-                ) { Text("Update") }
-            } else if (updateInfo?.hasUpdate == true) {
-                // No APK asset, open release page
-                OutlinedButton(
-                    onClick = {
-                        val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(updateInfo!!.htmlUrl))
-                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        updateContext.startActivity(intent)
-                    }
-                ) { Text("View release") }
-            } else {
+            } else if (updateInfo?.hasUpdate != true || dismissed) {
                 OutlinedButton(
                     onClick = {
                         checkingUpdate = true
+                        dismissed = false
                         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
                             updateInfo = com.pocketnode.util.UpdateChecker.check(updateContext)
                             checkingUpdate = false
@@ -1200,6 +1179,79 @@ private fun ActionButtons(
                     },
                     enabled = !checkingUpdate
                 ) { Text(if (checkingUpdate) "Checking..." else "Check for updates") }
+            }
+        }
+
+        // Update available card with release notes
+        if (updateInfo?.hasUpdate == true && !dismissed) {
+            Spacer(modifier = Modifier.height(8.dp))
+            androidx.compose.material3.Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = androidx.compose.material3.CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        "What's new",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF4CAF50)
+                    )
+                    if (updateInfo!!.releaseNotes.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 200.dp)
+                                .verticalScroll(rememberScrollState())
+                        ) {
+                            Text(
+                                updateInfo!!.releaseNotes,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
+                    ) {
+                        OutlinedButton(onClick = { dismissed = true }) {
+                            Text("Not yet")
+                        }
+                        if (updateInfo?.apkUrl != null) {
+                            Button(
+                                onClick = {
+                                    downloading = true
+                                    downloadProgress = 0
+                                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
+                                        val success = com.pocketnode.util.UpdateChecker.downloadAndInstall(
+                                            updateContext, updateInfo!!.apkUrl!!
+                                        ) { progress -> downloadProgress = progress }
+                                        downloading = false
+                                        if (success) installReady = true
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800))
+                            ) {
+                                Text("Update", color = Color.Black, fontWeight = FontWeight.Bold)
+                            }
+                        } else {
+                            Button(
+                                onClick = {
+                                    val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(updateInfo!!.htmlUrl))
+                                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    updateContext.startActivity(intent)
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800))
+                            ) {
+                                Text("View release", color = Color.Black, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
             }
         }
         // Bitcoin version selector
