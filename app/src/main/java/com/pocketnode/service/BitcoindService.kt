@@ -211,6 +211,7 @@ class BitcoindService : Service() {
             // non-BIP110 peers at 2, which starves a 4-connection node
             if (BinaryExtractor.isSignalBip110(this)) {
                 args.add("-signalbip110=1")
+                args.add("-uacomment=BIP-110")
                 args.add("-maxconnections=8")
             }
 
