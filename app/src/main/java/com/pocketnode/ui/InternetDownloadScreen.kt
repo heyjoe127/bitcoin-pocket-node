@@ -379,7 +379,7 @@ fun InternetDownloadScreen(
                                     "The source (utxo.download) is a well-known public snapshot " +
                                     "host used by the Bitcoin community. But even if you downloaded " +
                                     "from an untrusted source, the cryptographic verification means " +
-                                    "you'd get the same result. bad data is always rejected.",
+                                    "you'd get the same result. Bad data is always rejected.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                                 )
