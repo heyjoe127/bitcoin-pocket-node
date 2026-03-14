@@ -1224,6 +1224,7 @@ private fun ActionButtons(
                         if (updateInfo?.apkUrl != null) {
                             Button(
                                 onClick = {
+                                    dismissed = true
                                     downloading = true
                                     downloadProgress = 0
                                     kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
