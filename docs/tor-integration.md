@@ -253,9 +253,12 @@ object TorAwareHttp {
 ### Settings
 - **"Tor Network"** section
 - Main toggle: "Route all traffic through Tor"
-- Sub-option: "Tor only" (no clearnet fallback) vs "Prefer Tor" (default)
+- When enabled: **Tor only** by default (`onlynet=onion`). No clearnet connections. Safe for dissidents, journalists, activists.
+- Sub-option: "Allow clearnet" (opt-in for users in safe countries who want faster sync and more peers)
 - Status: Connected / Connecting / Off
 - Circuit info: number of hops, uptime
+
+**Design rationale:** The people who need Tor the most are the ones least able to evaluate "prefer" vs "only." One clearnet connection leaks their IP. Tor-only is the only safe default. Users in safe countries can opt into clearnet for performance.
 
 ### Dashboard
 - Small 🧅 onion icon next to peer count when Tor active
