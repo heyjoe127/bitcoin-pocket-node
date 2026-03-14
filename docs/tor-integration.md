@@ -278,6 +278,28 @@ object TorAwareHttp {
 | On-chain transactions | Public on blockchain | Public on blockchain (Tor doesn't help) |
 | Watchtower | Already Tor ✅ | Already Tor ✅ |
 
+## Power Modes and Tor
+
+Tor stays running across all power modes. Arti proxy persists independently of bitcoind's lifecycle.
+
+| Power Mode | Tor Behavior |
+|------------|-------------|
+| **Max** | Persistent connection, circuits stay warm. Best Tor experience. |
+| **Burst** | bitcoind cycles on/off but Arti stays up. Circuits remain warm between bursts. No cold-start penalty on each cycle. |
+| **Low** | Minimal network activity. Arti idles, circuits maintained. Negligible overhead. |
+
+**Key design decision:** Do NOT tear down Arti when bitcoind stops. Keep the proxy alive so circuits are ready when bitcoind restarts. This avoids the 3-10 second circuit setup on every burst cycle.
+
+### Idle Data Usage
+
+Arti's idle overhead when no app traffic is flowing:
+- **Directory consensus:** ~1-2 MB every 1-3 hours (cached to disk, survives restarts)
+- **Circuit keepalive:** ~1 KB/min per circuit (padding cells)
+- **Prebuilt circuits:** 2-3 idle
+- **Total idle cost:** ~2-5 MB/day
+
+Negligible next to block sync or RGS downloads.
+
 ## Performance Impact
 
 - **bitcoind sync:** +50-200% latency per peer. Acceptable for pruned catch-up (few blocks). Avoid for IBD.
