@@ -45,10 +45,11 @@ class NetworkMonitor(private val context: Context) {
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
-    // TrafficStats gives cumulative bytes since boot. We track deltas between samples
-    // and attribute them to the current network type (WiFi vs cellular) for budget tracking.
-    private var lastRxBytes: Long = TrafficStats.getTotalRxBytes()
-    private var lastTxBytes: Long = TrafficStats.getTotalTxBytes()
+    // TrafficStats per-UID gives cumulative bytes since boot for THIS app only.
+    // We track deltas between samples and attribute them to the current network type.
+    private val uid: Int = android.os.Process.myUid()
+    private var lastRxBytes: Long = TrafficStats.getUidRxBytes(uid).let { if (it == TrafficStats.UNSUPPORTED.toLong()) 0L else it }
+    private var lastTxBytes: Long = TrafficStats.getUidTxBytes(uid).let { if (it == TrafficStats.UNSUPPORTED.toLong()) 0L else it }
     private var lastNetworkState: NetworkState = NetworkState.OFFLINE
 
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
@@ -126,8 +127,8 @@ class NetworkMonitor(private val context: Context) {
     }
 
     private fun sampleDataUsage() {
-        val currentRx = TrafficStats.getTotalRxBytes()
-        val currentTx = TrafficStats.getTotalTxBytes()
+        val currentRx = TrafficStats.getUidRxBytes(uid)
+        val currentTx = TrafficStats.getUidTxBytes(uid)
 
         if (currentRx == TrafficStats.UNSUPPORTED.toLong()) return
 
