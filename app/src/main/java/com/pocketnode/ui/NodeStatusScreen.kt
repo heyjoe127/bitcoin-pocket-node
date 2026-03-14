@@ -1794,14 +1794,15 @@ private fun AboutCard() {
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        coil.compose.AsyncImage(
-                            model = "https://github.com/FreeOnlineUser.png",
-                            contentDescription = "FreeOnlineUser",
+                        Box(
                             modifier = Modifier
                                 .size(40.dp)
-                                .clip(CircleShape),
-                            contentScale = ContentScale.Crop
-                        )
+                                .clip(CircleShape)
+                                .background(Color(0xFFFF9800)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("F", fontWeight = FontWeight.Bold, color = Color.Black, fontSize = 20.sp)
+                        }
                         Text(
                             "Built by @FreeOnlineUser",
                             style = MaterialTheme.typography.bodyMedium,

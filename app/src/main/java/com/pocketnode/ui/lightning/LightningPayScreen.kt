@@ -1,5 +1,6 @@
 package com.pocketnode.ui.lightning
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -401,14 +402,15 @@ fun LightningPayScreen(
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    coil.compose.AsyncImage(
-                        model = "https://github.com/FreeOnlineUser.png",
-                        contentDescription = "FreeOnlineUser",
+                    Box(
                         modifier = Modifier
                             .size(32.dp)
-                            .clip(CircleShape),
-                        contentScale = ContentScale.Crop
-                    )
+                            .clip(CircleShape)
+                            .background(Color(0xFFFF9800)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("F", fontWeight = FontWeight.Bold, color = Color.Black, fontSize = 16.sp)
+                    }
                     Spacer(modifier = Modifier.width(10.dp))
                     Text(
                         "Built by @FreeOnlineUser",
