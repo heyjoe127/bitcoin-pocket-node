@@ -346,6 +346,13 @@ class LightningService(private val context: Context) {
 
             node = ldkNode
 
+            // One-time: clear stale peer channel limits from pre-fix caching bug
+            val limitsPrefs = context.getSharedPreferences("peer_channel_limits", MODE_PRIVATE)
+            if (!limitsPrefs.getBoolean("cache_v2_cleared", false)) {
+                limitsPrefs.edit().clear().putBoolean("cache_v2_cleared", true).apply()
+                Log.i(TAG, "Cleared stale peer channel limits cache")
+            }
+
             val nodeId = ldkNode.nodeId()
             val initBalances = ldkNode.listBalances()
             Log.i(TAG, "Lightning node started. Node ID: $nodeId")
