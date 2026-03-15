@@ -369,10 +369,10 @@ class PowerModeManager(private val context: Context) {
             // 1. Enable network
             setNetworkActive(client, true)
 
-            // 2. Wait for at least one peer (up to 15s)
+            // 2. Wait for at least one peer (up to 30s — cold start needs longer)
             var hasPeers = false
             val peerStart = System.currentTimeMillis()
-            while (System.currentTimeMillis() - peerStart < 15_000) {
+            while (System.currentTimeMillis() - peerStart < 30_000) {
                 try {
                     val netInfo = client.call("getnetworkinfo")
                     val connections = netInfo?.optInt("connections", 0) ?: 0
@@ -385,7 +385,7 @@ class PowerModeManager(private val context: Context) {
             }
 
             if (!hasPeers) {
-                Log.w(TAG, "Burst: no peers connected in 15s, aborting")
+                Log.w(TAG, "Burst: no peers connected in 30s, aborting")
                 if (_modeFlow.value != Mode.MAX) setNetworkActive(client, false)
                 _burstStateFlow.value = BurstState.IDLE
                 burstMutex.unlock()
