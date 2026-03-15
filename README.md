@@ -400,12 +400,12 @@ app/src/main/java/com/pocketnode/
 
 ## Roadmap
 
-- **iOS port:** Burst sync + watchtower + in-process LDK make iOS viable. No one has shipped a full node on iOS because everyone assumed continuous background execution was required. Burst sync removes that assumption. See [feasibility analysis](docs/IOS-PORT.md)
 - **Tor for all traffic:** route bitcoind, LDK peers, and HTTP calls through embedded Arti SOCKS proxy. One toggle for full network privacy. See [design doc](docs/tor-integration.md)
 - **LDK upstream contribution:** improving watchtower API in rust-lightning ChannelMonitor ([#813](https://github.com/lightningdevkit/ldk-node/issues/813)). Draft PR submitted.
 - **Upstream PRs:** rust-lightning [#4453](https://github.com/lightningdevkit/rust-lightning/pull/4453) (justice tx API), ldk-node [#822](https://github.com/lightningdevkit/ldk-node/pull/822) (wallet birthday), rust-lightning [#4485](https://github.com/lightningdevkit/rust-lightning/issues/4485) (anchor downgrade bug)
 - **Ark integration:** Community-scale trustless payments. Run an Ark Service Provider on your Umbrel, friends connect from their phones over Tor. No individual channel management, no routing failures, ASP can't steal funds. See [design doc](docs/ARK-INTEGRATION.md)
 - **Desktop port:** Same app on Linux, macOS, Windows via Compose Multiplatform. See [design doc](docs/DESKTOP-PORT.md)
+- **iOS port:** Burst sync + watchtower + in-process LDK make iOS viable. See [feasibility analysis](docs/IOS-PORT.md)
 
 ## Tested On
 
