@@ -68,6 +68,7 @@ fun SendPaymentScreen(
     }
     var offerAmountSats by remember { mutableStateOf("") }
     var sending by remember { mutableStateOf(false) }
+    var paymentComplete by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
 
@@ -264,6 +265,7 @@ fun SendPaymentScreen(
                         payResult.onSuccess {
                             result = "⚡ Payment successful!"
                             sending = false
+                            paymentComplete = true
                         }.onFailure {
                             error = it.message ?: "Payment failed"
                             sending = false
@@ -271,7 +273,7 @@ fun SendPaymentScreen(
                     }
                 },
                 modifier = Modifier.fillMaxWidth().height(48.dp),
-                enabled = !sending && invoiceInput.isNotBlank(),
+                enabled = !sending && !paymentComplete && invoiceInput.isNotBlank(),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800))
             ) {
                 if (sending) {
