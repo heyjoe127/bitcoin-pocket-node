@@ -989,9 +989,6 @@ class LightningService(private val context: Context) {
                 }
                 is Event.ChannelReady      -> {
                     Log.i(TAG, "Channel ready: ${event.channelId}")
-                    // Release network hold now that channel is confirmed
-                    val pmm = com.pocketnode.power.PowerModeManager(context)
-                    pmm.releaseNetworkHold()
                     // Unlock Lightning Pay as default home screen
                     try {
                         context.getSharedPreferences("pocketnode_prefs", android.content.Context.MODE_PRIVATE)
@@ -1200,14 +1197,12 @@ class LightningService(private val context: Context) {
             savePeerMinFloor(nodeId, amountSats)
             Result.failure(e)
         } finally {
-            // Only release network hold if the channel open FAILED.
-            // If channel is pending, keep network held until ChannelReady event.
-            val channelPending = try { n.listChannels().isNotEmpty() } catch (_: Exception) { false }
-            if (needsNetworkHold && !channelPending) {
+            if (needsNetworkHold) {
+                // Keep network up a bit longer to ensure funding tx propagates
+                // and peer acknowledges ChannelPending, then release.
+                Thread.sleep(10_000)
                 pmm.releaseNetworkHold()
             }
-            // If channel IS pending, the hold stays active.
-            // It will be released in the ChannelReady event handler.
         }
     }
 
