@@ -1005,10 +1005,14 @@ class LightningService(private val context: Context) {
                     // Cache peer's min channel size from rejection message
                     val peerId = event.counterpartyNodeId
                     if (peerId != null) {
+                        // Parse min channel size from various rejection formats
                         val minBtc = Regex("""min chan size of (\d+\.\d+) BTC""").find(reason)?.groupValues?.get(1)
+                        val minSatDirect = Regex("""min=(\d+)\s*sat""").find(reason)?.groupValues?.get(1)
                         if (minBtc != null) {
                             val minSats = (minBtc.toDouble() * 100_000_000).toLong()
                             savePeerMinChannel(peerId, minSats)
+                        } else if (minSatDirect != null) {
+                            savePeerMinChannel(peerId, minSatDirect.toLong())
                         }
                     }
                     channelEventLatch?.countDown()
@@ -1169,7 +1173,7 @@ class LightningService(private val context: Context) {
             Log.i(TAG, "Post-open: channels=${channels.size} hasNew=$hasNewChannel reason=$reason")
             if (!hasNewChannel) {
                 // If no explicit min from rejection, save attempted amount as floor
-                if (reason == null || !reason.contains("min chan size")) {
+                if (reason == null || (!reason.contains("min chan size") && !reason.contains("min="))) {
                     savePeerMinFloor(nodeId, amountSats)
                 }
                 val msg = if (reason != null) reason else "Peer rejected channel open"
