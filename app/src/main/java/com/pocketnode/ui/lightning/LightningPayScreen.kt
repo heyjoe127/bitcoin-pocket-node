@@ -134,7 +134,11 @@ fun LightningPayScreen(
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-
+            // Burst sync / channel hold banner
+            val burstState by com.pocketnode.power.PowerModeManager.burstStateFlow.collectAsState()
+            val nextBurst by com.pocketnode.power.PowerModeManager.nextBurstFlow.collectAsState()
+            val walletConnected by com.pocketnode.power.PowerModeManager.walletConnectedFlow.collectAsState()
+            com.pocketnode.ui.BurstSyncBanner(burstState = burstState, nextBurstMs = nextBurst, walletConnected = walletConnected)
 
             // Bootstrap status (only when not ready)
             if (!isReady) {
