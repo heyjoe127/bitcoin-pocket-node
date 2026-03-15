@@ -20,7 +20,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.pocketnode.lightning.LightningService
+import com.pocketnode.power.PowerModeManager
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -44,6 +46,22 @@ fun ReceivePaymentScreen(
     var output by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var copied by remember { mutableStateOf(false) }
+    var waiting by remember { mutableStateOf(false) }
+    var received by remember { mutableStateOf(false) }
+    var waitTimeLeft by remember { mutableStateOf(0) }
+
+    // Hold network while waiting for payment, release on unmount
+    DisposableEffect(waiting) {
+        if (waiting && PowerModeManager.modeFlow.value != PowerModeManager.Mode.MAX) {
+            val pmm = PowerModeManager(context)
+            val creds = com.pocketnode.util.ConfigGenerator.readCredentials(context)
+            if (creds != null) pmm.setRpc(com.pocketnode.rpc.BitcoinRpcClient(creds.first, creds.second))
+            pmm.holdNetwork()
+            onDispose { pmm.releaseNetworkHold() }
+        } else {
+            onDispose { }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -166,9 +184,27 @@ fun ReceivePaymentScreen(
                                 )
                             }
                         }
-                        result.onSuccess {
-                            output = it
+                        result.onSuccess { invoiceStr ->
+                            output = invoiceStr
                             generating = false
+                            // Start waiting for payment (BOLT11 only, 5 min timeout)
+                            if (!useOffer) {
+                                waiting = true
+                                waitTimeLeft = 300
+                                val balanceBefore = LightningService.stateFlow.value.lightningBalanceSats
+                                scope.launch {
+                                    while (waitTimeLeft > 0 && !received) {
+                                        delay(2000)
+                                        waitTimeLeft -= 2
+                                        val current = LightningService.stateFlow.value.lightningBalanceSats
+                                        if (current > balanceBefore) {
+                                            received = true
+                                            waiting = false
+                                        }
+                                    }
+                                    if (!received) waiting = false
+                                }
+                            }
                         }.onFailure {
                             error = it.message ?: "Failed to generate"
                             generating = false
@@ -244,6 +280,45 @@ fun ReceivePaymentScreen(
                             Icon(Icons.Default.ContentCopy, "Copy", modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(8.dp))
                             Text(if (copied) "Copied!" else if (useOffer) "Copy Offer" else "Copy Invoice")
+                        }
+
+                        // Payment waiting status
+                        if (!useOffer && (waiting || received)) {
+                            Spacer(Modifier.height(12.dp))
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (received) Color(0xFF4CAF50).copy(alpha = 0.15f)
+                                    else Color(0xFFFF9800).copy(alpha = 0.15f)
+                                )
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    if (received) {
+                                        Text("⚡", style = MaterialTheme.typography.titleMedium)
+                                        Text(
+                                            "Payment received!",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF4CAF50)
+                                        )
+                                    } else {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(16.dp),
+                                            color = Color(0xFFFF9800),
+                                            strokeWidth = 2.dp
+                                        )
+                                        Text(
+                                            "Waiting for payment... ${waitTimeLeft / 60}:${"%02d".format(waitTimeLeft % 60)}",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = Color(0xFFFF9800)
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
