@@ -79,6 +79,9 @@ class PowerModeManager(private val context: Context) {
         /** Whether a channel open is holding the network active */
         @Volatile var channelHoldingNetwork = false
 
+        private val _channelHoldFlow = MutableStateFlow(false)
+        val channelHoldFlow: StateFlow<Boolean> = _channelHoldFlow
+
         /** Single mutex shared across all PowerModeManager instances */
         val burstMutex = kotlinx.coroutines.sync.Mutex()
     }
@@ -520,6 +523,7 @@ class PowerModeManager(private val context: Context) {
         if (channelHoldingNetwork) return
 
         channelHoldingNetwork = true
+        _channelHoldFlow.value = true
         Log.i(TAG, "Channel open — holding network active")
 
         burstJob?.cancel()
@@ -537,6 +541,7 @@ class PowerModeManager(private val context: Context) {
     fun releaseNetworkHold() {
         if (!channelHoldingNetwork) return
         channelHoldingNetwork = false
+        _channelHoldFlow.value = false
 
         val mode = _modeFlow.value
         if (mode == Mode.MAX) return

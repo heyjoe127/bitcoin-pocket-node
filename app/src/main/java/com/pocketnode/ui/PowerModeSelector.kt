@@ -176,6 +176,27 @@ fun BurstSyncBanner(
         return
     }
 
+    // Channel hold (channel open pending confirmation)
+    val channelHold by PowerModeManager.channelHoldFlow.collectAsState()
+    if (channelHold) {
+        Row(
+            modifier = modifier
+                .fillMaxWidth()
+                .background(Color(0xFFFF9800))
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = "⚡ Network held: channel opening",
+                color = Color.White,
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Bold
+            )
+        }
+        return
+    }
+
     // Wallet hold takes priority over burst state
     if (walletConnected) {
         Row(
