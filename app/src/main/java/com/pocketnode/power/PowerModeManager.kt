@@ -121,6 +121,17 @@ class PowerModeManager(private val context: Context) {
     /** Set the RPC client once bitcoind is running */
     fun setRpc(client: BitcoinRpcClient) {
         rpc = client
+        // If burst sync should be running but wasn't started (rpc was null during applyMode),
+        // kick it off now. This ensures burst sync always starts even if setRpc is called
+        // after setMode.
+        val mode = _modeFlow.value
+        if (mode != Mode.MAX && burstJob?.isActive != true && !_initialSyncHold.value) {
+            val scope = activeScope ?: return
+            Log.i(TAG, "setRpc: starting burst cycle for $mode (was not running)")
+            scope.launch(Dispatchers.IO) {
+                applyMode(mode)
+            }
+        }
     }
 
     /**
