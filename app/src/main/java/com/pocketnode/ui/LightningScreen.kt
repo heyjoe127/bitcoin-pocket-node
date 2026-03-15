@@ -407,8 +407,11 @@ fun LightningScreen(
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                             )
                             Spacer(Modifier.height(8.dp))
-                            OutlinedButton(onClick = onNavigateToOpenChannel) {
-                                Text("Open Channel")
+                            OutlinedButton(
+                                onClick = onNavigateToOpenChannel,
+                                enabled = effectiveState.pendingChannels.isEmpty()
+                            ) {
+                                Text(if (effectiveState.pendingChannels.isNotEmpty()) "Channel Pending..." else "Open Channel")
                             }
                         } else {
                             Row(
@@ -626,8 +629,11 @@ fun LightningScreen(
                             }
 
                             Spacer(Modifier.height(4.dp))
-                            OutlinedButton(onClick = onNavigateToOpenChannel) {
-                                Text("Open Another Channel")
+                            OutlinedButton(
+                                onClick = onNavigateToOpenChannel,
+                                enabled = effectiveState.pendingChannels.isEmpty()
+                            ) {
+                                Text(if (effectiveState.pendingChannels.isNotEmpty()) "Channel Pending..." else "Open Another Channel")
                             }
                         }
 
