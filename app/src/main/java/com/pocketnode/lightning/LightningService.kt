@@ -1257,6 +1257,14 @@ class LightningService(private val context: Context) {
 
     fun payInvoice(invoiceStr: String): Result<String> {
         val n = node ?: return Result.failure(Exception("Node not running"))
+        // Hold network for payment routing
+        val pmm = com.pocketnode.power.PowerModeManager(context)
+        val needsHold = com.pocketnode.power.PowerModeManager.modeFlow.value != com.pocketnode.power.PowerModeManager.Mode.MAX
+        if (needsHold) {
+            val creds = com.pocketnode.util.ConfigGenerator.readCredentials(context)
+            if (creds != null) pmm.setRpc(com.pocketnode.rpc.BitcoinRpcClient(creds.first, creds.second))
+            pmm.holdNetwork()
+        }
         return try {
             val invoice = Bolt11Invoice.fromStr(invoiceStr)
             val paymentId = n.bolt11Payment().send(invoice, null)
@@ -1273,6 +1281,8 @@ class LightningService(private val context: Context) {
         } catch (e: Exception) {
             Log.e(TAG, "Failed to pay invoice", e)
             Result.failure(e)
+        } finally {
+            if (needsHold) pmm.releaseNetworkHold()
         }
     }
 
@@ -1340,6 +1350,13 @@ class LightningService(private val context: Context) {
 
     fun payOffer(offerStr: String, amountMsat: Long? = null): Result<String> {
         val n = node ?: return Result.failure(Exception("Node not running"))
+        val pmm = com.pocketnode.power.PowerModeManager(context)
+        val needsHold = com.pocketnode.power.PowerModeManager.modeFlow.value != com.pocketnode.power.PowerModeManager.Mode.MAX
+        if (needsHold) {
+            val creds = com.pocketnode.util.ConfigGenerator.readCredentials(context)
+            if (creds != null) pmm.setRpc(com.pocketnode.rpc.BitcoinRpcClient(creds.first, creds.second))
+            pmm.holdNetwork()
+        }
         return try {
             val offer = Offer.fromStr(offerStr)
             val paymentId = if (amountMsat != null)
@@ -1359,6 +1376,8 @@ class LightningService(private val context: Context) {
         } catch (e: Exception) {
             Log.e(TAG, "Failed to pay offer", e)
             Result.failure(e)
+        } finally {
+            if (needsHold) pmm.releaseNetworkHold()
         }
     }
 
