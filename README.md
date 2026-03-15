@@ -392,6 +392,8 @@ app/src/main/java/com/pocketnode/
 - [Power Modes Design](docs/POWER-MODES.md)
 - [Pruned Node Risk Analysis](docs/PRUNED-NODE-RISK-ANALYSIS.md)
 - [LDK Upstream Contribution](docs/LDK-UPSTREAM-CONTRIBUTION.md)
+- [LDK Anchor Downgrade Bug](docs/LDK-ANCHOR-DOWNGRADE-BUG.md)
+- [Ark Integration Plan](docs/ARK-INTEGRATION.md)
 - [Built-in Tor Design](docs/BUILT-IN-TOR.md)
 - [iOS Port Feasibility](docs/IOS-PORT.md)
 - [Phone-to-Phone Sharing](docs/PHONE-TO-PHONE.md)
@@ -402,7 +404,8 @@ app/src/main/java/com/pocketnode/
 - **iOS port:** Burst sync + watchtower + in-process LDK make iOS viable. No one has shipped a full node on iOS because everyone assumed continuous background execution was required. Burst sync removes that assumption. See [feasibility analysis](docs/IOS-PORT.md)
 - **Tor for all traffic:** route bitcoind, LDK peers, and HTTP calls through embedded Arti SOCKS proxy. One toggle for full network privacy. See [design doc](docs/tor-integration.md)
 - **LDK upstream contribution:** improving watchtower API in rust-lightning ChannelMonitor ([#813](https://github.com/lightningdevkit/ldk-node/issues/813)). Draft PR submitted.
-- **Upstream PRs:** rust-lightning [#4453](https://github.com/lightningdevkit/rust-lightning/pull/4453) (justice tx API), ldk-node [#822](https://github.com/lightningdevkit/ldk-node/pull/822) (wallet birthday)
+- **Upstream PRs:** rust-lightning [#4453](https://github.com/lightningdevkit/rust-lightning/pull/4453) (justice tx API), ldk-node [#822](https://github.com/lightningdevkit/ldk-node/pull/822) (wallet birthday), rust-lightning [#4485](https://github.com/lightningdevkit/rust-lightning/issues/4485) (anchor downgrade bug)
+- **Ark integration:** Community-scale trustless payments. Run an Ark Service Provider on your Umbrel, friends connect from their phones over Tor. No individual channel management, no routing failures, ASP can't steal funds. See [design doc](docs/ARK-INTEGRATION.md)
 - **Standalone Electrum server:** Extract the pruned-node Electrum server into a standalone JVM application. Connect to any Bitcoin Core node over RPC and serve BlueWallet. No full archival node required.
 - **Desktop port:** Same app on Linux, macOS, Windows via Compose Multiplatform. See [design doc](docs/DESKTOP-PORT.md)
 
@@ -413,11 +416,14 @@ app/src/main/java/com/pocketnode/
 | Pixel 9 | Tensor G4 | GrapheneOS | ✅ Full stack: chainstate copy, LDK Lightning, BIP 110, all features verified |
 | Samsung Galaxy Z Fold | Snapdragon | Android | ✅ Dual-pane foldable layout working, IBD syncing |
 | Huawei Mate 20 Lite | Kirin 710 | EMUI | ✅ Clean install, IBD syncing from genesis |
+| Pixel 9 | Tensor G4 | GrapheneOS | ✅ Lightning send/receive verified, 7-day uptime confirmed by independent tester |
 
 ## Known Issues
 
 - 16KB page alignment warning on GrapheneOS (cosmetic only)
 - `getblockchaininfo` reports background validation progress, not snapshot chain tip (AssumeUTXO path only)
+- `NetworkOnMainThreadException` on `getblockcount` in UI display (cosmetic, does not affect LDK sync)
+- Lightning routing through small peers (e.g., 1ML) may fail for larger amounts (>5-10k sats) due to intermediate channel liquidity
 
 ## License
 
