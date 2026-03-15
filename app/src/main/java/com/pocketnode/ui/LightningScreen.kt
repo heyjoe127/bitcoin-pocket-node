@@ -47,7 +47,8 @@ fun LightningScreen(
     onNavigateToOpenChannel: () -> Unit = {},
     onNavigateToSeedBackup: () -> Unit = {},
     onNavigateToWatchtower: () -> Unit = {},
-    onNavigateToLightningPay: () -> Unit = {}
+    onNavigateToLightningPay: () -> Unit = {},
+    onNavigateToSendOnchain: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -798,6 +799,17 @@ fun LightningScreen(
                                 }
                             ) {
                                 Text(if (depositAddress != null) "Show Deposit Address" else "Generate Deposit Address")
+                            }
+                        }
+
+                        // Send on-chain button
+                        if (effectiveState.onchainBalanceSats > 0) {
+                            Spacer(Modifier.height(8.dp))
+                            OutlinedButton(
+                                onClick = onNavigateToSendOnchain,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Send On-chain")
                             }
                         }
                     }

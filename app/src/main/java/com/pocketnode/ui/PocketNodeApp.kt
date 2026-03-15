@@ -292,7 +292,8 @@ fun PocketNodeApp(
                     onNavigateToHistory = { navController.navigate("lightning_history") },
                     onNavigateToOpenChannel = { navController.navigate("lightning_open_channel") },
                     onNavigateToSeedBackup = { navController.navigate("seed_backup") },
-                    onNavigateToWatchtower = { navController.navigate("watchtower") }
+                    onNavigateToWatchtower = { navController.navigate("watchtower") },
+                    onNavigateToSendOnchain = { navController.navigate("send_onchain") }
                 )
             }
             composable("seed_backup") {
@@ -363,6 +364,29 @@ fun PocketNodeApp(
             }
             composable("lightning_history") {
                 com.pocketnode.ui.lightning.PaymentHistoryScreen(
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+            composable("send_onchain") { backStackEntry ->
+                val scannedResult = backStackEntry.savedStateHandle
+                    .get<String>("scanned_qr")
+                LaunchedEffect(scannedResult) {
+                    if (scannedResult != null) {
+                        backStackEntry.savedStateHandle.remove<String>("scanned_qr")
+                    }
+                }
+                com.pocketnode.ui.lightning.SendOnchainScreen(
+                    onNavigateBack = { navController.popBackStack() },
+                    onNavigateToScanner = { navController.navigate("qr_scanner_onchain") },
+                    scannedQr = scannedResult
+                )
+            }
+            composable("qr_scanner_onchain") {
+                com.pocketnode.ui.lightning.QrScannerScreen(
+                    onResult = { result ->
+                        navController.previousBackStackEntry?.savedStateHandle?.set("scanned_qr", result)
+                        navController.popBackStack()
+                    },
                     onNavigateBack = { navController.popBackStack() }
                 )
             }
