@@ -104,6 +104,7 @@ class LightningService(private val context: Context) {
     @Volatile private var channelEventLatch: java.util.concurrent.CountDownLatch? = null
 
     @Volatile private var starting = false
+    @Volatile private var lastBitcoindHeight = 0L
 
     /**
      * Start the Lightning node on a bare Java Thread.
@@ -515,6 +516,10 @@ class LightningService(private val context: Context) {
                 while (isActive) {
                     delay(10_000)
                     try {
+                        // Update bitcoind height on background thread (avoids NetworkOnMainThreadException)
+                        try {
+                            lastBitcoindHeight = rpcClient?.callSync("getblockcount", org.json.JSONArray())?.optLong("value", 0) ?: 0
+                        } catch (_: Exception) {}
                         updateState()
                         // Handle pending close: LDK's broadcast queue is fire-and-forget.
                         // If the commitment tx broadcast failed (e.g. network off during burst),
@@ -825,10 +830,8 @@ class LightningService(private val context: Context) {
 
             val bestBlock = n.status().currentBestBlock
             val ldkH = bestBlock.height.toLong()
-            // Check if LDK is synced with bitcoind
-            val bitcoindH = try {
-                rpcClient?.callSync("getblockcount", org.json.JSONArray())?.optLong("value", 0) ?: 0
-            } catch (_: Exception) { 0L }
+            // Check if LDK is synced with bitcoind (use cached value to avoid NetworkOnMainThreadException)
+            val bitcoindH = lastBitcoindHeight
             val synced = ldkH > 0 && (bitcoindH == 0L || ldkH >= bitcoindH)
             val outboundMsat = channels.sumOf { it.outboundCapacityMsat.toLong() }
             val inboundMsat = channels.sumOf { it.inboundCapacityMsat.toLong() }
