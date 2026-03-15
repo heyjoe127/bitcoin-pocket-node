@@ -420,8 +420,6 @@ app/src/main/java/com/pocketnode/
 
 - 16KB page alignment warning on GrapheneOS (cosmetic only)
 - `getblockchaininfo` reports background validation progress, not snapshot chain tip (AssumeUTXO path only)
-- `NetworkOnMainThreadException` on `getblockcount` in UI display (cosmetic, does not affect LDK sync)
-- Lightning routing through small peers (e.g., 1ML) may fail for larger amounts (>5-10k sats) due to intermediate channel liquidity
 
 ## License
 
