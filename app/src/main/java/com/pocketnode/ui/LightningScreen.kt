@@ -572,40 +572,38 @@ fun LightningScreen(
                                                 Spacer(Modifier.height(8.dp))
                                                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                                             }
-                                        }
-                                    },
-                                    confirmButton = {
-                                        // Cooperative close
-                                        TextButton(
-                                            onClick = {
-                                                closing = true
-                                                closeError = null
-                                                scope.launch {
-                                                    val pmm = com.pocketnode.power.PowerModeManager(context)
-                                                    val creds = com.pocketnode.util.ConfigGenerator.readCredentials(context)
-                                                    if (creds != null) {
-                                                        pmm.setRpc(com.pocketnode.rpc.BitcoinRpcClient(creds.first, creds.second))
-                                                    }
-                                                    pmm.holdNetwork()
-                                                    kotlinx.coroutines.delay(2000)
-                                                    val result = withContext(kotlinx.coroutines.Dispatchers.IO) {
-                                                        try {
-                                                            lightning.closeChannel(ch.userChannelId, ch.counterpartyNodeId)
-                                                        } finally {
-                                                            pmm.releaseNetworkHold()
+                                            Spacer(Modifier.height(16.dp))
+                                            // Cooperative close
+                                            Button(
+                                                onClick = {
+                                                    closing = true
+                                                    closeError = null
+                                                    scope.launch {
+                                                        val pmm = com.pocketnode.power.PowerModeManager(context)
+                                                        val creds = com.pocketnode.util.ConfigGenerator.readCredentials(context)
+                                                        if (creds != null) {
+                                                            pmm.setRpc(com.pocketnode.rpc.BitcoinRpcClient(creds.first, creds.second))
                                                         }
+                                                        pmm.holdNetwork()
+                                                        kotlinx.coroutines.delay(2000)
+                                                        val result = withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                                            try {
+                                                                lightning.closeChannel(ch.userChannelId, ch.counterpartyNodeId)
+                                                            } finally {
+                                                                pmm.releaseNetworkHold()
+                                                            }
+                                                        }
+                                                        result.onSuccess { selectedChannel = null }
+                                                            .onFailure { closing = false; closeError = it.message }
                                                     }
-                                                    result.onSuccess { selectedChannel = null }
-                                                        .onFailure { closing = false; closeError = it.message }
-                                                }
-                                            },
-                                            enabled = !closing
-                                        ) { Text("Close") }
-                                    },
-                                    dismissButton = {
-                                        Row {
+                                                },
+                                                enabled = !closing,
+                                                modifier = Modifier.fillMaxWidth(),
+                                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                                            ) { Text("Cooperative Close") }
+                                            Spacer(Modifier.height(8.dp))
                                             // Force close
-                                            TextButton(
+                                            OutlinedButton(
                                                 onClick = {
                                                     closing = true
                                                     closeError = null
@@ -616,15 +614,20 @@ fun LightningScreen(
                                                     }
                                                 },
                                                 enabled = !closing,
-                                                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                                                modifier = Modifier.fillMaxWidth(),
+                                                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
                                             ) { Text("Force Close") }
-                                            // Cancel
-                                            TextButton(
+                                            Spacer(Modifier.height(8.dp))
+                                            // Exit / go back
+                                            OutlinedButton(
                                                 onClick = { selectedChannel = null },
-                                                enabled = !closing
-                                            ) { Text("Cancel") }
+                                                enabled = !closing,
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) { Text("Go Back") }
                                         }
-                                    }
+                                    },
+                                    confirmButton = {},
+                                    dismissButton = {}
                                 )
                             }
 
